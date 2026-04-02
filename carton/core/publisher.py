@@ -121,15 +121,18 @@ class Publisher:
             "icon": icon,
         }
 
+        _EXCLUDE_DIRS = {"__pycache__", ".git", ".svn", ".hg", "tests", "test", "dist", "build", ".vscode", ".idea"}
+        _EXCLUDE_FILES = {".gitignore", ".gitattributes", ".DS_Store", "Thumbs.db"}
+
         with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as zf:
             if is_folder:
                 for root, dirs, files in os.walk(local_path):
-                    dirs[:] = [d for d in dirs if d != "__pycache__"]
+                    dirs[:] = [d for d in dirs if d not in _EXCLUDE_DIRS]
                     for f in files:
-                        if f.endswith(".pyc"):
+                        if f.endswith(".pyc") or f in _EXCLUDE_FILES:
                             continue
                         fp = os.path.join(root, f)
-                        arcname = os.path.relpath(fp, os.path.dirname(local_path))
+                        arcname = os.path.relpath(fp, local_path)
                         zf.write(fp, arcname)
                 if "package.json" not in zf.namelist():
                     zf.writestr("package.json",
