@@ -1,0 +1,16 @@
+{
+  "id": "483385bd-a385-42d3-8b29-c66a6ad7f2bb",
+  "name": "auto_rig",
+  "display_name": "AutoRig MEL",
+  "version": "1.0.0",
+  "type": "mel_script",
+  "description": "自動リギングMELスクリプト",
+  "author": "cignoir",
+  "maya_versions": ["2024", "2025", "2026", "2027"],
+  "entry_point": {
+    "type": "mel",
+    "script": "autoRig.mel",
+    "procedure": "autoRigUI"
+  },
+  "tags": ["rigging", "mel"]
+}

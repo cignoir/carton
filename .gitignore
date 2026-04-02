@@ -1,0 +1,30 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.egg-info/
+dist/
+build/
+*.egg
+
+# Maya
+*.ma.swatches
+*.mb.swatches
+workspace.mel
+
+# IDE
+.vscode/
+.idea/
+*.sublime-*
+
+# OS
+Thumbs.db
+Desktop.ini
+.DS_Store
+
+# Environment
+.env
+
+# Build artifacts
+*.zip
+dist/

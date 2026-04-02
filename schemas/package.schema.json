@@ -1,0 +1,172 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://carton.dev/schemas/package.schema.json",
+  "title": "Carton Package Metadata",
+  "description": "Carton パッケージの package.json スキーマ (v2.0)",
+  "type": "object",
+  "required": ["name", "display_name", "version", "description", "author", "maya_versions", "entry_point"],
+  "properties": {
+    "id": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+      "description": "パッケージ固有ID（UUID v4）。省略時は CI/CD で自動生成"
+    },
+    "name": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_]*$",
+      "description": "import 名 / フォルダ名（小文字英数字+アンダースコア）"
+    },
+    "display_name": {
+      "type": "string",
+      "minLength": 1,
+      "description": "UI表示名"
+    },
+    "version": {
+      "type": "string",
+      "pattern": "^\\d+\\.\\d+\\.\\d+$",
+      "description": "セマンティックバージョン (MAJOR.MINOR.PATCH)"
+    },
+    "type": {
+      "type": "string",
+      "enum": ["python_package", "mel_script", "plugin", "local"],
+      "default": "python_package",
+      "description": "パッケージタイプ。省略時は python_package"
+    },
+    "description": {
+      "type": "string",
+      "description": "ツールの説明文"
+    },
+    "author": {
+      "type": "string",
+      "description": "作者名"
+    },
+    "maya_versions": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^\\d{4}$"
+      },
+      "minItems": 1,
+      "description": "対応Mayaバージョン（例: [\"2024\", \"2025\", \"2026\"]）"
+    },
+    "entry_point": {
+      "oneOf": [
+        { "$ref": "#/$defs/entry_point_python" },
+        { "$ref": "#/$defs/entry_point_mel" },
+        { "$ref": "#/$defs/entry_point_plugin" },
+        {
+          "type": "string",
+          "pattern": "^[a-zA-Z_][a-zA-Z0-9_.]*:[a-zA-Z_][a-zA-Z0-9_]*$",
+          "description": "後方互換: \"module:function\" 形式（内部で python 形式に変換）"
+        }
+      ],
+      "description": "タイプ別エントリポイント"
+    },
+    "platform": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "enum": ["win64", "linux", "mac"]
+      },
+      "description": "対応プラットフォーム（plugin 時に必要）"
+    },
+    "icon": {
+      "type": "string",
+      "description": "アイコン。画像ファイルの相対パス (例: resources/icon.png) または絵文字 (例: 📷)"
+    },
+    "dependencies": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["name", "version"],
+        "properties": {
+          "name": { "type": "string" },
+          "version": { "type": "string" }
+        }
+      },
+      "description": "他パッケージへの依存"
+    },
+    "tags": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "検索・分類用タグ"
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": { "type": { "const": "plugin" } },
+        "required": ["type"]
+      },
+      "then": {
+        "required": ["platform"]
+      }
+    }
+  ],
+  "$defs": {
+    "entry_point_python": {
+      "type": "object",
+      "required": ["type", "module", "function"],
+      "properties": {
+        "type": { "const": "python" },
+        "module": {
+          "type": "string",
+          "description": "import するモジュール名"
+        },
+        "function": {
+          "type": "string",
+          "description": "呼び出す関数名"
+        }
+      },
+      "additionalProperties": false
+    },
+    "entry_point_mel": {
+      "type": "object",
+      "required": ["type", "script", "procedure"],
+      "properties": {
+        "type": { "const": "mel" },
+        "script": {
+          "type": "string",
+          "pattern": "\\.mel$",
+          "description": "source するMELスクリプトファイル名"
+        },
+        "procedure": {
+          "type": "string",
+          "description": "呼び出すMELプロシージャ名"
+        }
+      },
+      "additionalProperties": false
+    },
+    "entry_point_plugin": {
+      "type": "object",
+      "required": ["type", "plugin_file"],
+      "properties": {
+        "type": { "const": "plugin" },
+        "plugin_file": {
+          "type": "string",
+          "description": "プラグインファイル名（拡張子なし）"
+        },
+        "commands": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "プラグインが提供するコマンド"
+        },
+        "nodes": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "プラグインが提供するノードタイプ"
+        },
+        "ui_command": {
+          "type": "string",
+          "description": "UI起動コマンド（UI有りの場合）"
+        },
+        "auto_load": {
+          "type": "boolean",
+          "default": false,
+          "description": "Maya起動時に自動ロードするか"
+        }
+      },
+      "additionalProperties": false
+    }
+  }
+}

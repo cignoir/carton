@@ -1,0 +1,17 @@
+{
+  "id": "9577464b-fed6-4749-83b8-d1cc79590ea4",
+  "name": "cigref",
+  "display_name": "CigRef",
+  "version": "1.0.0",
+  "type": "python_package",
+  "description": "Maya上でリファレンス画像を効率的に管理・活用するツール",
+  "author": "cignoir",
+  "maya_versions": ["2024", "2025", "2026", "2027"],
+  "entry_point": {
+    "type": "python",
+    "module": "cigref",
+    "function": "show"
+  },
+  "icon": "cigref/resources/icon.png",
+  "tags": ["reference", "camera", "modeling"]
+}

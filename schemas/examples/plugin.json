@@ -1,0 +1,19 @@
+{
+  "id": "e4abaf2a-7de7-4200-b3f4-902aebf113f4",
+  "name": "smooth_deformer",
+  "display_name": "Smooth Deformer",
+  "version": "2.0.0",
+  "type": "plugin",
+  "description": "高品質スムースデフォーマプラグイン",
+  "author": "cignoir",
+  "maya_versions": ["2025", "2026", "2027"],
+  "platform": ["win64"],
+  "entry_point": {
+    "type": "plugin",
+    "plugin_file": "smoothDeformer",
+    "commands": ["smoothDeform", "smoothDeformUI"],
+    "nodes": ["smoothDeformerNode"],
+    "ui_command": "smoothDeformUI"
+  },
+  "tags": ["deformer", "plugin"]
+}

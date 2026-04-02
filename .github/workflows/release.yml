@@ -1,0 +1,52 @@
+name: Release Carton
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  id-token: write
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Extract version
+        id: version
+        run: echo "VERSION=${GITHUB_REF#refs/tags/v}" >> "$GITHUB_OUTPUT"
+
+      - name: Sync version from tag
+        run: |
+          VERSION="${{ steps.version.outputs.VERSION }}"
+          jq --arg ver "$VERSION" '.version = $ver' package.json > package_tmp.json
+          mv package_tmp.json package.json
+          sed -i "s/__version__ = \".*\"/__version__ = \"$VERSION\"/" carton/__init__.py
+
+      - name: Build Carton zip
+        run: |
+          mkdir -p dist
+          zip -r dist/carton.zip carton/ -x "carton/__pycache__/*" "*.pyc"
+
+      - name: Build installers
+        run: |
+          B64=$(base64 -w0 dist/carton.zip)
+          sed \
+            -e "s|__VERSION__|${{ steps.version.outputs.VERSION }}|g" \
+            -e "s|__CARTON_ZIP_B64__|${B64}|" \
+            installer/install_carton.template.py > dist/install_carton.py
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: carton-installer
+          path: dist/install_carton.py
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist/install_carton.py
+            dist/carton.zip
+          generate_release_notes: true

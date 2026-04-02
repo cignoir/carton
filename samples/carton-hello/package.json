@@ -1,0 +1,16 @@
+{
+  "id": "3e45c57f-2d4b-44ad-aee6-6927e74bce1c",
+  "name": "carton_hello",
+  "display_name": "Hello Carton",
+  "version": "1.0.0",
+  "type": "python_package",
+  "description": "Carton テスト用サンプルツール — シーン情報をポップアップ表示",
+  "author": "cignoir",
+  "maya_versions": ["2024", "2025", "2026", "2027"],
+  "entry_point": {
+    "type": "python",
+    "module": "carton_hello",
+    "function": "show"
+  },
+  "tags": ["sample", "test", "hello"]
+}

@@ -1,0 +1,119 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://carton.dev/schemas/registry.schema.json",
+  "title": "Carton Registry",
+  "description": "Carton パッケージレジストリ (v2.0)",
+  "type": "object",
+  "required": ["schema_version", "packages"],
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "const": "2.0"
+    },
+    "last_updated": {
+      "type": "string",
+      "format": "date-time",
+      "description": "最終更新日時 (ISO 8601)"
+    },
+    "packages": {
+      "type": "object",
+      "description": "キーは UUID (パッケージ固有ID)",
+      "additionalProperties": {
+        "$ref": "#/$defs/registry_package"
+      }
+    }
+  },
+  "$defs": {
+    "registry_package": {
+      "type": "object",
+      "required": ["name", "display_name", "type", "description", "author", "latest_version", "versions"],
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "import 名 / フォルダ名"
+        },
+        "display_name": { "type": "string" },
+        "type": {
+          "type": "string",
+          "enum": ["python_package", "mel_script", "plugin"]
+        },
+        "description": { "type": "string" },
+        "author": { "type": "string" },
+        "platform": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": ["win64", "linux", "mac"]
+          }
+        },
+        "tags": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "latest_version": {
+          "type": "string",
+          "pattern": "^\\d+\\.\\d+\\.\\d+$"
+        },
+        "versions": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/$defs/version_entry"
+          }
+        }
+      }
+    },
+    "version_entry": {
+      "type": "object",
+      "required": ["maya_versions", "released_at"],
+      "properties": {
+        "maya_versions": {
+          "type": "array",
+          "items": { "type": "string" },
+          "minItems": 1
+        },
+        "sha256": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$",
+          "description": "非プラグインパッケージ用のSHA256ハッシュ"
+        },
+        "size_bytes": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "platform": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "artifacts": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/$defs/artifact"
+          },
+          "description": "プラグイン用: プラットフォーム×Mayaバージョン別のアーティファクト"
+        },
+        "released_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "changelog": {
+          "type": "string"
+        }
+      }
+    },
+    "artifact": {
+      "type": "object",
+      "required": ["sha256", "size_bytes"],
+      "properties": {
+        "sha256": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "size_bytes": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "additionalProperties": false
+    }
+  }
+}
