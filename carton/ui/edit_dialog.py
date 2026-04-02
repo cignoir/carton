@@ -4,6 +4,7 @@ import os
 import re
 
 from carton.ui.compat import QtWidgets, QtCore, Qt
+from carton.ui.i18n import t
 
 
 def _list_functions(path):
@@ -29,8 +30,8 @@ class EditDialog(QtWidgets.QDialog):
         self._pkg_data = pkg_data
         self._result = None
 
-        self.setWindowTitle("Carton — Edit")
-        self.setFixedSize(440, 380)
+        self.setWindowTitle(t("edit_title"))
+        self.setFixedSize(440, 420)
         self.setStyleSheet(
             "QDialog { background: #1e1e1e; }"
             "QLabel { color: #e0e0e0; font-size: 13px; }"
@@ -57,26 +58,32 @@ class EditDialog(QtWidgets.QDialog):
         label_style = "color: #888; font-size: 12px;"
 
         # Display Name
-        name_label = QtWidgets.QLabel("Display Name")
+        name_label = QtWidgets.QLabel(t("label_display_name"))
         name_label.setStyleSheet(label_style)
         self._name_input = QtWidgets.QLineEdit(self._pkg_data.get("display_name", ""))
         form.addRow(name_label, self._name_input)
 
         # Version
-        ver_label = QtWidgets.QLabel("Version")
+        ver_label = QtWidgets.QLabel(t("label_version"))
         ver_label.setStyleSheet(label_style)
         self._ver_input = QtWidgets.QLineEdit(self._pkg_data.get("version", "0.0.0"))
         form.addRow(ver_label, self._ver_input)
 
         # Icon
-        icon_label = QtWidgets.QLabel("Icon")
+        icon_label = QtWidgets.QLabel(t("label_icon"))
         icon_label.setStyleSheet(label_style)
         self._icon_input = QtWidgets.QLineEdit(self._pkg_data.get("icon", "🔧"))
-        self._icon_input.setMaximumWidth(60)
+        # No width limit — allows emoji or image path
         form.addRow(icon_label, self._icon_input)
 
+        # Author
+        author_label = QtWidgets.QLabel(t("label_author"))
+        author_label.setStyleSheet(label_style)
+        self._author_input = QtWidgets.QLineEdit(self._pkg_data.get("author", ""))
+        form.addRow(author_label, self._author_input)
+
         # Description
-        desc_label = QtWidgets.QLabel("Description")
+        desc_label = QtWidgets.QLabel(t("label_description"))
         desc_label.setStyleSheet(label_style)
         self._desc_input = QtWidgets.QLineEdit(self._pkg_data.get("description", ""))
         form.addRow(desc_label, self._desc_input)
@@ -84,7 +91,7 @@ class EditDialog(QtWidgets.QDialog):
         # Local Path (read-only)
         local_path = self._pkg_data.get("local_path", "")
         if local_path:
-            path_label = QtWidgets.QLabel("Path")
+            path_label = QtWidgets.QLabel(t("label_path"))
             path_label.setStyleSheet(label_style)
             path_val = QtWidgets.QLineEdit(local_path)
             path_val.setReadOnly(True)
@@ -97,7 +104,7 @@ class EditDialog(QtWidgets.QDialog):
         entry = self._pkg_data.get("entry_point", {})
         ep_type = entry.get("type", "python")
 
-        mode_group = QtWidgets.QGroupBox("Run Mode")
+        mode_group = QtWidgets.QGroupBox(t("label_run_mode"))
         mode_group.setStyleSheet(
             "QGroupBox { color: #888; font-size: 12px; border: 1px solid #3c3c3c;"
             "  border-radius: 4px; margin-top: 8px; padding-top: 16px; }"
@@ -105,10 +112,10 @@ class EditDialog(QtWidgets.QDialog):
         )
         mode_layout = QtWidgets.QVBoxLayout(mode_group)
 
-        self._mode_exec = QtWidgets.QRadioButton("Execute file (トップレベル実行)")
+        self._mode_exec = QtWidgets.QRadioButton(t("add_exec_mode"))
         mode_layout.addWidget(self._mode_exec)
 
-        self._mode_func = QtWidgets.QRadioButton("Call function:")
+        self._mode_func = QtWidgets.QRadioButton(t("add_func_mode"))
         mode_func_layout = QtWidgets.QHBoxLayout()
         mode_func_layout.addWidget(self._mode_func)
         self._func_combo = QtWidgets.QComboBox()
@@ -148,7 +155,7 @@ class EditDialog(QtWidgets.QDialog):
         btn_layout = QtWidgets.QHBoxLayout()
 
         # Remove button (left-aligned)
-        remove_btn = QtWidgets.QPushButton("Remove")
+        remove_btn = QtWidgets.QPushButton(t("remove"))
         remove_btn.setStyleSheet(
             "QPushButton { color: #e57373; background: transparent;"
             "  border: 1px solid #e57373; border-radius: 4px; padding: 6px 12px; }"
@@ -159,7 +166,7 @@ class EditDialog(QtWidgets.QDialog):
 
         btn_layout.addStretch()
 
-        cancel_btn = QtWidgets.QPushButton("キャンセル")
+        cancel_btn = QtWidgets.QPushButton(t("cancel"))
         cancel_btn.setStyleSheet(
             "QPushButton { background: transparent; color: #888;"
             "  border: 1px solid #3c3c3c; border-radius: 4px; padding: 6px 16px; }"
@@ -168,7 +175,7 @@ class EditDialog(QtWidgets.QDialog):
         cancel_btn.clicked.connect(self.reject)
         btn_layout.addWidget(cancel_btn)
 
-        save_btn = QtWidgets.QPushButton("Save")
+        save_btn = QtWidgets.QPushButton(t("save"))
         save_btn.setStyleSheet(
             "QPushButton { background: #3572A5; color: white;"
             "  border: none; border-radius: 4px; padding: 6px 16px; }"
@@ -183,7 +190,7 @@ class EditDialog(QtWidgets.QDialog):
     def _on_save(self):
         display_name = self._name_input.text().strip()
         if not display_name:
-            QtWidgets.QMessageBox.warning(self, "Carton", "Display Name を入力してください。")
+            QtWidgets.QMessageBox.warning(self, "Carton", t("add_no_display_name"))
             return
 
         name = self._pkg_data.get("name", "")
@@ -211,6 +218,7 @@ class EditDialog(QtWidgets.QDialog):
             "action": "save",
             "display_name": display_name,
             "version": self._ver_input.text().strip() or "0.0.0",
+            "author": self._author_input.text().strip(),
             "icon": self._icon_input.text().strip() or "🔧",
             "description": self._desc_input.text().strip(),
             "entry_point": entry_point,
@@ -221,7 +229,7 @@ class EditDialog(QtWidgets.QDialog):
         display = self._pkg_data.get("display_name", self._pkg_id)
         reply = QtWidgets.QMessageBox.question(
             self, "Remove",
-            "{} の登録を解除しますか？\n元ファイルは削除されません。".format(display),
+            t("edit_confirm_remove", display),
             QtWidgets.QMessageBox.Yes | QtWidgets.QMessageBox.No,
         )
         if reply == QtWidgets.QMessageBox.Yes:

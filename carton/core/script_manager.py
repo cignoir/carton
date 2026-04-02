@@ -19,7 +19,8 @@ class ScriptManager:
         self._env_mgr = env_manager
 
     def register(self, file_path, name, display_name, icon, description,
-                 pkg_type, entry_point, is_folder=False):
+                 pkg_type, entry_point, is_folder=False, version="0.0.0",
+                 author=""):
         """Register locally.
 
         Args:
@@ -45,7 +46,8 @@ class ScriptManager:
         installed_data = {
             "name": name,
             "display_name": display_name,
-            "version": "0.0.0",
+            "version": version,
+            "author": author,
             "type": pkg_type,
             "installed_at": now,
             "entry_point": entry_point,

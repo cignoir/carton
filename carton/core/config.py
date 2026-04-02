@@ -44,11 +44,13 @@ class Config:
         install_dir=_DEFAULT_INSTALL_DIR,
         auto_check_updates=True,
         github_repo="cignoir/carton",
+        language="auto",
     ):
         self.registries = registries or []
         self.install_dir = install_dir
         self.auto_check_updates = auto_check_updates
         self.github_repo = github_repo
+        self.language = language
 
     @classmethod
     def load(cls, path=None):
@@ -64,6 +66,7 @@ class Config:
                 install_dir=data.get("install_dir", _DEFAULT_INSTALL_DIR),
                 auto_check_updates=data.get("auto_check_updates", True),
                 github_repo=data.get("github_repo", "cignoir/carton"),
+                language=data.get("language", "auto"),
             )
         return cls()
 
@@ -81,6 +84,7 @@ class Config:
             "install_dir": self.install_dir,
             "auto_check_updates": self.auto_check_updates,
             "github_repo": self.github_repo,
+            "language": self.language,
         }
 
     def add_registry(self, name, path):

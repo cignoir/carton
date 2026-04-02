@@ -37,6 +37,14 @@ def startup():
     from carton.core.publisher import Publisher
 
     _config = Config.load()
+
+    # Initialize i18n
+    from carton.ui.i18n import set_language, detect_language
+    lang = _config.language
+    if lang == "auto":
+        lang = detect_language()
+    set_language(lang)
+
     _env_mgr = MayaEnvManager()
     _install_mgr = InstallManager(_config, _env_mgr)
     _registry_client = RegistryClient(_config)

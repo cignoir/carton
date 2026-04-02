@@ -11,6 +11,7 @@ import os
 import re
 
 from carton.ui.compat import QtWidgets, QtCore, Qt
+from carton.ui.i18n import t
 
 
 def _detect_from_folder(folder_path):
@@ -37,6 +38,10 @@ def _detect_from_folder(folder_path):
                 info["function"] = ep.get("function", ep.get("procedure", "show"))
             info["icon"] = data.get("icon", "")
             info["description"] = data.get("description", "")
+            info["version"] = data.get("version", "0.0.0")
+            info["author"] = data.get("author", "")
+            info["has_package_json"] = True
+            info["entry_point"] = data.get("entry_point", {})
             return info
         except (json.JSONDecodeError, OSError):
             pass
@@ -111,7 +116,7 @@ class AddDialog(QtWidgets.QDialog):
 
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.setWindowTitle("Carton — Add")
+        self.setWindowTitle(t("add_title"))
         self.setFixedSize(440, 360)
         self.setStyleSheet(
             "QDialog { background: #1e1e1e; }"
@@ -138,11 +143,11 @@ class AddDialog(QtWidgets.QDialog):
         # File / folder selection
         select_layout = QtWidgets.QHBoxLayout()
         self._path_input = QtWidgets.QLineEdit()
-        self._path_input.setPlaceholderText("ファイルまたはフォルダを選択...")
+        self._path_input.setPlaceholderText(t("add_select_placeholder"))
         self._path_input.setReadOnly(True)
         select_layout.addWidget(self._path_input)
 
-        file_btn = QtWidgets.QPushButton("File...")
+        file_btn = QtWidgets.QPushButton(t("file"))
         file_btn.setStyleSheet(
             "QPushButton { background: #3c3c3c; color: #e0e0e0; border: none;"
             "  border-radius: 4px; padding: 6px 10px; }"
@@ -151,7 +156,7 @@ class AddDialog(QtWidgets.QDialog):
         file_btn.clicked.connect(self._browse_file)
         select_layout.addWidget(file_btn)
 
-        folder_btn = QtWidgets.QPushButton("Folder...")
+        folder_btn = QtWidgets.QPushButton(t("folder"))
         folder_btn.setStyleSheet(
             "QPushButton { background: #3c3c3c; color: #e0e0e0; border: none;"
             "  border-radius: 4px; padding: 6px 10px; }"
@@ -166,18 +171,18 @@ class AddDialog(QtWidgets.QDialog):
         form.setSpacing(8)
         label_style = "color: #888; font-size: 12px;"
 
-        name_label = QtWidgets.QLabel("Display Name")
+        name_label = QtWidgets.QLabel(t("label_display_name"))
         name_label.setStyleSheet(label_style)
         self._name_input = QtWidgets.QLineEdit()
         form.addRow(name_label, self._name_input)
 
-        icon_label = QtWidgets.QLabel("Icon")
+        icon_label = QtWidgets.QLabel(t("label_icon"))
         icon_label.setStyleSheet(label_style)
         self._icon_input = QtWidgets.QLineEdit("🔧")
-        self._icon_input.setMaximumWidth(60)
+        # No width limit — allows emoji or image path
         form.addRow(icon_label, self._icon_input)
 
-        desc_label = QtWidgets.QLabel("Description")
+        desc_label = QtWidgets.QLabel(t("label_description"))
         desc_label.setStyleSheet(label_style)
         self._desc_input = QtWidgets.QLineEdit()
         form.addRow(desc_label, self._desc_input)
@@ -185,7 +190,8 @@ class AddDialog(QtWidgets.QDialog):
         layout.addLayout(form)
 
         # Run mode
-        mode_group = QtWidgets.QGroupBox("Run Mode")
+        self._mode_group = QtWidgets.QGroupBox(t("label_run_mode"))
+        mode_group = self._mode_group
         mode_group.setStyleSheet(
             "QGroupBox { color: #888; font-size: 12px; border: 1px solid #3c3c3c;"
             "  border-radius: 4px; margin-top: 8px; padding-top: 16px; }"
@@ -193,11 +199,11 @@ class AddDialog(QtWidgets.QDialog):
         )
         mode_layout = QtWidgets.QVBoxLayout(mode_group)
 
-        self._mode_exec = QtWidgets.QRadioButton("Execute file (トップレベル実行)")
+        self._mode_exec = QtWidgets.QRadioButton(t("add_exec_mode"))
         self._mode_exec.setChecked(True)
         mode_layout.addWidget(self._mode_exec)
 
-        self._mode_func = QtWidgets.QRadioButton("Call function:")
+        self._mode_func = QtWidgets.QRadioButton(t("add_func_mode"))
         mode_func_layout = QtWidgets.QHBoxLayout()
         mode_func_layout.addWidget(self._mode_func)
         self._func_combo = QtWidgets.QComboBox()
@@ -209,7 +215,7 @@ class AddDialog(QtWidgets.QDialog):
             "QComboBox QAbstractItemView { background: #2b2b2b; color: #e0e0e0;"
             "  selection-background-color: #3572A5; }"
         )
-        self._func_combo.lineEdit().setPlaceholderText("function name")
+        self._func_combo.lineEdit().setPlaceholderText(t("label_function"))
         mode_func_layout.addWidget(self._func_combo)
         mode_layout.addLayout(mode_func_layout)
 
@@ -221,7 +227,7 @@ class AddDialog(QtWidgets.QDialog):
         btn_layout = QtWidgets.QHBoxLayout()
         btn_layout.addStretch()
 
-        cancel_btn = QtWidgets.QPushButton("キャンセル")
+        cancel_btn = QtWidgets.QPushButton(t("cancel"))
         cancel_btn.setStyleSheet(
             "QPushButton { background: transparent; color: #888;"
             "  border: 1px solid #3c3c3c; border-radius: 4px; padding: 6px 16px; }"
@@ -230,7 +236,7 @@ class AddDialog(QtWidgets.QDialog):
         cancel_btn.clicked.connect(self.reject)
         btn_layout.addWidget(cancel_btn)
 
-        register_btn = QtWidgets.QPushButton("Register")
+        register_btn = QtWidgets.QPushButton(t("register"))
         register_btn.setStyleSheet(
             "QPushButton { background: #4CAF50; color: white;"
             "  border: none; border-radius: 4px; padding: 6px 16px; }"
@@ -244,7 +250,7 @@ class AddDialog(QtWidgets.QDialog):
 
     def _browse_file(self):
         path, _ = QtWidgets.QFileDialog.getOpenFileName(
-            self, "スクリプトを選択", "",
+            self, t("add_browse_file"), "",
             "Scripts (*.py *.mel);;Python (*.py);;MEL (*.mel)",
         )
         if not path:
@@ -252,7 +258,7 @@ class AddDialog(QtWidgets.QDialog):
         self._set_path(path, is_folder=False)
 
     def _browse_folder(self):
-        path = QtWidgets.QFileDialog.getExistingDirectory(self, "フォルダを選択")
+        path = QtWidgets.QFileDialog.getExistingDirectory(self, t("add_browse_folder"))
         if not path:
             return
         self._set_path(path, is_folder=True)
@@ -264,6 +270,7 @@ class AddDialog(QtWidgets.QDialog):
 
         if is_folder:
             info = _detect_from_folder(path)
+            self._detected_info = info
             self._name_input.setText(info.get("display_name", ""))
             self._func_combo.clear()
             self._func_combo.addItem(info.get("function", "show"))
@@ -272,14 +279,22 @@ class AddDialog(QtWidgets.QDialog):
                 self._icon_input.setText(info["icon"])
             if info.get("description"):
                 self._desc_input.setText(info["description"])
-            # Folder always uses function call mode
-            self._mode_func.setChecked(True)
-            self._mode_exec.setEnabled(False)
+
+            if info.get("has_package_json"):
+                # package.json exists: hide Run mode (auto-resolved)
+                self._mode_group.setVisible(False)
+            else:
+                # No package.json: show Run mode, function call only
+                self._mode_group.setVisible(True)
+                self._mode_func.setChecked(True)
+                self._mode_exec.setEnabled(False)
         else:
+            self._detected_info = None
+            self._mode_group.setVisible(True)
+            self._mode_exec.setEnabled(True)
             basename = os.path.splitext(os.path.basename(path))[0]
             display = basename.replace("_", " ").replace("-", " ").title()
             self._name_input.setText(display)
-            self._mode_exec.setEnabled(True)
             self._mode_exec.setChecked(True)
 
             # Populate function list in dropdown
@@ -298,10 +313,10 @@ class AddDialog(QtWidgets.QDialog):
         display_name = self._name_input.text().strip()
 
         if not path or (not os.path.isfile(path) and not os.path.isdir(path)):
-            QtWidgets.QMessageBox.warning(self, "Carton", "有効なファイルまたはフォルダを選択してください。")
+            QtWidgets.QMessageBox.warning(self, "Carton", t("add_invalid_path"))
             return
         if not display_name:
-            QtWidgets.QMessageBox.warning(self, "Carton", "Display Name を入力してください。")
+            QtWidgets.QMessageBox.warning(self, "Carton", t("add_no_display_name"))
             return
 
         is_exec_mode = self._mode_exec.isChecked()
@@ -310,6 +325,23 @@ class AddDialog(QtWidgets.QDialog):
         description = self._desc_input.text().strip()
 
         if self._is_folder:
+            # If package.json exists, use its entry_point directly
+            info = getattr(self, "_detected_info", None)
+            if info and info.get("has_package_json"):
+                self._result = {
+                    "file_path": path,
+                    "name": info.get("name", ""),
+                    "display_name": display_name,
+                    "version": info.get("version", "0.0.0"),
+                    "author": info.get("author", ""),
+                    "icon": icon,
+                    "description": description,
+                    "type": info.get("type", "python_package"),
+                    "entry_point": info.get("entry_point", {}),
+                    "is_folder": True,
+                }
+                self.accept()
+                return
             self._result = self._build_folder_result(path, display_name, func, icon, description)
         else:
             self._result = self._build_file_result(path, display_name, func, icon, description, is_exec_mode)

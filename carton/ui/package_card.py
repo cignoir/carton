@@ -3,6 +3,7 @@
 import os
 
 from carton.ui.compat import QtWidgets, QtCore, QtGui, Qt
+from carton.ui.i18n import t
 
 _DEFAULT_ICON = None
 
@@ -29,16 +30,17 @@ class TypeBadge(QtWidgets.QLabel):
         super().__init__(parent)
         label, color = _BADGE_CONFIG.get(pkg_type, ("?", "#666"))
         self.setText(label)
-        self.setFixedHeight(20)
+        self.setFixedHeight(18)
         self.setAlignment(Qt.AlignCenter)
         self.setStyleSheet(
             "QLabel {{"
-            "  background-color: {color};"
-            "  color: white;"
+            "  background-color: transparent;"
+            "  color: {color};"
+            "  border: 1px solid {color};"
             "  border-radius: 3px;"
-            "  padding: 0px 6px;"
-            "  font-size: 11px;"
-            "  font-weight: bold;"
+            "  padding: 0px 5px;"
+            "  font-size: 10px;"
+            "  font-weight: 600;"
             "}}".format(color=color)
         )
         self.adjustSize()
@@ -65,12 +67,13 @@ class PackageCard(QtWidgets.QFrame):
         self.setFrameShape(QtWidgets.QFrame.StyledPanel)
         self.setStyleSheet(
             "PackageCard {"
-            "  background: #2b2b2b;"
-            "  border: 1px solid #3c3c3c;"
-            "  border-radius: 6px;"
+            "  background: #252526;"
+            "  border: 1px solid #2d2d2d;"
+            "  border-radius: 8px;"
             "}"
             "PackageCard:hover {"
-            "  border-color: #5c5c5c;"
+            "  background: #2a2a2b;"
+            "  border-color: #3a3a3a;"
             "}"
         )
         self.setFixedHeight(80)
@@ -82,7 +85,7 @@ class PackageCard(QtWidgets.QFrame):
         self._icon_label = QtWidgets.QLabel()
         self._icon_label.setFixedSize(48, 48)
         self._icon_label.setStyleSheet(
-            "QLabel { background: #383838; border-radius: 6px; }"
+            "QLabel { background: transparent; border-radius: 8px; }"
         )
         self._icon_label.setAlignment(Qt.AlignCenter)
         icon_value = self._pkg_data.get("icon", "")
@@ -90,7 +93,7 @@ class PackageCard(QtWidgets.QFrame):
             # Emoji icon
             self._icon_label.setText(icon_value)
             self._icon_label.setStyleSheet(
-                "QLabel { background: #383838; border-radius: 6px;"
+                "QLabel { background: transparent; border-radius: 8px;"
                 "  font-size: 24px; }"
             )
         elif self._icon_path and os.path.exists(self._icon_path):
@@ -109,7 +112,7 @@ class PackageCard(QtWidgets.QFrame):
             else:
                 self._icon_label.setText("📦")
                 self._icon_label.setStyleSheet(
-                    "QLabel { background: #383838; border-radius: 6px;"
+                    "QLabel { background: transparent; border-radius: 8px;"
                     "  font-size: 24px; }"
                 )
         layout.addWidget(self._icon_label)
@@ -123,7 +126,7 @@ class PackageCard(QtWidgets.QFrame):
         title_layout.setSpacing(8)
 
         name_label = QtWidgets.QLabel(self._pkg_data.get("display_name", self._pkg_id))
-        name_label.setStyleSheet("font-size: 14px; font-weight: bold; color: #e0e0e0;")
+        name_label.setStyleSheet("font-size: 14px; font-weight: 600; color: #e0e0e0; background: transparent;")
         title_layout.addWidget(name_label)
 
         badge = TypeBadge(self._pkg_data.get("type", "python_package"))
@@ -140,16 +143,22 @@ class PackageCard(QtWidgets.QFrame):
             ver_text = "v{}".format(latest) if latest else ""
 
         ver_label = QtWidgets.QLabel(ver_text)
-        ver_label.setStyleSheet("font-size: 11px; color: #888;")
+        ver_label.setStyleSheet("font-size: 11px; color: #666; background: transparent;")
         title_layout.addWidget(ver_label)
         title_layout.addStretch()
+
+        author = self._pkg_data.get("author", "")
+        if author:
+            author_label = QtWidgets.QLabel(author)
+            author_label.setStyleSheet("font-size: 11px; color: #555; background: transparent;")
+            title_layout.addWidget(author_label)
 
         info_layout.addLayout(title_layout)
 
         # Description
         desc = self._pkg_data.get("description", "")
         desc_label = QtWidgets.QLabel(desc)
-        desc_label.setStyleSheet("font-size: 12px; color: #aaa;")
+        desc_label.setStyleSheet("font-size: 12px; color: #a0a0a0; background: transparent;")
         desc_label.setWordWrap(True)
         info_layout.addWidget(desc_label)
 
@@ -173,52 +182,52 @@ class PackageCard(QtWidgets.QFrame):
                     pass
 
             if has_update:
-                update_btn = QtWidgets.QPushButton("Update")
+                update_btn = QtWidgets.QPushButton(t("update"))
                 update_btn.setFixedWidth(80)
                 update_btn.setStyleSheet(
                     "QPushButton {"
-                    "  background: #FF9800; color: white; border: none;"
-                    "  border-radius: 4px; padding: 6px;"
+                    "  background: #FF9800; color: #1e1e1e; border: none;"
+                    "  border-radius: 6px; padding: 6px; font-weight: 600; font-size: 12px;"
                     "}"
-                    "QPushButton:hover { background: #FFA826; }"
+                    "QPushButton:hover { background: #ffad33; }"
                 )
                 update_btn.clicked.connect(lambda: self.update_requested.emit(self._pkg_id))
                 btn_layout.addWidget(update_btn)
 
-            launch_btn = QtWidgets.QPushButton("Launch")
+            launch_btn = QtWidgets.QPushButton(t("launch"))
             launch_btn.setFixedWidth(80)
             launch_btn.setStyleSheet(
                 "QPushButton {"
                 "  background: #3572A5; color: white; border: none;"
-                "  border-radius: 4px; padding: 6px;"
+                "  border-radius: 6px; padding: 6px; font-weight: 600; font-size: 12px;"
                 "}"
-                "QPushButton:hover { background: #4682B5; }"
+                "QPushButton:hover { background: #4080b8; }"
             )
             launch_btn.clicked.connect(lambda: self.launch_requested.emit(self._pkg_id))
             btn_layout.addWidget(launch_btn)
 
             if is_local:
-                publish_btn = QtWidgets.QPushButton("Publish")
+                publish_btn = QtWidgets.QPushButton(t("publish"))
                 publish_btn.setFixedWidth(80)
                 publish_btn.setStyleSheet(
                     "QPushButton {"
                     "  background: transparent; color: #4CAF50;"
-                    "  border: 1px solid #4CAF50; border-radius: 4px; padding: 4px;"
-                    "  font-size: 11px;"
+                    "  border: 1px solid #3a6b3d; border-radius: 6px; padding: 4px;"
+                    "  font-size: 11px; font-weight: 600;"
                     "}"
-                    "QPushButton:hover { background: #1b3a1b; }"
+                    "QPushButton:hover { background: #1e2e1e; border-color: #4CAF50; }"
                 )
                 publish_btn.clicked.connect(lambda: self.publish_requested.emit(self._pkg_id))
                 btn_layout.addWidget(publish_btn)
         else:
-            install_btn = QtWidgets.QPushButton("Install")
+            install_btn = QtWidgets.QPushButton(t("install"))
             install_btn.setFixedWidth(80)
             install_btn.setStyleSheet(
                 "QPushButton {"
-                "  background: #4CAF50; color: white; border: none;"
-                "  border-radius: 4px; padding: 6px;"
+                "  background: #4CAF50; color: #1e1e1e; border: none;"
+                "  border-radius: 6px; padding: 6px; font-weight: 600; font-size: 12px;"
                 "}"
-                "QPushButton:hover { background: #5CBF60; }"
+                "QPushButton:hover { background: #5cbf60; }"
             )
             install_btn.clicked.connect(lambda: self.install_requested.emit(self._pkg_id))
             btn_layout.addWidget(install_btn)

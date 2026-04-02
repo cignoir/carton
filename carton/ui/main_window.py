@@ -5,6 +5,7 @@ import os
 from collections import OrderedDict
 
 from carton.ui.compat import QtWidgets, QtCore, Qt, wrapInstance
+from carton.ui.i18n import t
 from carton.ui.package_card import PackageCard
 from carton.ui.package_detail import PackageDetailPanel
 from carton.ui.settings_dialog import SettingsDialog
@@ -30,11 +31,14 @@ class _RegistryGroup(QtWidgets.QWidget):
 
         self._arrow = QtWidgets.QLabel("▼")
         self._arrow.setFixedWidth(16)
-        self._arrow.setStyleSheet("color: #666; font-size: 10px;")
+        self._arrow.setStyleSheet("color: #555; font-size: 10px; background: transparent;")
         layout.addWidget(self._arrow)
 
-        label = QtWidgets.QLabel(registry_name)
-        label.setStyleSheet("color: #888; font-size: 12px; font-weight: bold;")
+        label = QtWidgets.QLabel(registry_name.upper())
+        label.setStyleSheet(
+            "color: #6e6e6e; font-size: 11px; font-weight: 600;"
+            " letter-spacing: 1px; background: transparent;"
+        )
         layout.addWidget(label)
 
         layout.addStretch()
@@ -57,18 +61,39 @@ QWidget {
     font-family: "Segoe UI", "Yu Gothic UI", sans-serif;
 }
 QLineEdit {
-    background: #2b2b2b;
-    border: 1px solid #3c3c3c;
-    border-radius: 4px;
-    padding: 6px 10px;
+    background: #252526;
+    border: 1px solid #333;
+    border-radius: 6px;
+    padding: 7px 12px;
     color: #e0e0e0;
     font-size: 13px;
+    selection-background-color: #264f78;
 }
 QLineEdit:focus {
     border-color: #3572A5;
 }
 QScrollArea {
     border: none;
+    background: transparent;
+}
+QScrollBar:vertical {
+    background: transparent;
+    width: 8px;
+    margin: 0;
+}
+QScrollBar::handle:vertical {
+    background: #3a3a3a;
+    border-radius: 4px;
+    min-height: 30px;
+}
+QScrollBar::handle:vertical:hover {
+    background: #555;
+}
+QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
+    height: 0;
+}
+QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {
+    background: transparent;
 }
 """
 
@@ -109,9 +134,9 @@ class CartonWindow(QtWidgets.QDialog):
 
         # Update banner
         self._update_banner = QtWidgets.QWidget()
-        self._update_banner.setFixedHeight(28)
+        self._update_banner.setFixedHeight(32)
         self._update_banner.setStyleSheet(
-            "QWidget { background: #3E2C00; border-radius: 4px; }"
+            "QWidget { background: #2a2517; border: 1px solid #3e3520; border-radius: 6px; }"
         )
         self._update_banner.setVisible(False)
         banner_layout = QtWidgets.QHBoxLayout(self._update_banner)
@@ -123,7 +148,7 @@ class CartonWindow(QtWidgets.QDialog):
         )
         banner_layout.addWidget(self._update_banner_label)
         banner_layout.addStretch()
-        self._update_banner_btn = QtWidgets.QPushButton("Update")
+        self._update_banner_btn = QtWidgets.QPushButton(t("update"))
         self._update_banner_btn.setFixedHeight(20)
         self._update_banner_btn.setStyleSheet(
             "QPushButton { background: #FF9800; color: white; border: none;"
@@ -138,16 +163,16 @@ class CartonWindow(QtWidgets.QDialog):
         # Search + buttons
         search_row = QtWidgets.QHBoxLayout()
         self._search = QtWidgets.QLineEdit()
-        self._search.setPlaceholderText("Search packages...")
+        self._search.setPlaceholderText(t("search_placeholder"))
         self._search.textChanged.connect(self._filter_cards)
         search_row.addWidget(self._search)
 
         refresh_btn = QtWidgets.QPushButton("↻")
         refresh_btn.setFixedSize(28, 28)
         refresh_btn.setStyleSheet(
-            "QPushButton { background: transparent; border: 1px solid #3c3c3c;"
-            "  border-radius: 4px; font-size: 16px; color: #888; }"
-            "QPushButton:hover { background: #2b2b2b; color: #e0e0e0; }"
+            "QPushButton { background: transparent; border: 1px solid #333;"
+            "  border-radius: 6px; font-size: 16px; color: #777; }"
+            "QPushButton:hover { background: #2a2a2a; color: #e0e0e0; border-color: #444; }"
         )
         refresh_btn.clicked.connect(self.refresh)
         search_row.addWidget(refresh_btn)
@@ -155,9 +180,9 @@ class CartonWindow(QtWidgets.QDialog):
         settings_btn = QtWidgets.QPushButton("⚙")
         settings_btn.setFixedSize(28, 28)
         settings_btn.setStyleSheet(
-            "QPushButton { background: transparent; border: 1px solid #3c3c3c;"
-            "  border-radius: 4px; font-size: 16px; color: #888; }"
-            "QPushButton:hover { background: #2b2b2b; color: #e0e0e0; }"
+            "QPushButton { background: transparent; border: 1px solid #333;"
+            "  border-radius: 6px; font-size: 16px; color: #777; }"
+            "QPushButton:hover { background: #2a2a2a; color: #e0e0e0; border-color: #444; }"
         )
         settings_btn.clicked.connect(self._open_settings)
         search_row.addWidget(settings_btn)
@@ -166,14 +191,15 @@ class CartonWindow(QtWidgets.QDialog):
 
         # Tabs
         tab_layout = QtWidgets.QHBoxLayout()
-        self._tab_all = QtWidgets.QPushButton("All")
-        self._tab_installed = QtWidgets.QPushButton("Installed")
+        self._tab_all = QtWidgets.QPushButton(t("tab_all"))
+        self._tab_installed = QtWidgets.QPushButton(t("tab_installed"))
         for btn in (self._tab_all, self._tab_installed):
             btn.setCheckable(True)
             btn.setFixedHeight(28)
             btn.setStyleSheet(
                 "QPushButton { background: transparent; border: none;"
-                "  color: #888; font-size: 12px; padding: 0 12px; }"
+                "  color: #666; font-size: 12px; padding: 0 12px; }"
+                "QPushButton:hover { color: #a0a0a0; }"
                 "QPushButton:checked { color: #e0e0e0; border-bottom: 2px solid #3572A5; }"
             )
         self._tab_all.setChecked(True)
@@ -183,12 +209,12 @@ class CartonWindow(QtWidgets.QDialog):
         tab_layout.addWidget(self._tab_installed)
         tab_layout.addStretch()
 
-        add_btn = QtWidgets.QPushButton("+ Add")
+        add_btn = QtWidgets.QPushButton(t("add"))
         add_btn.setFixedHeight(28)
         add_btn.setStyleSheet(
-            "QPushButton { background: transparent; border: 1px solid #3c3c3c;"
-            "  border-radius: 4px; color: #888; font-size: 12px; padding: 0 10px; }"
-            "QPushButton:hover { background: #2b2b2b; color: #e0e0e0; }"
+            "QPushButton { background: transparent; border: 1px solid #333;"
+            "  border-radius: 6px; color: #777; font-size: 12px; padding: 0 10px; }"
+            "QPushButton:hover { background: #2a2a2a; color: #e0e0e0; border-color: #444; }"
         )
         add_btn.clicked.connect(self._on_add_script)
         tab_layout.addWidget(add_btn)
@@ -205,8 +231,8 @@ class CartonWindow(QtWidgets.QDialog):
         self._card_layout.setContentsMargins(0, 0, 0, 0)
         self._card_layout.setSpacing(8)
 
-        self._loading_label = QtWidgets.QLabel("Loading...")
-        self._loading_label.setStyleSheet("color: #888; font-size: 13px;")
+        self._loading_label = QtWidgets.QLabel(t("loading"))
+        self._loading_label.setStyleSheet("color: #666; font-size: 13px; background: transparent;")
         self._loading_label.setAlignment(Qt.AlignCenter)
         self._card_layout.addWidget(self._loading_label)
         self._card_layout.addStretch()
@@ -232,8 +258,52 @@ class CartonWindow(QtWidgets.QDialog):
         QtCore.QTimer.singleShot(0, self._do_deferred_init)
 
     def _do_deferred_init(self):
+        if self._config and not self._config.registries:
+            self._prompt_registry_setup()
         self.refresh()
         self._loading_label.setVisible(False)
+
+    def _prompt_registry_setup(self):
+        """Show a setup dialog when no registries are configured."""
+        reply = QtWidgets.QMessageBox.question(
+            self, t("setup_title"),
+            t("setup_no_registry"),
+            QtWidgets.QMessageBox.Yes | QtWidgets.QMessageBox.No,
+        )
+        if reply == QtWidgets.QMessageBox.Yes:
+            self._create_new_registry()
+        else:
+            QtWidgets.QMessageBox.information(
+                self, "Carton",
+                t("setup_no_registry_hint"),
+            )
+
+    def _create_new_registry(self):
+        """Create a new empty registry directory."""
+        folder = QtWidgets.QFileDialog.getExistingDirectory(
+            self, t("setup_select_folder"),
+        )
+        if not folder:
+            return
+
+        name, ok = QtWidgets.QInputDialog.getText(
+            self, "Registry Name",
+            t("setup_registry_name"),
+            text=os.path.basename(folder),
+        )
+        if not ok or not name:
+            return
+
+        import json
+        reg_path = os.path.join(folder, "registry.json")
+        if not os.path.exists(reg_path):
+            os.makedirs(folder, exist_ok=True)
+            with open(reg_path, "w", encoding="utf-8") as f:
+                json.dump({"schema_version": "2.0", "packages": {}}, f, indent=2)
+            os.makedirs(os.path.join(folder, "packages"), exist_ok=True)
+
+        self._config.add_registry(name, reg_path)
+        self._config.save()
 
     def set_services(self, registry_client, install_manager, downloader,
                      self_updater=None, config=None, script_manager=None,
@@ -286,7 +356,7 @@ class CartonWindow(QtWidgets.QDialog):
                     "type": pkg_data.get("type", "python_package"),
                     "icon": pkg_data.get("icon", "📄"),
                     "description": pkg_data.get("description", ""),
-                    "author": "",
+                    "author": pkg_data.get("author", ""),
                     "tags": [],
                     "latest_version": pkg_data.get("version", "0.0.0"),
                     "_installed_ver": pkg_data.get("version", "0.0.0"),
@@ -366,6 +436,7 @@ class CartonWindow(QtWidgets.QDialog):
         elif result["action"] == "save":
             pkg_data["display_name"] = result["display_name"]
             pkg_data["version"] = result["version"]
+            pkg_data["author"] = result["author"]
             pkg_data["icon"] = result["icon"]
             pkg_data["description"] = result["description"]
             pkg_data["entry_point"] = result["entry_point"]
@@ -426,10 +497,12 @@ class CartonWindow(QtWidgets.QDialog):
                 pkg_type=result["type"],
                 entry_point=result["entry_point"],
                 is_folder=result.get("is_folder", False),
+                version=result.get("version", "0.0.0"),
+                author=result.get("author", ""),
             )
             self._rebuild_cards()
         except Exception as e:
-            QtWidgets.QMessageBox.warning(self, "Register Error", str(e))
+            QtWidgets.QMessageBox.warning(self, t("register_error"), str(e))
 
     def _on_publish(self, pkg_id):
         if not self._publisher or not self._config:
@@ -447,9 +520,7 @@ class CartonWindow(QtWidgets.QDialog):
         registries = self._config.registries
         if not registries:
             QtWidgets.QMessageBox.warning(
-                self, "Publish",
-                "レジストリが登録されていません。\n"
-                "Settings からレジストリを追加してください。",
+                self, t("publish"), t("publish_no_registry"),
             )
             return
 
@@ -458,15 +529,15 @@ class CartonWindow(QtWidgets.QDialog):
         else:
             names = [r.name for r in registries]
             chosen, ok = QtWidgets.QInputDialog.getItem(
-                self, "Publish", "Publish 先レジストリ:", names, 0, False,
+                self, t("publish"), t("publish_select_registry"), names, 0, False,
             )
             if not ok:
                 return
             target_registry = next(r for r in registries if r.name == chosen)
 
         reply = QtWidgets.QMessageBox.question(
-            self, "Publish",
-            "{} v{} を '{}' に共有しますか？".format(display, local_version, target_registry.name),
+            self, t("publish"),
+            t("confirm_publish", display, local_version, target_registry.name),
             QtWidgets.QMessageBox.Yes | QtWidgets.QMessageBox.No,
         )
         if reply != QtWidgets.QMessageBox.Yes:
@@ -484,12 +555,12 @@ class CartonWindow(QtWidgets.QDialog):
                 self._install_manager._save_installed()
 
             QtWidgets.QMessageBox.information(
-                self, "Publish", "{} を共有しました！".format(display),
+                self, t("publish"), t("publish_success", display),
             )
             self.refresh()
         except Exception as e:
             self._set_publish_button_state(pkg_id, busy=False)
-            QtWidgets.QMessageBox.warning(self, "Publish Error", str(e))
+            QtWidgets.QMessageBox.warning(self, t("publish_error"), str(e))
 
     def _set_publish_button_state(self, pkg_id, busy=True):
         for i in range(self._card_layout.count()):
@@ -497,8 +568,8 @@ class CartonWindow(QtWidgets.QDialog):
             widget = item.widget()
             if isinstance(widget, PackageCard) and widget._pkg_id == pkg_id:
                 for btn in widget.findChildren(QtWidgets.QPushButton):
-                    if btn.text() in ("Publish", "Publishing..."):
-                        btn.setText("Publishing..." if busy else "Publish")
+                    if btn.text() in (t("publish"), t("publishing")):
+                        btn.setText(t("publishing") if busy else t("publish"))
                         btn.setEnabled(not busy)
                         return
 
@@ -510,8 +581,8 @@ class CartonWindow(QtWidgets.QDialog):
         latest = pkg_data.get("latest_version", "")
         display = pkg_data.get("display_name", "")
         reply = QtWidgets.QMessageBox.question(
-            self, "Update",
-            "{} を v{} に更新しますか？".format(display, latest),
+            self, t("update"),
+            t("confirm_update", display, latest),
             QtWidgets.QMessageBox.Yes | QtWidgets.QMessageBox.No,
         )
         if reply != QtWidgets.QMessageBox.Yes:
@@ -528,7 +599,7 @@ class CartonWindow(QtWidgets.QDialog):
         if self._self_updater.has_pending_update():
             ver = self._self_updater.get_pending_version()
             self._update_banner_label.setText(
-                "Carton v{} — next Maya restart".format(ver)
+                t("update_pending", ver)
             )
             self._update_banner_btn.setVisible(False)
             self._update_banner.setVisible(True)
@@ -540,7 +611,7 @@ class CartonWindow(QtWidgets.QDialog):
         if result:
             self._pending_self_update = result  # (version, download_url)
             self._update_banner_label.setText(
-                "Carton v{} available".format(result[0])
+                t("update_available", result[0])
             )
             self._update_banner_btn.setVisible(True)
             self._update_banner.setVisible(True)
@@ -551,20 +622,20 @@ class CartonWindow(QtWidgets.QDialog):
         if not hasattr(self, "_pending_self_update") or not self._pending_self_update:
             return
         version, download_url = self._pending_self_update
-        self._update_banner_btn.setText("Updating...")
+        self._update_banner_btn.setText(t("updating"))
         self._update_banner_btn.setEnabled(False)
         QtWidgets.QApplication.processEvents()
         try:
             self._self_updater.stage_update(version, download_url)
             self._update_banner_label.setText(
-                "Carton v{} — next Maya restart".format(version)
+                t("update_pending", version)
             )
             self._update_banner_btn.setVisible(False)
             self._pending_self_update = None
         except Exception as e:
-            self._update_banner_btn.setText("Update")
+            self._update_banner_btn.setText(t("update"))
             self._update_banner_btn.setEnabled(True)
-            QtWidgets.QMessageBox.warning(self, "Update Error", str(e))
+            QtWidgets.QMessageBox.warning(self, t("update_error"), str(e))
 
     def _on_install(self, pkg_id):
         if not self._downloader or not self._install_manager:
@@ -584,7 +655,7 @@ class CartonWindow(QtWidgets.QDialog):
         try:
             url = version_info.get("download_url")
             if not url:
-                raise RuntimeError("No download URL available")
+                raise RuntimeError(t("no_download_url"))
 
             dest = os.path.join(
                 self._install_manager._config.staging_dir,
@@ -619,7 +690,7 @@ class CartonWindow(QtWidgets.QDialog):
 
         except Exception as e:
             self._set_install_button_state(pkg_id, busy=False)
-            QtWidgets.QMessageBox.warning(self, "Install Error", str(e))
+            QtWidgets.QMessageBox.warning(self, t("install_error"), str(e))
 
     def _set_install_button_state(self, pkg_id, busy=True):
         for i in range(self._card_layout.count()):
@@ -627,21 +698,21 @@ class CartonWindow(QtWidgets.QDialog):
             widget = item.widget()
             if isinstance(widget, PackageCard) and widget._pkg_id == pkg_id:
                 for btn in widget.findChildren(QtWidgets.QPushButton):
-                    if btn.text() in ("Install", "Installing..."):
+                    if btn.text() in (t("install"), t("installing")):
                         if busy:
-                            btn.setText("Installing...")
+                            btn.setText(t("installing"))
                             btn.setEnabled(False)
                             btn.setStyleSheet(
-                                "QPushButton { background: #666; color: #aaa; border: none;"
-                                "  border-radius: 4px; padding: 6px; }"
+                                "QPushButton { background: #3a3a3a; color: #666; border: none;"
+                                "  border-radius: 6px; padding: 6px; font-weight: 600; font-size: 12px; }"
                             )
                         else:
-                            btn.setText("Install")
+                            btn.setText(t("install"))
                             btn.setEnabled(True)
                             btn.setStyleSheet(
-                                "QPushButton { background: #4CAF50; color: white; border: none;"
-                                "  border-radius: 4px; padding: 6px; }"
-                                "QPushButton:hover { background: #5CBF60; }"
+                                "QPushButton { background: #4CAF50; color: #1e1e1e; border: none;"
+                                "  border-radius: 6px; padding: 6px; font-weight: 600; font-size: 12px; }"
+                                "QPushButton:hover { background: #5cbf60; }"
                             )
                         return
 
@@ -649,8 +720,8 @@ class CartonWindow(QtWidgets.QDialog):
         packages = self._registry_client.get_packages() if self._registry_client else {}
         display = packages.get(pkg_id, {}).get("display_name", pkg_id)
         reply = QtWidgets.QMessageBox.question(
-            self, "Uninstall",
-            "{} をアンインストールしますか？".format(display),
+            self, t("uninstall"),
+            t("confirm_uninstall", display),
             QtWidgets.QMessageBox.Yes | QtWidgets.QMessageBox.No,
         )
         if reply == QtWidgets.QMessageBox.Yes:
@@ -679,7 +750,7 @@ class CartonWindow(QtWidgets.QDialog):
                 handler = get_handler(pkg_data.get("type", "python_package"))
                 handler.launch(pkg_data)
         except Exception as e:
-            QtWidgets.QMessageBox.warning(self, "Launch Error", str(e))
+            QtWidgets.QMessageBox.warning(self, t("launch_error"), str(e))
 
     def _resolve_entry_point(self, pkg_name):
         packages_dir = self._install_manager._config.packages_dir

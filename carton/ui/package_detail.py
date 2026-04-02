@@ -1,6 +1,7 @@
 """Package detail panel."""
 
 from carton.ui.compat import QtWidgets, QtCore, Qt
+from carton.ui.i18n import t
 from carton.ui.package_card import TypeBadge
 
 
@@ -23,16 +24,20 @@ class PackageDetailPanel(QtWidgets.QWidget):
         layout.setSpacing(12)
 
         # Back button
-        back_btn = QtWidgets.QPushButton("← Back")
+        back_btn = QtWidgets.QPushButton(t("back"))
         back_btn.setFlat(True)
-        back_btn.setStyleSheet("color: #888; font-size: 12px; text-align: left;")
+        back_btn.setStyleSheet(
+            "QPushButton { color: #666; font-size: 12px; text-align: left;"
+            "  background: transparent; border: none; }"
+            "QPushButton:hover { color: #a0a0a0; }"
+        )
         back_btn.clicked.connect(self.back_requested.emit)
         layout.addWidget(back_btn)
 
         # Header
         header = QtWidgets.QHBoxLayout()
         self._name_label = QtWidgets.QLabel()
-        self._name_label.setStyleSheet("font-size: 20px; font-weight: bold; color: #e0e0e0;")
+        self._name_label.setStyleSheet("font-size: 20px; font-weight: 600; color: #e0e0e0; background: transparent;")
         header.addWidget(self._name_label)
 
         self._badge_container = QtWidgets.QHBoxLayout()
@@ -47,44 +52,46 @@ class PackageDetailPanel(QtWidgets.QWidget):
 
         # Version
         self._version_label = QtWidgets.QLabel()
-        self._version_label.setStyleSheet("font-size: 12px; color: #888;")
+        self._version_label.setStyleSheet("font-size: 12px; color: #666; background: transparent;")
         layout.addWidget(self._version_label)
 
         # Description
         self._desc_label = QtWidgets.QLabel()
-        self._desc_label.setStyleSheet("font-size: 13px; color: #ccc;")
+        self._desc_label.setStyleSheet("font-size: 13px; color: #b0b0b0; background: transparent;")
         self._desc_label.setWordWrap(True)
         layout.addWidget(self._desc_label)
 
         # Metadata
         self._meta_area = QtWidgets.QWidget()
+        self._meta_area.setStyleSheet("background: transparent;")
         meta_layout = QtWidgets.QFormLayout(self._meta_area)
-        meta_layout.setContentsMargins(0, 8, 0, 0)
-        label_style = "color: #888; font-size: 12px;"
-        value_style = "color: #ccc; font-size: 12px;"
+        meta_layout.setContentsMargins(0, 12, 0, 0)
+        meta_layout.setVerticalSpacing(8)
+        label_style = "color: #666; font-size: 12px; background: transparent;"
+        value_style = "color: #a0a0a0; font-size: 12px; background: transparent;"
 
         self._author_val = QtWidgets.QLabel()
         self._author_val.setStyleSheet(value_style)
-        author_label = QtWidgets.QLabel("Author")
+        author_label = QtWidgets.QLabel(t("label_author"))
         author_label.setStyleSheet(label_style)
         meta_layout.addRow(author_label, self._author_val)
 
         self._maya_val = QtWidgets.QLabel()
         self._maya_val.setStyleSheet(value_style)
-        maya_label = QtWidgets.QLabel("Maya")
+        maya_label = QtWidgets.QLabel(t("label_maya"))
         maya_label.setStyleSheet(label_style)
         meta_layout.addRow(maya_label, self._maya_val)
 
         self._tags_val = QtWidgets.QLabel()
         self._tags_val.setStyleSheet(value_style)
-        tags_label = QtWidgets.QLabel("Tags")
+        tags_label = QtWidgets.QLabel(t("label_tags"))
         tags_label.setStyleSheet(label_style)
         meta_layout.addRow(tags_label, self._tags_val)
 
         self._changelog_val = QtWidgets.QLabel()
         self._changelog_val.setStyleSheet(value_style)
         self._changelog_val.setWordWrap(True)
-        changelog_label = QtWidgets.QLabel("Changelog")
+        changelog_label = QtWidgets.QLabel(t("label_changelog"))
         changelog_label.setStyleSheet(label_style)
         meta_layout.addRow(changelog_label, self._changelog_val)
 
@@ -92,11 +99,11 @@ class PackageDetailPanel(QtWidgets.QWidget):
         layout.addStretch()
 
         # Uninstall
-        self._uninstall_btn = QtWidgets.QPushButton("Uninstall")
+        self._uninstall_btn = QtWidgets.QPushButton(t("uninstall"))
         self._uninstall_btn.setStyleSheet(
-            "QPushButton { color: #e57373; background: transparent; border: 1px solid #e57373;"
-            "  border-radius: 4px; padding: 6px; }"
-            "QPushButton:hover { background: #3c2020; }"
+            "QPushButton { color: #e57373; background: transparent; border: 1px solid #4a2a2a;"
+            "  border-radius: 6px; padding: 8px; font-size: 12px; }"
+            "QPushButton:hover { background: #2e1e1e; border-color: #e57373; }"
         )
         self._uninstall_btn.clicked.connect(
             lambda: self.uninstall_requested.emit(self._pkg_id)
@@ -138,11 +145,11 @@ class PackageDetailPanel(QtWidgets.QWidget):
 
         # Button configuration
         if installed_version:
-            self._action_btn.setText("Launch")
+            self._action_btn.setText(t("launch"))
             self._action_btn.setStyleSheet(
                 "QPushButton { background: #3572A5; color: white; border: none;"
-                "  border-radius: 4px; padding: 8px; }"
-                "QPushButton:hover { background: #4682B5; }"
+                "  border-radius: 6px; padding: 8px; font-weight: 600; font-size: 13px; }"
+                "QPushButton:hover { background: #4080b8; }"
             )
             try:
                 self._action_btn.clicked.disconnect()
@@ -153,11 +160,11 @@ class PackageDetailPanel(QtWidgets.QWidget):
             )
             self._uninstall_btn.setVisible(True)
         else:
-            self._action_btn.setText("Install")
+            self._action_btn.setText(t("install"))
             self._action_btn.setStyleSheet(
-                "QPushButton { background: #4CAF50; color: white; border: none;"
-                "  border-radius: 4px; padding: 8px; }"
-                "QPushButton:hover { background: #5CBF60; }"
+                "QPushButton { background: #4CAF50; color: #1e1e1e; border: none;"
+                "  border-radius: 6px; padding: 8px; font-weight: 600; font-size: 13px; }"
+                "QPushButton:hover { background: #5cbf60; }"
             )
             try:
                 self._action_btn.clicked.disconnect()

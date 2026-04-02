@@ -4,6 +4,7 @@ import os
 import shutil
 
 from carton.ui.compat import QtWidgets, QtCore, Qt
+from carton.ui.i18n import t
 
 
 class SettingsDialog(QtWidgets.QDialog):
@@ -12,7 +13,7 @@ class SettingsDialog(QtWidgets.QDialog):
     def __init__(self, config, parent=None):
         super().__init__(parent)
         self._config = config
-        self.setWindowTitle("Carton — Settings")
+        self.setWindowTitle(t("settings_title"))
         self.setFixedSize(500, 400)
         self.setStyleSheet(
             "QDialog { background: #1e1e1e; }"
@@ -32,7 +33,7 @@ class SettingsDialog(QtWidgets.QDialog):
         layout.setSpacing(12)
 
         # Registry list
-        reg_label = QtWidgets.QLabel("Registries")
+        reg_label = QtWidgets.QLabel(t("settings_registries"))
         reg_label.setStyleSheet("color: #888; font-size: 12px; font-weight: bold;")
         layout.addWidget(reg_label)
 
@@ -44,7 +45,7 @@ class SettingsDialog(QtWidgets.QDialog):
         # Registry operation buttons
         reg_btn_layout = QtWidgets.QHBoxLayout()
 
-        add_btn = QtWidgets.QPushButton("+ Add")
+        add_btn = QtWidgets.QPushButton(t("add"))
         add_btn.setStyleSheet(
             "QPushButton { background: #4CAF50; color: white; border: none;"
             "  border-radius: 4px; padding: 6px 12px; }"
@@ -53,7 +54,7 @@ class SettingsDialog(QtWidgets.QDialog):
         add_btn.clicked.connect(self._add_registry)
         reg_btn_layout.addWidget(add_btn)
 
-        remove_btn = QtWidgets.QPushButton("Remove")
+        remove_btn = QtWidgets.QPushButton(t("remove"))
         remove_btn.setStyleSheet(
             "QPushButton { background: transparent; color: #e57373;"
             "  border: 1px solid #e57373; border-radius: 4px; padding: 6px 12px; }"
@@ -89,7 +90,7 @@ class SettingsDialog(QtWidgets.QDialog):
         layout.addStretch()
 
         # Uninstall
-        uninstall_btn = QtWidgets.QPushButton("Carton をアンインストール")
+        uninstall_btn = QtWidgets.QPushButton(t("settings_uninstall"))
         uninstall_btn.setStyleSheet(
             "QPushButton { color: #e57373; background: transparent;"
             "  border: 1px solid #e57373; border-radius: 4px; padding: 6px; }"
@@ -102,7 +103,7 @@ class SettingsDialog(QtWidgets.QDialog):
         btn_layout = QtWidgets.QHBoxLayout()
         btn_layout.addStretch()
 
-        close_btn = QtWidgets.QPushButton("Close")
+        close_btn = QtWidgets.QPushButton(t("close"))
         close_btn.setStyleSheet(
             "QPushButton { background: #3572A5; color: white;"
             "  border: none; border-radius: 4px; padding: 6px 16px; }"
@@ -116,7 +117,7 @@ class SettingsDialog(QtWidgets.QDialog):
     def _add_registry(self):
         """Add a registry."""
         path = QtWidgets.QFileDialog.getOpenFileName(
-            self, "registry.json を選択", "",
+            self, t("settings_select_registry"), "",
             "Registry (registry.json);;JSON (*.json)",
         )[0]
         if not path:
@@ -126,7 +127,7 @@ class SettingsDialog(QtWidgets.QDialog):
         base = os.path.basename(os.path.dirname(path))
         name, ok = QtWidgets.QInputDialog.getText(
             self, "Registry Name",
-            "レジストリの名前を入力:",
+            t("settings_registry_name"),
             text=base,
         )
         if not ok or not name:
@@ -137,7 +138,7 @@ class SettingsDialog(QtWidgets.QDialog):
             if r.name == name:
                 QtWidgets.QMessageBox.warning(
                     self, "Carton",
-                    "'{}' は既に登録されています。".format(name),
+                    t("settings_already_exists", name),
                 )
                 return
 
@@ -153,7 +154,7 @@ class SettingsDialog(QtWidgets.QDialog):
         entry = self._config.registries[row]
         reply = QtWidgets.QMessageBox.question(
             self, "Remove Registry",
-            "'{}' を削除しますか？\nレジストリの中身は削除されません。".format(entry.name),
+            t("settings_confirm_remove", entry.name),
             QtWidgets.QMessageBox.Yes | QtWidgets.QMessageBox.No,
         )
         if reply == QtWidgets.QMessageBox.Yes:
@@ -191,9 +192,8 @@ class SettingsDialog(QtWidgets.QDialog):
     def _uninstall_carton(self):
         """Uninstall Carton itself."""
         reply = QtWidgets.QMessageBox.warning(
-            self, "Carton アンインストール",
-            "Carton とインストール済みの全パッケージを削除します。\n"
-            "この操作は取り消せません。\n\n続行しますか？",
+            self, t("settings_uninstall_title"),
+            t("settings_confirm_uninstall"),
             QtWidgets.QMessageBox.Yes | QtWidgets.QMessageBox.No,
             QtWidgets.QMessageBox.No,
         )
@@ -255,12 +255,10 @@ class SettingsDialog(QtWidgets.QDialog):
         if errors:
             QtWidgets.QMessageBox.warning(
                 None, "Carton",
-                "一部エラーが発生しました:\n" + "\n".join(errors)
-                + "\n\nMaya を再起動してください。",
+                t("settings_uninstall_errors", "\n".join(errors)),
             )
         else:
             QtWidgets.QMessageBox.information(
                 None, "Carton",
-                "Carton をアンインストールしました。\n"
-                "Maya を再起動してください。",
+                t("settings_uninstall_done"),
             )
