@@ -24,10 +24,11 @@ def _list_functions(path):
 class EditDialog(QtWidgets.QDialog):
     """Dialog for editing metadata of locally registered tools."""
 
-    def __init__(self, pkg_id, pkg_data, parent=None):
+    def __init__(self, pkg_id, pkg_data, published_registries=None, parent=None):
         super().__init__(parent)
         self._pkg_id = pkg_id
         self._pkg_data = pkg_data
+        self._published_registries = published_registries or []
         self._result = None
 
         self.setWindowTitle(t("edit_title"))
@@ -164,6 +165,16 @@ class EditDialog(QtWidgets.QDialog):
         remove_btn.clicked.connect(self._on_remove)
         btn_layout.addWidget(remove_btn)
 
+        if self._published_registries:
+            unpub_btn = QtWidgets.QPushButton(t("unpublish"))
+            unpub_btn.setStyleSheet(
+                "QPushButton { color: #FFB74D; background: transparent;"
+                "  border: 1px solid #FFB74D; border-radius: 4px; padding: 6px 12px; }"
+                "QPushButton:hover { background: #3c3020; }"
+            )
+            unpub_btn.clicked.connect(self._on_unpublish)
+            btn_layout.addWidget(unpub_btn)
+
         btn_layout.addStretch()
 
         cancel_btn = QtWidgets.QPushButton(t("cancel"))
@@ -236,12 +247,37 @@ class EditDialog(QtWidgets.QDialog):
             self._result = {"action": "remove"}
             self.accept()
 
+    def _on_unpublish(self):
+        display = self._pkg_data.get("display_name", self._pkg_id)
+        regs = self._published_registries
+
+        if len(regs) == 1:
+            target = regs[0]
+        else:
+            names = [r.name for r in regs]
+            chosen, ok = QtWidgets.QInputDialog.getItem(
+                self, t("unpublish"), t("unpublish_select_registry"),
+                names, 0, False,
+            )
+            if not ok:
+                return
+            target = next(r for r in regs if r.name == chosen)
+
+        reply = QtWidgets.QMessageBox.question(
+            self, t("unpublish"),
+            t("confirm_unpublish", display, target.name),
+            QtWidgets.QMessageBox.Yes | QtWidgets.QMessageBox.No,
+        )
+        if reply == QtWidgets.QMessageBox.Yes:
+            self._result = {"action": "unpublish", "registry": target}
+            self.accept()
+
     def get_result(self):
         return self._result
 
     @classmethod
-    def prompt(cls, pkg_id, pkg_data, parent=None):
-        dialog = cls(pkg_id, pkg_data, parent)
+    def prompt(cls, pkg_id, pkg_data, published_registries=None, parent=None):
+        dialog = cls(pkg_id, pkg_data, published_registries=published_registries, parent=parent)
         if dialog.exec_() == QtWidgets.QDialog.Accepted:
             return dialog.get_result()
         return None

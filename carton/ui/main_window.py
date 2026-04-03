@@ -426,8 +426,18 @@ class CartonWindow(QtWidgets.QDialog):
         pkg_data = installed.get(pkg_id, {})
         if not pkg_data:
             return
-        result = EditDialog.prompt(pkg_id, pkg_data, self)
+
+        # Check which registries have this package published
+        published_regs = []
+        if self._publisher:
+            published_regs = self._publisher.find_published_registries(pkg_id)
+
+        result = EditDialog.prompt(pkg_id, pkg_data,
+                                   published_registries=published_regs, parent=self)
         if not result:
+            return
+        if result["action"] == "unpublish":
+            self._on_unpublish(pkg_id, result["registry"])
             return
         if result["action"] == "remove":
             if self._script_manager:
@@ -562,6 +572,33 @@ class CartonWindow(QtWidgets.QDialog):
         except Exception as e:
             self._set_publish_button_state(pkg_id, busy=False)
             QtWidgets.QMessageBox.warning(self, t("publish_error"), str(e))
+
+    def _on_unpublish(self, pkg_id, registry_entry):
+        if not self._publisher:
+            return
+
+        installed = self._install_manager.get_installed_packages()
+        pkg_data = installed.get(pkg_id, {})
+        display = pkg_data.get("display_name", pkg_id)
+
+        try:
+            self._publisher.unpublish(pkg_id, registry_entry)
+
+            # Revert source back to local_script
+            installed_pkgs = self._install_manager._installed["packages"]
+            if pkg_id in installed_pkgs:
+                installed_pkgs[pkg_id]["source"] = "local_script"
+                self._install_manager._save_installed()
+
+            QtWidgets.QMessageBox.information(
+                self, t("unpublish"),
+                t("unpublish_success", display, registry_entry.name),
+            )
+            self.refresh()
+        except Exception as e:
+            QtWidgets.QMessageBox.warning(
+                self, t("unpublish_error"), str(e),
+            )
 
     def _set_publish_button_state(self, pkg_id, busy=True):
         for i in range(self._card_layout.count()):

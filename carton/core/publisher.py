@@ -219,6 +219,71 @@ class Publisher:
         with open(pkg_json_path, "w", encoding="utf-8") as f:
             json.dump(data, f, indent=2, ensure_ascii=False)
 
+    def unpublish(self, pkg_id, registry_entry):
+        """Remove a package from a registry.
+
+        Deletes the registry.json entry and all version zip files.
+
+        Args:
+            pkg_id: Package UUID to unpublish
+            registry_entry: Target RegistryEntry to unpublish from
+
+        Returns:
+            dict with id, name of the unpublished package
+
+        Raises:
+            RuntimeError: If the package is not found in the registry
+        """
+        reg_path = os.path.normpath(registry_entry.path)
+        if not os.path.exists(reg_path):
+            raise RuntimeError("Registry not found: {}".format(reg_path))
+
+        with open(reg_path, "r", encoding="utf-8") as f:
+            registry = json.load(f)
+
+        packages = registry.get("packages", {})
+        if pkg_id not in packages:
+            raise RuntimeError("Package not found in registry: {}".format(pkg_id))
+
+        entry = packages[pkg_id]
+        name = entry.get("name", pkg_id)
+
+        # Delete version zip files
+        pkg_dir = os.path.join(registry_entry.base_dir, "packages", pkg_id)
+        if os.path.isdir(pkg_dir):
+            shutil.rmtree(pkg_dir)
+
+        # Remove from registry.json
+        del packages[pkg_id]
+        registry["last_updated"] = datetime.now(timezone.utc).strftime(
+            "%Y-%m-%dT%H:%M:%SZ"
+        )
+
+        with open(reg_path, "w", encoding="utf-8") as f:
+            json.dump(registry, f, indent=2, ensure_ascii=False)
+
+        return {"id": pkg_id, "name": name}
+
+    def find_published_registries(self, pkg_id):
+        """Find all registries that contain a given package UUID.
+
+        Returns:
+            list of RegistryEntry objects where the package is published
+        """
+        results = []
+        for entry in self._config.registries:
+            reg_path = os.path.normpath(entry.path)
+            if not os.path.exists(reg_path):
+                continue
+            try:
+                with open(reg_path, "r", encoding="utf-8") as f:
+                    registry = json.load(f)
+                if pkg_id in registry.get("packages", {}):
+                    results.append(entry)
+            except (json.JSONDecodeError, OSError):
+                continue
+        return results
+
     def _compute_sha256(self, file_path):
         sha = hashlib.sha256()
         with open(file_path, "rb") as f:
