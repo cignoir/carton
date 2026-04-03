@@ -11,49 +11,32 @@ The Ashbox repository (`F:\workspace\ashbox`) remains as a reference but is no l
 ## Current State
 
 ### What Works
-- **D&D installer**: `dist/install_carton.py` → Maya viewport → restart → Carton menu appears
+- **D&D installer**: `dist/install_carton_*.py` → Maya viewport → restart → Carton menu appears
+- **Language-specific installers**: `install_carton_ja_v*.py` forces Japanese, `install_carton_en_v*.py` forces English, plain `install_carton_v*.py` auto-detects from Maya locale
 - **Multiple registries**: Add via Settings, reads local `registry.json` files
 - **Local script registration**: + Add → file or folder → reference-based (edits reflected immediately)
 - **Publish**: Local → registry directory (zip + registry.json update)
+- **Unpublish**: From Edit dialog when local UUID matches registry; also CLI admin tool
 - **Install / Launch / Uninstall**: From registry packages
 - **Update detection**: Version comparison, orange Update button
-- **Self-update**: GitHub Releases check (not yet tested end-to-end)
+- **Self-update**: GitHub Releases check → stage → bootstrap apply (tested end-to-end, requires public repo)
 - **i18n**: Full Japanese/English support, auto-detected from Maya locale
 - **Registry grouping**: UI groups packages by registry name, collapsible
 - **Edit dialog**: Metadata editing for local scripts
 - **Emoji icons**: Package icons can be emoji or image paths
 - **package.json auto-detection**: Folders with package.json skip Run Mode selection
-- **Tests**: 26 tests, all passing
+- **UUID persistence**: UUID survives Remove → re-Add cycles via package.json
+- **Tests**: 38 tests, all passing
+- **CI/CD**: GitHub Actions builds language-specific installers + update zip on tag push
 
 ### What Doesn't Work / Needs Attention
-- **Self-update not tested end-to-end**: GitHub Release → staging → bootstrap apply flow needs real testing with a published release
-- **Publish creates duplicate UUIDs**: If a user Publishes, then Removes local, then re-Adds and Publishes again, a new UUID is generated. UUID should persist across Publish cycles.
+- **Self-update requires public repo**: GitHub API returns 404 for private repos without auth token. If private distribution is needed, either add token support to config or switch to registry-based update detection.
 
 ## Open Design Questions
 
 These were discussed but not yet implemented. They should be addressed in the next session.
 
-### 1. Publish / Unpublish Architecture
-
-**Current behavior:**
-- Local Add generates a UUID
-- Publish copies zip to registry directory + updates registry.json with that UUID
-- Source changes from `local_script` to `published` (prevents duplicate display)
-- Local registration is effectively hidden after Publish
-
-**Desired behavior:**
-- Publish should keep local registration visible (don't hide it)
-- UUID must stay consistent between local and registry for version updates
-- Unpublish should be possible from two places:
-  - Carton UI: if the same UUID exists locally, show an "Unpublish" button
-  - Registry management UI: standalone tool for registry administrators
-
-**Key decisions needed:**
-- How to handle UUID persistence across Remove → re-Add cycles
-- Whether to store a `_publish_id` in installed.json to remember the registry UUID
-- Unpublish confirmation flow (what happens to users who installed it?)
-
-### 2. Registry Management UI (Standalone)
+### 1. Registry Management UI (Standalone)
 
 A standalone tool (not inside Carton) that lets registry admins:
 - Browse all packages in a registry
@@ -61,16 +44,17 @@ A standalone tool (not inside Carton) that lets registry admins:
 - Edit metadata
 - View download stats (if logging is added later)
 
-Could be a separate script or a mode of Carton launched with a flag.
+CLI admin commands already exist (`python -m carton list`, `python -m carton unpublish`).
+Could be extended with a GUI, or launched as a mode of Carton with a flag.
 
-### 3. Version Sync Between Local and Registry
+### 2. Version Sync Between Local and Registry
 
 When a user edits version locally and re-Publishes:
 - The registry should add a new version entry (not overwrite)
 - Same-version re-publish is already blocked
 - Users on other machines see the Update button
 
-Currently working correctly, but the UUID duplication issue (see above) can break this flow.
+Currently working correctly. UUID persistence ensures consistent identity across cycles.
 
 ## Architecture
 
@@ -78,14 +62,16 @@ Currently working correctly, but the UUID duplication issue (see above) can brea
 F:\workspace\carton\
 ├── carton/                      # Package manager core
 │   ├── __init__.py              # Entry point: startup(), show(), open_settings()
+│   ├── __main__.py              # CLI entry: python -m carton <command>
+│   ├── cli.py                   # Admin CLI (list, unpublish)
 │   ├── core/
 │   │   ├── config.py            # Multi-registry config (registries list)
 │   │   ├── registry_client.py   # Load + merge multiple registries
-│   │   ├── publisher.py         # Write zip + registry.json to local registry
+│   │   ├── publisher.py         # Publish + unpublish to local registry
 │   │   ├── downloader.py        # Local copy or HTTP download
 │   │   ├── installer.py         # Install / uninstall (UUID-keyed)
 │   │   ├── updater.py           # Version comparison
-│   │   ├── self_updater.py      # GitHub Releases check
+│   │   ├── self_updater.py      # GitHub Releases check (carton-v*.zip asset)
 │   │   ├── script_manager.py    # Local script registration (reference-based)
 │   │   ├── env_manager.py       # Maya env var management
 │   │   ├── hash_verify.py       # SHA256
@@ -98,7 +84,7 @@ F:\workspace\carton\
 │       ├── package_card.py      # Package card widget
 │       ├── package_detail.py    # Package detail panel
 │       ├── add_dialog.py        # Add file/folder dialog
-│       ├── edit_dialog.py       # Edit metadata dialog
+│       ├── edit_dialog.py       # Edit metadata + unpublish dialog
 │       ├── settings_dialog.py   # Registry management + uninstall
 │       ├── shelf.py             # Maya menu registration
 │       ├── compat.py            # PySide2/6 compatibility
@@ -112,9 +98,9 @@ F:\workspace\carton\
 │   └── release.yml              # GitHub Release + installer generation
 ├── schemas/                     # JSON schemas
 ├── scripts/
-│   ├── dev_reload.py            # Maya dev reload
-│   └── demo_standalone.py       # Standalone test (needs update for new config)
-├── tests/                       # 26 tests
+│   ├── build_installer.py       # Build D&D installers (auto/ja/en + update zip)
+│   └── dev_reload.py            # Maya dev reload
+├── tests/                       # 38 tests
 ├── package.json
 ├── README.md                    # English
 └── README_ja.md                 # Japanese
@@ -125,13 +111,17 @@ F:\workspace\carton\
 | File | Purpose |
 |------|---------|
 | `carton/__init__.py` | Initialization flow: config → i18n → services → activate packages → menu |
-| `core/config.py` | `Config` with `registries` list of `RegistryEntry` objects |
+| `core/config.py` | `Config` with `registries` list of `RegistryEntry` objects. Path normalization on all platforms |
 | `core/registry_client.py` | Loads all registries, merges packages, resolves relative `download_url` |
-| `core/publisher.py` | Creates zip from local file/folder, writes to registry dir |
+| `core/publisher.py` | Creates zip from local file/folder, writes to registry dir. Also `unpublish()` and `find_published_registries()` |
+| `core/self_updater.py` | Checks GitHub Releases for `carton-v*.zip` asset, stages for bootstrap apply |
 | `core/script_manager.py` | Reference-based local registration. Supports exec/function/folder modes |
-| `ui/main_window.py` | Largest UI file. Registry grouping, all button handlers |
+| `ui/main_window.py` | Largest UI file. Registry grouping, all button handlers including unpublish |
+| `ui/edit_dialog.py` | Metadata editing. Shows Unpublish button when local UUID exists in a registry |
 | `ui/i18n.py` | All translatable strings. `t(key, *args)` function |
 | `ui/add_dialog.py` | Detects package.json, hides Run Mode when present |
+| `carton/cli.py` | Admin CLI: `python -m carton list <registry>`, `python -m carton unpublish --registry <path> --id <uuid>` |
+| `scripts/build_installer.py` | Builds language-specific installers + update zip |
 
 ## Config Format
 
@@ -147,6 +137,8 @@ F:\workspace\carton\
   "language": "auto"
 }
 ```
+
+`language` values: `"auto"` (Maya locale), `"ja"`, `"en"`. Set by installer variant.
 
 ## Registry Format
 
@@ -185,27 +177,21 @@ F:\workspace\carton\
 exec(open(r"F:\workspace\carton\scripts\dev_reload.py", encoding="utf-8").read())
 ```
 
-### Build installer
-```python
+### Build installers
+```bash
 cd F:/workspace/carton
-python -c "
-import zipfile, os, base64
-zip_path = 'dist/carton.zip'
-os.makedirs('dist', exist_ok=True)
-with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as zf:
-    for root, dirs, files in os.walk('carton'):
-        dirs[:] = [d for d in dirs if d != '__pycache__']
-        for f in files:
-            if not f.endswith('.pyc'):
-                zf.write(os.path.join(root, f))
-with open(zip_path, 'rb') as f:
-    b64 = base64.b64encode(f.read()).decode('ascii')
-with open('installer/install_carton.template.py', 'r', encoding='utf-8') as f:
-    template = f.read()
-out = template.replace('__VERSION__', '0.1.0').replace('__CARTON_ZIP_B64__', b64)
-with open('dist/install_carton.py', 'w', encoding='utf-8') as f:
-    f.write(out)
-"
+python scripts/build_installer.py
+python scripts/build_installer.py --version 1.2.3
+python scripts/build_installer.py --lang ja      # Japanese only
+```
+
+Output:
+```
+dist/
+├── carton-v0.1.0.zip              ← Self-update zip (GitHub Release asset)
+├── install_carton_v0-1-0.py       ← Installer (auto language)
+├── install_carton_ja_v0-1-0.py    ← Installer (Japanese)
+└── install_carton_en_v0-1-0.py    ← Installer (English)
 ```
 
 ### Run tests
@@ -214,6 +200,30 @@ cd F:\workspace\carton
 python -m pytest tests/ -v
 ```
 
+### CLI admin commands
+```bash
+python -m carton list path/to/registry.json
+python -m carton unpublish --registry path/to/registry.json --id <uuid>
+python -m carton unpublish --registry path/to/registry.json --id <uuid> --force
+```
+
+## Install Directory
+
+All components use the same shared directory (not Maya-version-specific):
+- Windows: `~/Documents/maya/carton/`
+- Linux/Mac: `~/maya/carton/`
+
+This is consistent across: installer, bootstrap, and `Config.load()`.
+
+## Release Workflow
+
+1. Bump version: edit `package.json` (CI syncs to `__init__.py`)
+2. Tag: `git tag v0.2.0 && git push --tags`
+3. CI builds: 3 installers + 1 update zip
+4. GitHub Release created with all 4 assets
+5. Existing Carton installs detect the new version via GitHub API
+6. User clicks Update → zip staged → next Maya restart applies it
+
 ## Related Repositories
 
 | Repository | Path | Purpose |
@@ -221,25 +231,13 @@ python -m pytest tests/ -v
 | carton | `F:\workspace\carton` | Package manager (this repo) |
 | ashbox | `F:\workspace\ashbox` | Previous version (AWS-based, archived) |
 | cigref | `F:\workspace\cigref` | CigRef tool (test package) |
-| ashbox-tool-template | `F:\workspace\ashbox-tool-template` | Tool template (needs renaming to carton-tool-template) |
+| carton-tool-template | `F:\workspace\ashbox-tool-template` | Tool template (rename repo to carton-tool-template on GitHub) |
 | ashbox-registry | `F:\workspace\ashbox-registry` | Old registry (AWS, deprecated) |
 | cigmaya | `F:\workspace\cigmaya` | Test local registry |
 
-## Next Steps (Priority Order)
+## Next Steps
 
-1. **Fix UUID persistence** — Ensure local registration UUID survives Remove → re-Add. Consider storing publish UUID in package.json or a local mapping file.
-
-2. **Unpublish from Carton UI** — Add "Unpublish" button to Edit dialog when the same UUID exists in a registry. Removes zip + registry.json entry.
-
-3. **Registry management standalone UI** — Separate tool for registry admins. Could be `python -m carton.registry_admin` or a menu item.
-
-4. **Rename ashbox-tool-template** — Update to carton-tool-template with Carton's release.yml.
-
-5. **CI/CD testing** — Push carton to GitHub, create first release, verify installer generation and self-update flow.
-
-6. **demo_standalone.py** — Update for new multi-registry config (currently references old Ashbox AWS endpoints).
-
-7. **Additional languages** — i18n framework is ready. Add zh_CN, ko, etc. as needed.
+1. **Rename ashbox-tool-template on GitHub** — Contents already updated. Rename repo to `carton-tool-template` via GitHub Settings.
 
 ## Coding Conventions
 
@@ -247,3 +245,4 @@ python -m pytest tests/ -v
 - UI text: Managed through `i18n.py`, supports en/ja
 - Version source of truth: **git tag** (CI/CD syncs to package.json and __init__.py)
 - Package ID: **UUID v4**, auto-generated on first Publish if not present
+- Path handling: All paths normalized via `os.path.normpath` (no mixed `/` and `\`)

@@ -10,9 +10,12 @@ Maya 用ローカルファーストのパッケージマネージャ。ツール
 - **複数レジストリ** — チーム別・プロジェクト別にレジストリを追加可能
 - **ワンクリックインストール** — `.py` を Maya にドラッグ＆ドロップ
 - **ローカルスクリプト登録** — 単一ファイルやフォルダを UI から登録。参照方式で編集が即反映
-- **Publish** — ローカル登録したスクリプトをレジストリに書き出して共有
+- **Publish / Unpublish** — ローカル登録したスクリプトをレジストリに公開、または取り下げ
 - **自動更新** — Carton 本体は GitHub Releases から自動更新
+- **言語別インストーラ** — 自動検出 / 日本語固定 / 英語固定を選択可能
 - **絵文字アイコン** — パッケージアイコンに絵文字を指定可能
+- **UUID 永続化** — 削除・再追加してもパッケージの ID が維持される
+- **CLI 管理ツール** — コマンドラインからパッケージ一覧や強制 Unpublish が可能
 - **VCS 非依存** — レジストリは Git / SVN / ネットワークドライブ、何でも OK
 
 ## 動作環境
@@ -24,7 +27,10 @@ Maya 用ローカルファーストのパッケージマネージャ。ツール
 
 ### インストール
 
-1. [Releases](https://github.com/cignoir/carton/releases) から `install_carton.py` をダウンロード
+1. [Releases](https://github.com/cignoir/carton/releases) からインストーラをダウンロード:
+   - `install_carton_v*` — Maya の言語設定に従う
+   - `install_carton_ja_v*` — 日本語固定
+   - `install_carton_en_v*` — 英語固定
 2. Maya を開き、ビューポートにドラッグ＆ドロップ
 3. Maya を再起動
 4. メニューバーの「Carton」→「Open Carton」
@@ -44,6 +50,22 @@ Maya 用ローカルファーストのパッケージマネージャ。ツール
 1. Carton → + Add → ファイルまたはフォルダを選択
 2. Display Name, Icon, Run Mode を設定 → Register
 3. Publish ボタン → レジストリを選択 → 共有完了
+
+### 公開取消 (Unpublish)
+
+- 編集ダイアログから: ローカルパッケージをクリック → 公開取消（同じ UUID がレジストリに存在する場合に表示）
+- CLI から: `python -m carton unpublish --registry path/to/registry.json --id <uuid>`
+
+## CLI
+
+```bash
+# レジストリ内のパッケージ一覧
+python -m carton list path/to/registry.json
+
+# パッケージを強制 Unpublish（管理者向け）
+python -m carton unpublish --registry path/to/registry.json --id <uuid>
+python -m carton unpublish --registry path/to/registry.json --id <uuid> --force
+```
 
 ## レジストリの構成
 
@@ -115,10 +137,17 @@ my-registry/
 
 ## 開発
 
+### インストーラのビルド
+
+```bash
+python scripts/build_installer.py
+python scripts/build_installer.py --version 1.2.3
+python scripts/build_installer.py --lang ja en    # 特定の言語のみ
+```
+
 ### テスト
 
 ```bash
-cd carton
 python -m pytest tests/ -v
 ```
 
@@ -133,27 +162,32 @@ exec(open(r"path/to/carton/scripts/dev_reload.py", encoding="utf-8").read())
 ```
 carton/
 ├── carton/                      # パッケージマネージャ本体
+│   ├── __init__.py              # エントリポイント: startup(), show()
+│   ├── __main__.py              # CLI エントリ: python -m carton
+│   ├── cli.py                   # 管理 CLI (list, unpublish)
 │   ├── core/
 │   │   ├── config.py            # 複数レジストリ設定
 │   │   ├── registry_client.py   # 複数レジストリ読み込み + マージ
-│   │   ├── publisher.py         # レジストリに直接書き出し
+│   │   ├── publisher.py         # レジストリへの公開 / 取消
 │   │   ├── downloader.py        # ローカルコピー / URL DL
 │   │   ├── installer.py         # インストール / アンインストール
-│   │   ├── updater.py           # バージョン比較
 │   │   ├── self_updater.py      # GitHub Releases 自動更新
 │   │   ├── script_manager.py    # ローカルスクリプト登録
 │   │   ├── env_manager.py       # Maya 環境変数管理
 │   │   └── handlers/            # パッケージタイプ別 Handler
 │   ├── models/
 │   └── ui/
-│       ├── main_window.py       # レジストリグルーピング
+│       ├── main_window.py       # レジストリグルーピング、Unpublish ハンドラ
 │       ├── settings_dialog.py   # レジストリ管理 UI
 │       ├── add_dialog.py        # ローカル登録 (ファイル / フォルダ)
-│       └── edit_dialog.py       # メタ情報編集
+│       └── edit_dialog.py       # メタ情報編集 + Unpublish
 ├── bootstrap/
 ├── installer/
+├── scripts/
+│   ├── build_installer.py       # 言語別インストーラのビルド
+│   └── dev_reload.py            # Maya 開発リロード
 ├── .github/workflows/
-│   └── release.yml              # GitHub Releases にインストーラ添付
+│   └── release.yml              # ビルド & GitHub Releases に添付
 └── tests/
 ```
 

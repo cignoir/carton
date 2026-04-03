@@ -10,9 +10,12 @@ A local-first package manager for Maya. Manage distribution, installation, and u
 - **Multiple Registries** — Add registries per team, project, or personal use
 - **One-Click Install** — Drag & drop a `.py` file onto Maya's viewport
 - **Local Script Registration** — Register single files or folders from the UI. Reference-based, so edits are reflected immediately
-- **Publish** — Share locally registered scripts to a registry with one click
+- **Publish / Unpublish** — Share locally registered scripts to a registry, or remove them
 - **Auto Update** — Carton itself updates automatically from GitHub Releases
+- **Language-Specific Installers** — Choose auto-detect, Japanese, or English
 - **Emoji Icons** — Use emoji as package icons. Image files also supported
+- **UUID Persistence** — Package identity is preserved across Remove and re-Add cycles
+- **CLI Admin Tools** — List and force-unpublish packages from the command line
 - **VCS Agnostic** — Registries work with Git, SVN, network drives, or anything
 
 ## Requirements
@@ -24,26 +27,45 @@ A local-first package manager for Maya. Manage distribution, installation, and u
 
 ### Installation
 
-1. Download `install_carton.py` from [Releases](https://github.com/cignoir/carton/releases)
+1. Download an installer from [Releases](https://github.com/cignoir/carton/releases):
+   - `install_carton_v*` — Auto-detect language from Maya
+   - `install_carton_ja_v*` — Force Japanese
+   - `install_carton_en_v*` — Force English
 2. Open Maya and drag & drop the file onto the viewport
 3. Restart Maya
-4. Menu bar → "Carton" → "Open Carton"
+4. Menu bar: "Carton" > "Open Carton"
 
 ### Add a Registry
 
-1. Carton → Settings (⚙) → + Add
+1. Carton > Settings (⚙) > + Add
 2. Select the path to a `registry.json`
 
 ### Install a Tool
 
-1. Open Carton → Package list from registries is displayed
-2. Click Install → Done
+1. Open Carton — package list from registries is displayed
+2. Click Install
 
 ### Register & Share a Script
 
-1. Carton → + Add → Select a file or folder
-2. Set Display Name, Icon, Run Mode → Register
-3. Click Publish → Select target registry → Shared
+1. Carton > + Add > Select a file or folder
+2. Set Display Name, Icon, Run Mode > Register
+3. Click Publish > Select target registry > Shared
+
+### Unpublish
+
+- From the Edit dialog: click a local package > Unpublish (shown when the same UUID exists in a registry)
+- From the CLI: `python -m carton unpublish --registry path/to/registry.json --id <uuid>`
+
+## CLI
+
+```bash
+# List all packages in a registry
+python -m carton list path/to/registry.json
+
+# Force-unpublish a package (admin)
+python -m carton unpublish --registry path/to/registry.json --id <uuid>
+python -m carton unpublish --registry path/to/registry.json --id <uuid> --force
+```
 
 ## Registry Structure
 
@@ -115,10 +137,17 @@ Metadata file placed in each tool repository.
 
 ## Development
 
+### Build Installers
+
+```bash
+python scripts/build_installer.py
+python scripts/build_installer.py --version 1.2.3
+python scripts/build_installer.py --lang ja en    # specific languages only
+```
+
 ### Tests
 
 ```bash
-cd carton
 python -m pytest tests/ -v
 ```
 
@@ -133,27 +162,32 @@ exec(open(r"path/to/carton/scripts/dev_reload.py", encoding="utf-8").read())
 ```
 carton/
 ├── carton/                      # Package manager core
+│   ├── __init__.py              # Entry point: startup(), show()
+│   ├── __main__.py              # CLI entry: python -m carton
+│   ├── cli.py                   # Admin CLI (list, unpublish)
 │   ├── core/
 │   │   ├── config.py            # Multi-registry configuration
 │   │   ├── registry_client.py   # Load & merge multiple registries
-│   │   ├── publisher.py         # Write directly to registry
+│   │   ├── publisher.py         # Publish / unpublish to registry
 │   │   ├── downloader.py        # Local copy / URL download
 │   │   ├── installer.py         # Install / uninstall
-│   │   ├── updater.py           # Version comparison
 │   │   ├── self_updater.py      # GitHub Releases auto-update
 │   │   ├── script_manager.py    # Local script registration
 │   │   ├── env_manager.py       # Maya environment variable management
 │   │   └── handlers/            # Per-type package handlers
 │   ├── models/
 │   └── ui/
-│       ├── main_window.py       # Registry grouping
+│       ├── main_window.py       # Registry grouping, unpublish handler
 │       ├── settings_dialog.py   # Registry management UI
 │       ├── add_dialog.py        # Local registration (file / folder)
-│       └── edit_dialog.py       # Metadata editing
+│       └── edit_dialog.py       # Metadata editing + unpublish
 ├── bootstrap/
 ├── installer/
+├── scripts/
+│   ├── build_installer.py       # Build language-specific installers
+│   └── dev_reload.py            # Maya dev reload
 ├── .github/workflows/
-│   └── release.yml              # Attach installer to GitHub Releases
+│   └── release.yml              # Build & attach to GitHub Releases
 └── tests/
 ```
 
