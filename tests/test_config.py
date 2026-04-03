@@ -24,7 +24,7 @@ class TestConfig:
             loaded = Config.load(path)
             assert len(loaded.registries) == 1
             assert loaded.registries[0].name == "test"
-            assert loaded.registries[0].path == "/some/path/registry.json"
+            assert loaded.registries[0].path == os.path.normpath("/some/path/registry.json")
 
     def test_load_missing(self):
         c = Config.load("/nonexistent/path/config.json")
@@ -55,4 +55,4 @@ class TestRegistryEntry:
         e = RegistryEntry("test", "/path/registry.json")
         d = e.to_dict()
         assert d["name"] == "test"
-        assert d["path"] == "/path/registry.json"
+        assert d["path"] == os.path.normpath("/path/registry.json")
