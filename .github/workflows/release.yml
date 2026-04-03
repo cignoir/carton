@@ -36,9 +36,10 @@ jobs:
             dist/carton-v*.zip
 
       - name: Create GitHub Release
-        uses: softprops/action-gh-release@v2
-        with:
-          files: |
-            dist/install_carton_*.py
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create "v${{ steps.version.outputs.VERSION }}" \
+            --generate-notes \
+            dist/install_carton_*.py \
             dist/carton-v*.zip
-          generate_release_notes: true
