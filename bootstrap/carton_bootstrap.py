@@ -14,28 +14,10 @@ import traceback
 import zipfile
 
 def _find_default_install_dir():
-    """Detect the Maya application directory."""
-    # 1. MAYA_APP_DIR environment variable (for custom setups)
-    env_dir = os.environ.get("MAYA_APP_DIR")
-    if env_dir:
-        candidate = os.path.join(env_dir, "carton")
-        if os.path.exists(os.path.join(candidate, "config.json")):
-            return candidate
-
-    # 2. Documents/maya/carton (Windows default)
-    docs_maya = os.path.expanduser("~/Documents/maya/carton")
-    if os.path.exists(os.path.join(docs_maya, "config.json")):
-        return docs_maya
-
-    # 3. ~/maya/carton (Linux/Mac default)
-    home_maya = os.path.expanduser("~/maya/carton")
-    if os.path.exists(os.path.join(home_maya, "config.json")):
-        return home_maya
-
-    # Fallback: default based on OS
+    """Detect install directory — must match carton.core.config._detect_install_dir."""
     if sys.platform == "win32":
-        return docs_maya
-    return home_maya
+        return os.path.normpath(os.path.expanduser("~/Documents/maya/carton"))
+    return os.path.normpath(os.path.expanduser("~/maya/carton"))
 
 
 def _get_install_dir():

@@ -47,20 +47,9 @@ import zipfile
 
 
 def _find_default_install_dir():
-    env_dir = os.environ.get("MAYA_APP_DIR")
-    if env_dir:
-        candidate = os.path.join(env_dir, "carton")
-        if os.path.exists(os.path.join(candidate, "config.json")):
-            return candidate
-    docs_maya = os.path.expanduser("~/Documents/maya/carton")
-    if os.path.exists(os.path.join(docs_maya, "config.json")):
-        return docs_maya
-    home_maya = os.path.expanduser("~/maya/carton")
-    if os.path.exists(os.path.join(home_maya, "config.json")):
-        return home_maya
     if sys.platform == "win32":
-        return docs_maya
-    return home_maya
+        return os.path.normpath(os.path.expanduser("~/Documents/maya/carton"))
+    return os.path.normpath(os.path.expanduser("~/maya/carton"))
 
 
 def _get_install_dir():
@@ -143,6 +132,13 @@ def _show_dialog(title, message, buttons=None):
     )
 
 
+def _detect_install_dir():
+    """Detect install directory — same logic as carton.core.config."""
+    if sys.platform == "win32":
+        return os.path.normpath(os.path.expanduser("~/Documents/maya/carton"))
+    return os.path.normpath(os.path.expanduser("~/maya/carton"))
+
+
 def onMayaDroppedPythonFile(*args, **kwargs):
     """Maya Drag & Drop entry point."""
     import maya.cmds as cmds
@@ -158,9 +154,8 @@ def onMayaDroppedPythonFile(*args, **kwargs):
         )
         return
 
-    # Installation destination
-    maya_app_dir = cmds.internalVar(userAppDir=True)
-    install_dir = os.path.join(maya_app_dir, "carton")
+    # Installation destination (shared across Maya versions)
+    install_dir = _detect_install_dir()
     carton_pkg_dir = os.path.join(install_dir, "carton")
 
     # Check for existing installation
