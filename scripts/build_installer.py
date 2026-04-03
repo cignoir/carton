@@ -3,13 +3,13 @@
 Usage:
     python scripts/build_installer.py
     python scripts/build_installer.py --version 1.2.3
+    python scripts/build_installer.py --lang ja en
 """
 
 import argparse
 import base64
 import json
 import os
-import sys
 import zipfile
 
 ROOT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -18,6 +18,9 @@ TEMPLATE_PATH = os.path.join(ROOT_DIR, "installer", "install_carton.template.py"
 DIST_DIR = os.path.join(ROOT_DIR, "dist")
 
 _EXCLUDE_DIRS = {"__pycache__", ".git", ".svn", ".idea", ".vscode"}
+
+# Language variants to build by default
+DEFAULT_LANGUAGES = ["auto", "ja", "en"]
 
 
 def _detect_version():
@@ -29,8 +32,22 @@ def _detect_version():
     return "0.1.0"
 
 
-def build(version=None):
+def _installer_filename(version, lang):
+    """Generate installer filename.
+
+    auto  -> install_carton_v0-1-0.py
+    ja    -> install_carton_ja_v0-1-0.py
+    en    -> install_carton_en_v0-1-0.py
+    """
+    safe_ver = version.replace(".", "-")
+    if lang == "auto":
+        return "install_carton_v{}.py".format(safe_ver)
+    return "install_carton_{}_v{}.py".format(lang, safe_ver)
+
+
+def build(version=None, languages=None):
     version = version or _detect_version()
+    languages = languages or DEFAULT_LANGUAGES
 
     os.makedirs(DIST_DIR, exist_ok=True)
     zip_path = os.path.join(DIST_DIR, "carton.zip")
@@ -53,24 +70,28 @@ def build(version=None):
     # 3. Clean up intermediate zip
     os.remove(zip_path)
 
-    # 4. Fill template
+    # 4. Read template
     with open(TEMPLATE_PATH, "r", encoding="utf-8") as f:
         template = f.read()
 
-    installer = template.replace("__VERSION__", version).replace("__CARTON_ZIP_B64__", b64)
+    base = template.replace("__VERSION__", version).replace("__CARTON_ZIP_B64__", b64)
 
-    out_name = "install_carton_v{}.py".format(version)
-    out_path = os.path.join(DIST_DIR, out_name)
-    with open(out_path, "w", encoding="utf-8") as f:
-        f.write(installer)
-
-    out_kb = os.path.getsize(out_path) / 1024
+    # 5. Generate one installer per language
     print("Carton v{}".format(version))
-    print("  installer: {:.1f} KB  ({})".format(out_kb, out_path))
+    for lang in languages:
+        installer = base.replace("__LANGUAGE__", lang)
+        out_name = _installer_filename(version, lang)
+        out_path = os.path.join(DIST_DIR, out_name)
+        with open(out_path, "w", encoding="utf-8") as f:
+            f.write(installer)
+        out_kb = os.path.getsize(out_path) / 1024
+        print("  {:>2}: {:.1f} KB  ({})".format(lang, out_kb, out_name))
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Build Carton installer")
     parser.add_argument("--version", help="Override version (default: from package.json)")
+    parser.add_argument("--lang", nargs="*",
+                        help="Language variants to build (default: auto ja en)")
     args = parser.parse_args()
-    build(version=args.version)
+    build(version=args.version, languages=args.lang)

@@ -15,6 +15,7 @@ import zipfile
 
 # ---- Settings (auto-embedded by CI/CD) ----
 CARTON_VERSION = "__VERSION__"
+CARTON_LANGUAGE = "__LANGUAGE__"
 SUPPORTED_MAYA = ["2024", "2025", "2026", "2027"]
 
 # CI/CD pipeline embeds the Base64-encoded zip here
@@ -216,13 +217,17 @@ def onMayaDroppedPythonFile(*args, **kwargs):
         with open(usersetup_path, "w", encoding="utf-8") as f:
             f.write(USERSETUP_HOOK)
 
-    # Generate initial config.json
+    # Generate or update config.json
     config_path = os.path.join(install_dir, "config.json")
-    if not os.path.exists(config_path):
+    if os.path.exists(config_path):
+        with open(config_path, "r", encoding="utf-8") as f:
+            config = json.load(f)
+    else:
         config = DEFAULT_CONFIG.copy()
         config["install_dir"] = install_dir
-        with open(config_path, "w", encoding="utf-8") as f:
-            json.dump(config, f, indent=2, ensure_ascii=False)
+    config["language"] = CARTON_LANGUAGE
+    with open(config_path, "w", encoding="utf-8") as f:
+        json.dump(config, f, indent=2, ensure_ascii=False)
 
     _show_dialog(
         "Carton",
