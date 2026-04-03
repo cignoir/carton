@@ -29,24 +29,24 @@ jobs:
           mkdir -p dist
           zip -r dist/carton.zip carton/ -x "carton/__pycache__/*" "*.pyc"
 
-      - name: Build installers
+      - name: Build installer
         run: |
+          VERSION="${{ steps.version.outputs.VERSION }}"
           B64=$(base64 -w0 dist/carton.zip)
           sed \
-            -e "s|__VERSION__|${{ steps.version.outputs.VERSION }}|g" \
+            -e "s|__VERSION__|${VERSION}|g" \
             -e "s|__CARTON_ZIP_B64__|${B64}|" \
-            installer/install_carton.template.py > dist/install_carton.py
+            installer/install_carton.template.py > "dist/install_carton_v${VERSION}.py"
+          rm dist/carton.zip
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
           name: carton-installer
-          path: dist/install_carton.py
+          path: dist/install_carton_v*.py
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          files: |
-            dist/install_carton.py
-            dist/carton.zip
+          files: dist/install_carton_v*.py
           generate_release_notes: true
