@@ -55,16 +55,15 @@ class SelfUpdater:
             return None
 
         if remote > current:
-            # Find carton zip from assets
+            # Find update zip from release assets (carton-v*.zip)
             download_url = None
             for asset in data.get("assets", []):
                 name = asset.get("name", "")
-                if name.startswith("carton") and name.endswith(".zip"):
+                if name.startswith("carton-v") and name.endswith(".zip"):
                     download_url = asset.get("browser_download_url")
                     break
-            # Fall back to source zip if no assets found
             if not download_url:
-                download_url = data.get("zipball_url")
+                return None
             return (latest, download_url)
 
         return None

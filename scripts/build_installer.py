@@ -67,8 +67,9 @@ def build(version=None, languages=None):
     with open(zip_path, "rb") as f:
         b64 = base64.b64encode(f.read()).decode("ascii")
 
-    # 3. Clean up intermediate zip
-    os.remove(zip_path)
+    # 3. Rename zip for release (used by self-updater)
+    release_zip = os.path.join(DIST_DIR, "carton-v{}.zip".format(version.replace(".", "-")))
+    os.replace(zip_path, release_zip)
 
     # 4. Read template
     with open(TEMPLATE_PATH, "r", encoding="utf-8") as f:
@@ -77,7 +78,9 @@ def build(version=None, languages=None):
     base = template.replace("__VERSION__", version).replace("__CARTON_ZIP_B64__", b64)
 
     # 5. Generate one installer per language
+    release_kb = os.path.getsize(release_zip) / 1024
     print("Carton v{}".format(version))
+    print("  zip: {:.1f} KB  ({})".format(release_kb, os.path.basename(release_zip)))
     for lang in languages:
         installer = base.replace("__LANGUAGE__", lang)
         out_name = _installer_filename(version, lang)
