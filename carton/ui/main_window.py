@@ -697,7 +697,7 @@ class CartonWindow(QtWidgets.QDialog):
 
             dest = os.path.join(
                 self._install_manager._config.staging_dir,
-                "{}-{}.zip".format(pkg_name, latest),
+                "{}-{}.package".format(pkg_name, latest),
             )
             self._downloader.download(
                 url, dest,
