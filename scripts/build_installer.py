@@ -68,7 +68,7 @@ def build(version=None, languages=None):
         b64 = base64.b64encode(f.read()).decode("ascii")
 
     # 3. Rename zip for release (used by self-updater)
-    release_zip = os.path.join(DIST_DIR, "carton-v{}.zip".format(version.replace(".", "-")))
+    release_zip = os.path.join(DIST_DIR, "carton-v{}.zip".format(version))
     os.replace(zip_path, release_zip)
 
     # 4. Read template
