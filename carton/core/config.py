@@ -4,6 +4,16 @@ import json
 import os
 import sys
 
+try:
+    from urllib.parse import urlparse
+except ImportError:
+    from urlparse import urlparse
+
+
+def _is_url(path):
+    """Check if a path is an HTTP/HTTPS URL."""
+    return path.startswith(("http://", "https://"))
+
 
 def _detect_install_dir():
     """Return the default install_dir based on the OS."""
@@ -20,7 +30,7 @@ class RegistryEntry:
 
     def __init__(self, name, path):
         self.name = name
-        self.path = os.path.normpath(path)
+        self.path = path if _is_url(path) else os.path.normpath(path)
 
     def to_dict(self):
         return {"name": self.name, "path": self.path}
@@ -30,8 +40,20 @@ class RegistryEntry:
         return cls(name=d.get("name", ""), path=d.get("path", ""))
 
     @property
+    def is_remote(self):
+        """True if the registry is a remote URL."""
+        return _is_url(self.path)
+
+    @property
     def base_dir(self):
-        """Parent directory of registry.json. Used for relative path resolution."""
+        """Base directory or URL for relative path resolution.
+
+        For local: parent directory of registry.json
+        For remote: parent URL of registry.json
+        """
+        if self.is_remote:
+            # "https://example.com/registry/registry.json" -> "https://example.com/registry/"
+            return self.path.rsplit("/", 1)[0] + "/"
         return os.path.dirname(os.path.normpath(self.path))
 
 
@@ -89,7 +111,7 @@ class Config:
 
     def add_registry(self, name, path):
         """Add a registry."""
-        self.registries.append(RegistryEntry(name, os.path.normpath(path)))
+        self.registries.append(RegistryEntry(name, path))
 
     def remove_registry(self, name):
         """Remove a registry by name."""

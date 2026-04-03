@@ -28,6 +28,9 @@ class Publisher:
         Returns:
             dict with id, version
         """
+        if registry_entry.is_remote:
+            raise RuntimeError("Cannot publish to a remote registry: {}".format(registry_entry.name))
+
         local_path = pkg_data.get("local_path", "")
         if not local_path or not os.path.exists(local_path):
             raise RuntimeError("File not found: {}".format(local_path))
@@ -234,6 +237,9 @@ class Publisher:
         Raises:
             RuntimeError: If the package is not found in the registry
         """
+        if registry_entry.is_remote:
+            raise RuntimeError("Cannot unpublish from a remote registry: {}".format(registry_entry.name))
+
         reg_path = os.path.normpath(registry_entry.path)
         if not os.path.exists(reg_path):
             raise RuntimeError("Registry not found: {}".format(reg_path))
@@ -272,6 +278,8 @@ class Publisher:
         """
         results = []
         for entry in self._config.registries:
+            if entry.is_remote:
+                continue
             reg_path = os.path.normpath(entry.path)
             if not os.path.exists(reg_path):
                 continue

@@ -527,8 +527,8 @@ class CartonWindow(QtWidgets.QDialog):
         display = pkg_data.get("display_name", pkg_id)
         local_version = pkg_data.get("version", "0.0.0")
 
-        # Select target registry for publishing
-        registries = self._config.registries
+        # Select target registry for publishing (local only)
+        registries = [r for r in self._config.registries if not r.is_remote]
         if not registries:
             QtWidgets.QMessageBox.warning(
                 self, t("publish"), t("publish_no_registry"),

@@ -115,7 +115,21 @@ class SettingsDialog(QtWidgets.QDialog):
         layout.addLayout(btn_layout)
 
     def _add_registry(self):
-        """Add a registry."""
+        """Add a registry — local file or remote URL."""
+        choices = [t("settings_add_local"), t("settings_add_url")]
+        chosen, ok = QtWidgets.QInputDialog.getItem(
+            self, t("add"), t("settings_add_method"), choices, 0, False,
+        )
+        if not ok:
+            return
+
+        if chosen == choices[1]:
+            self._add_remote_registry()
+        else:
+            self._add_local_registry()
+
+    def _add_local_registry(self):
+        """Add a local registry via file dialog."""
         path = QtWidgets.QFileDialog.getOpenFileName(
             self, t("settings_select_registry"), "",
             "Registry (registry.json);;JSON (*.json)",
@@ -123,17 +137,40 @@ class SettingsDialog(QtWidgets.QDialog):
         if not path:
             return
 
-        # Guess name from folder name
         base = os.path.basename(os.path.dirname(path))
+        self._finish_add_registry(path, default_name=base)
+
+    def _add_remote_registry(self):
+        """Add a remote registry via URL input."""
+        url, ok = QtWidgets.QInputDialog.getText(
+            self, t("settings_add_url"),
+            t("settings_url_placeholder"),
+        )
+        if not ok or not url.strip():
+            return
+        url = url.strip()
+        if not url.startswith(("http://", "https://")):
+            QtWidgets.QMessageBox.warning(self, "Carton", t("settings_invalid_url"))
+            return
+
+        # Guess name from URL path
+        parts = url.rstrip("/").rsplit("/", 2)
+        default_name = parts[-2] if len(parts) >= 2 else "remote"
+        if default_name in ("raw", "main", "master"):
+            default_name = parts[-3] if len(parts) >= 3 else "remote"
+
+        self._finish_add_registry(url, default_name=default_name)
+
+    def _finish_add_registry(self, path, default_name=""):
+        """Common logic for adding a registry after path/URL is determined."""
         name, ok = QtWidgets.QInputDialog.getText(
             self, "Registry Name",
             t("settings_registry_name"),
-            text=base,
+            text=default_name,
         )
         if not ok or not name:
             return
 
-        # Duplicate check
         for r in self._config.registries:
             if r.name == name:
                 QtWidgets.QMessageBox.warning(

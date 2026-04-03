@@ -3,9 +3,20 @@
 import json
 import os
 
+try:
+    from urllib.request import urlopen, Request
+    from urllib.error import URLError
+except ImportError:
+    from urllib2 import urlopen, Request, URLError
+
+try:
+    from urllib.parse import urljoin
+except ImportError:
+    from urlparse import urljoin
+
 
 class RegistryClient:
-    """Load multiple local registries and return them merged.
+    """Load multiple local and remote registries and return them merged.
 
     Attaches _registry_name and _registry_base_dir to each package data entry.
     Also resolves relative paths in download_url.
@@ -22,7 +33,14 @@ class RegistryClient:
             self._load_registry(entry)
 
     def _load_registry(self, entry):
-        """Load a single registry."""
+        """Load a single registry (local or remote)."""
+        if entry.is_remote:
+            self._load_remote_registry(entry)
+        else:
+            self._load_local_registry(entry)
+
+    def _load_local_registry(self, entry):
+        """Load a registry from the local filesystem."""
         path = os.path.normpath(entry.path)
         if not os.path.exists(path):
             print("[Carton] Registry not found: {} ({})".format(entry.name, path))
@@ -35,7 +53,25 @@ class RegistryClient:
             print("[Carton] Registry read failed: {} ({})".format(entry.name, e))
             return
 
+        self._merge_packages(entry, data)
+
+    def _load_remote_registry(self, entry):
+        """Load a registry from a remote URL."""
+        try:
+            req = Request(entry.path)
+            req.add_header("Accept", "application/json")
+            resp = urlopen(req, timeout=15)
+            data = json.loads(resp.read().decode("utf-8"))
+        except (URLError, OSError, ValueError) as e:
+            print("[Carton] Remote registry failed: {} ({})".format(entry.name, e))
+            return
+
+        self._merge_packages(entry, data)
+
+    def _merge_packages(self, entry, data):
+        """Merge packages from a loaded registry into the package dict."""
         base_dir = entry.base_dir
+        is_remote = entry.is_remote
         packages = data.get("packages", {})
 
         for pkg_id, pkg_data in packages.items():
@@ -45,14 +81,18 @@ class RegistryClient:
             item = dict(pkg_data)
             item["_registry_name"] = entry.name
             item["_registry_base_dir"] = base_dir
+            item["_registry_remote"] = is_remote
 
             # Resolve relative paths in download_url
             for ver_key, ver_info in item.get("versions", {}).items():
                 dl_url = ver_info.get("download_url", "")
                 if dl_url and not os.path.isabs(dl_url) and not dl_url.startswith(("http://", "https://")):
-                    ver_info["download_url"] = os.path.normpath(
-                        os.path.join(base_dir, dl_url)
-                    )
+                    if is_remote:
+                        ver_info["download_url"] = urljoin(base_dir, dl_url)
+                    else:
+                        ver_info["download_url"] = os.path.normpath(
+                            os.path.join(base_dir, dl_url)
+                        )
 
             self._packages[pkg_id] = item
 
