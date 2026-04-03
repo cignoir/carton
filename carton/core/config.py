@@ -20,7 +20,7 @@ class RegistryEntry:
 
     def __init__(self, name, path):
         self.name = name
-        self.path = path
+        self.path = os.path.normpath(path)
 
     def to_dict(self):
         return {"name": self.name, "path": self.path}
@@ -89,7 +89,7 @@ class Config:
 
     def add_registry(self, name, path):
         """Add a registry."""
-        self.registries.append(RegistryEntry(name, path))
+        self.registries.append(RegistryEntry(name, os.path.normpath(path)))
 
     def remove_registry(self, name):
         """Remove a registry by name."""
