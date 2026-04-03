@@ -499,6 +499,7 @@ class CartonWindow(QtWidgets.QDialog):
                 is_folder=result.get("is_folder", False),
                 version=result.get("version", "0.0.0"),
                 author=result.get("author", ""),
+                pkg_id=result.get("id"),
             )
             self._rebuild_cards()
         except Exception as e:

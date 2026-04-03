@@ -20,7 +20,7 @@ class ScriptManager:
 
     def register(self, file_path, name, display_name, icon, description,
                  pkg_type, entry_point, is_folder=False, version="0.0.0",
-                 author=""):
+                 author="", pkg_id=None):
         """Register locally.
 
         Args:
@@ -32,11 +32,13 @@ class ScriptManager:
             pkg_type: "python_package" or "mel_script"
             entry_point: Entry point dict
             is_folder: Whether this is a folder registration
+            pkg_id: Reuse an existing UUID (from package.json) if provided
 
         Returns:
             pkg_id (UUID)
         """
-        pkg_id = str(_uuid.uuid4())
+        if not pkg_id:
+            pkg_id = str(_uuid.uuid4())
 
         # Add to environment variables (reference-based)
         self._add_to_env(file_path, pkg_type, is_folder)

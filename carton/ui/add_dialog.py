@@ -36,6 +36,8 @@ def _detect_from_folder(folder_path):
             ep = data.get("entry_point", {})
             if isinstance(ep, dict):
                 info["function"] = ep.get("function", ep.get("procedure", "show"))
+            if data.get("id"):
+                info["id"] = data["id"]
             info["icon"] = data.get("icon", "")
             info["description"] = data.get("description", "")
             info["version"] = data.get("version", "0.0.0")
@@ -328,7 +330,7 @@ class AddDialog(QtWidgets.QDialog):
             # If package.json exists, use its entry_point directly
             info = getattr(self, "_detected_info", None)
             if info and info.get("has_package_json"):
-                self._result = {
+                result = {
                     "file_path": path,
                     "name": info.get("name", ""),
                     "display_name": display_name,
@@ -340,6 +342,9 @@ class AddDialog(QtWidgets.QDialog):
                     "entry_point": info.get("entry_point", {}),
                     "is_folder": True,
                 }
+                if info.get("id"):
+                    result["id"] = info["id"]
+                self._result = result
                 self.accept()
                 return
             self._result = self._build_folder_result(path, display_name, func, icon, description)

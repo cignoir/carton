@@ -86,6 +86,9 @@ class Publisher:
             tags=pkg_data.get("tags", []),
         )
 
+        # Persist UUID into source package.json so it survives Remove -> re-Add
+        self._persist_uuid_to_source(local_path, pkg_id, is_folder)
+
         return {"id": pkg_id, "version": version}
 
     def _check_version_conflict(self, pkg_id, version, registry_entry):
@@ -189,6 +192,32 @@ class Publisher:
         os.makedirs(os.path.dirname(reg_path), exist_ok=True)
         with open(reg_path, "w", encoding="utf-8") as f:
             json.dump(registry, f, indent=2, ensure_ascii=False)
+
+    def _persist_uuid_to_source(self, local_path, pkg_id, is_folder):
+        """Write UUID back into the source folder's package.json.
+
+        For folders: update or create package.json with the id field.
+        For single files: no-op (no package.json to write to).
+        """
+        if not is_folder:
+            return
+
+        pkg_json_path = os.path.join(local_path, "package.json")
+        if os.path.exists(pkg_json_path):
+            try:
+                with open(pkg_json_path, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+            except (json.JSONDecodeError, OSError):
+                data = {}
+        else:
+            data = {}
+
+        if data.get("id") == pkg_id:
+            return
+
+        data["id"] = pkg_id
+        with open(pkg_json_path, "w", encoding="utf-8") as f:
+            json.dump(data, f, indent=2, ensure_ascii=False)
 
     def _compute_sha256(self, file_path):
         sha = hashlib.sha256()
