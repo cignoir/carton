@@ -41,6 +41,8 @@ _STRINGS = {
         "loading": "Loading...",
         "tab_all": "All",
         "tab_installed": "Installed",
+        "my_tools": "My Tools",
+        "register_script": "+ Register Script",
         "add": "+ Add",
         "update_available": "Carton v{} available",
         "update_pending": "Carton v{} — next Maya restart",
@@ -71,7 +73,7 @@ _STRINGS = {
         "setup_registry_name": "Enter registry name:",
 
         # Add dialog
-        "add_title": "Carton — Add",
+        "add_title": "Carton — Register Script",
         "add_select_placeholder": "Select a file or folder...",
         "add_exec_mode": "Execute file (top-level execution)",
         "add_func_mode": "Call function:",
@@ -153,6 +155,8 @@ _STRINGS = {
         "loading": "読み込み中...",
         "tab_all": "すべて",
         "tab_installed": "インストール済み",
+        "my_tools": "マイツール",
+        "register_script": "+ スクリプトを登録",
         "add": "+ 追加",
         "update_available": "Carton v{} が利用可能",
         "update_pending": "Carton v{} — 次回 Maya 起動時に適用",
@@ -183,7 +187,7 @@ _STRINGS = {
         "setup_registry_name": "レジストリの名前を入力:",
 
         # Add dialog
-        "add_title": "Carton — 追加",
+        "add_title": "Carton — スクリプト登録",
         "add_select_placeholder": "ファイルまたはフォルダを選択...",
         "add_exec_mode": "ファイルを直接実行",
         "add_func_mode": "関数を呼び出す:",

@@ -24,7 +24,7 @@ from carton.ui.add_dialog import AddDialog
 from carton.ui.edit_dialog import EditDialog
 
 _WINDOW_TITLE = "Carton"
-_WINDOW_WIDTH = 640
+_WINDOW_WIDTH = 780
 _WINDOW_HEIGHT = 600
 
 
@@ -129,43 +129,6 @@ class _PublishTargetDialog(QtWidgets.QDialog):
         return self._result_registry
 
 
-class _RegistryGroup(QtWidgets.QWidget):
-    """Registry group header. Click to collapse/expand."""
-
-    def __init__(self, registry_name, count=0, parent=None):
-        super().__init__(parent)
-        self._collapsed = False
-        self._cards = []
-
-        layout = QtWidgets.QHBoxLayout(self)
-        layout.setContentsMargins(0, 4, 0, 4)
-        layout.setSpacing(6)
-
-        self._arrow = QtWidgets.QLabel("▼")
-        self._arrow.setFixedWidth(16)
-        self._arrow.setStyleSheet("color: #555; font-size: 10px; background: transparent;")
-        layout.addWidget(self._arrow)
-
-        label_text = f"{registry_name.upper()} ({count})" if count else registry_name.upper()
-        label = QtWidgets.QLabel(label_text)
-        label.setStyleSheet(
-            "color: #6e6e6e; font-size: 11px; font-weight: 600;"
-            " letter-spacing: 1px; background: transparent;"
-        )
-        layout.addWidget(label)
-
-        layout.addStretch()
-        self.setCursor(Qt.PointingHandCursor)
-
-    def add_card(self, card):
-        self._cards.append(card)
-
-    def mousePressEvent(self, event):
-        self._collapsed = not self._collapsed
-        self._arrow.setText("▶" if self._collapsed else "▼")
-        for card in self._cards:
-            card.setVisible(not self._collapsed)
-
 
 _STYLE = """
 QWidget {
@@ -241,11 +204,49 @@ class CartonWindow(QtWidgets.QDialog):
         self._stack = QtWidgets.QStackedWidget()
         main_layout.addWidget(self._stack)
 
-        # ---- Page 0: Package list ----
+        # ---- Page 0: Sidebar + Package list ----
         list_page = QtWidgets.QWidget()
-        list_layout = QtWidgets.QVBoxLayout(list_page)
-        list_layout.setContentsMargins(16, 16, 16, 16)
-        list_layout.setSpacing(12)
+        page_layout = QtWidgets.QHBoxLayout(list_page)
+        page_layout.setContentsMargins(0, 0, 0, 0)
+        page_layout.setSpacing(0)
+
+        # -- Sidebar --
+        sidebar = QtWidgets.QWidget()
+        sidebar.setFixedWidth(160)
+        sidebar.setStyleSheet("QWidget { background: #181818; }")
+        sidebar_layout = QtWidgets.QVBoxLayout(sidebar)
+        sidebar_layout.setContentsMargins(8, 12, 8, 12)
+        sidebar_layout.setSpacing(4)
+
+        self._sidebar_list = QtWidgets.QListWidget()
+        self._sidebar_list.setStyleSheet(
+            "QListWidget { background: transparent; border: none; outline: none; }"
+            "QListWidget::item { color: #aaa; padding: 6px 8px; border-radius: 4px; }"
+            "QListWidget::item:selected { background: #2a2a2a; color: #e0e0e0; }"
+            "QListWidget::item:hover { background: #222; }"
+            "QListWidget::item:disabled { background: transparent; padding: 0; }"
+            "QListWidget::item:disabled:hover { background: transparent; }"
+        )
+        self._sidebar_list.currentRowChanged.connect(self._on_sidebar_changed)
+        sidebar_layout.addWidget(self._sidebar_list)
+
+        # Settings button at bottom of sidebar
+        settings_btn = QtWidgets.QPushButton("⚙  " + t("settings_title").split("—")[-1].strip())
+        settings_btn.setStyleSheet(
+            "QPushButton { background: transparent; border: none;"
+            "  color: #555; font-size: 11px; text-align: left; padding: 6px 8px; }"
+            "QPushButton:hover { color: #aaa; }"
+        )
+        settings_btn.clicked.connect(self._open_settings)
+        sidebar_layout.addWidget(settings_btn)
+
+        page_layout.addWidget(sidebar)
+
+        # -- Content area --
+        content = QtWidgets.QWidget()
+        content_layout = QtWidgets.QVBoxLayout(content)
+        content_layout.setContentsMargins(16, 12, 16, 12)
+        content_layout.setSpacing(10)
 
         # Update banner
         self._update_banner = QtWidgets.QWidget()
@@ -273,9 +274,9 @@ class CartonWindow(QtWidgets.QDialog):
         self._update_banner_btn.clicked.connect(self._on_self_update)
         self._update_banner_btn.setVisible(False)
         banner_layout.addWidget(self._update_banner_btn)
-        list_layout.addWidget(self._update_banner)
+        content_layout.addWidget(self._update_banner)
 
-        # Search + buttons
+        # Search + refresh
         search_row = QtWidgets.QHBoxLayout()
         self._search = QtWidgets.QLineEdit()
         self._search.setPlaceholderText(t("search_placeholder"))
@@ -291,21 +292,11 @@ class CartonWindow(QtWidgets.QDialog):
         )
         refresh_btn.clicked.connect(self.refresh)
         search_row.addWidget(refresh_btn)
+        content_layout.addLayout(search_row)
 
-        settings_btn = QtWidgets.QPushButton("⚙")
-        settings_btn.setFixedSize(28, 28)
-        settings_btn.setStyleSheet(
-            "QPushButton { background: transparent; border: 1px solid #333;"
-            "  border-radius: 6px; font-size: 16px; color: #777; }"
-            "QPushButton:hover { background: #2a2a2a; color: #e0e0e0; border-color: #444; }"
-        )
-        settings_btn.clicked.connect(self._open_settings)
-        search_row.addWidget(settings_btn)
+        # Toolbar (tabs + register button, visibility depends on sidebar selection)
+        toolbar = QtWidgets.QHBoxLayout()
 
-        list_layout.addLayout(search_row)
-
-        # Tabs
-        tab_layout = QtWidgets.QHBoxLayout()
         self._tab_all = QtWidgets.QPushButton(t("tab_all"))
         self._tab_installed = QtWidgets.QPushButton(t("tab_installed"))
         for btn in (self._tab_all, self._tab_installed):
@@ -320,21 +311,22 @@ class CartonWindow(QtWidgets.QDialog):
         self._tab_installed.setChecked(True)
         self._tab_all.clicked.connect(lambda: self._set_tab("all"))
         self._tab_installed.clicked.connect(lambda: self._set_tab("installed"))
-        tab_layout.addWidget(self._tab_installed)
-        tab_layout.addWidget(self._tab_all)
-        tab_layout.addStretch()
+        toolbar.addWidget(self._tab_installed)
+        toolbar.addWidget(self._tab_all)
+        toolbar.addStretch()
 
-        add_btn = QtWidgets.QPushButton(t("add"))
-        add_btn.setFixedHeight(28)
-        add_btn.setStyleSheet(
+        self._register_btn = QtWidgets.QPushButton(t("register_script"))
+        self._register_btn.setFixedHeight(28)
+        self._register_btn.setStyleSheet(
             "QPushButton { background: transparent; border: 1px solid #333;"
             "  border-radius: 6px; color: #777; font-size: 12px; padding: 0 10px; }"
             "QPushButton:hover { background: #2a2a2a; color: #e0e0e0; border-color: #444; }"
         )
-        add_btn.clicked.connect(self._on_add_script)
-        tab_layout.addWidget(add_btn)
+        self._register_btn.clicked.connect(self._on_add_script)
+        self._register_btn.setVisible(False)
+        toolbar.addWidget(self._register_btn)
 
-        list_layout.addLayout(tab_layout)
+        content_layout.addLayout(toolbar)
 
         # Card list
         scroll = QtWidgets.QScrollArea()
@@ -343,7 +335,7 @@ class CartonWindow(QtWidgets.QDialog):
 
         self._card_container = QtWidgets.QWidget()
         self._card_layout = QtWidgets.QVBoxLayout(self._card_container)
-        self._card_layout.setContentsMargins(0, 0, 0, 0)
+        self._card_layout.setContentsMargins(0, 0, 10, 0)
         self._card_layout.setSpacing(8)
 
         self._loading_label = QtWidgets.QLabel(t("loading"))
@@ -353,7 +345,9 @@ class CartonWindow(QtWidgets.QDialog):
         self._card_layout.addStretch()
 
         scroll.setWidget(self._card_container)
-        list_layout.addWidget(scroll)
+        content_layout.addWidget(scroll)
+
+        page_layout.addWidget(content)
 
         self._stack.addWidget(list_page)
 
@@ -366,6 +360,7 @@ class CartonWindow(QtWidgets.QDialog):
         self._stack.addWidget(self._detail)
 
         self._current_tab = "installed"
+        self._sidebar_selection = None  # Will be set on refresh
 
     # ---- public API ----
 
@@ -442,8 +437,105 @@ class CartonWindow(QtWidgets.QDialog):
         if not self._registry_client:
             return
         self._registry_client.fetch()
+        self._rebuild_sidebar()
         self._rebuild_cards()
         self._check_self_update()
+
+    _MYTOOLS_KEY = "__my_tools__"
+
+    def _rebuild_sidebar(self):
+        """Rebuild sidebar items from config registries + My Tools."""
+        prev = self._sidebar_selection
+        self._sidebar_list.blockSignals(True)
+        self._sidebar_list.clear()
+
+        packages = self._registry_client.get_packages() if self._registry_client else {}
+        installed = self._install_manager.get_installed_packages() if self._install_manager else {}
+
+        # Count packages per registry
+        reg_counts = {}
+        for pkg_data in packages.values():
+            rn = pkg_data.get("_registry_name", "")
+            reg_counts[rn] = reg_counts.get(rn, 0) + 1
+
+        # Registry items (config order)
+        if self._config:
+            for entry in self._config.registries:
+                count = reg_counts.get(entry.name, 0)
+                item = QtWidgets.QListWidgetItem("{} ({})".format(entry.name, count))
+                item.setData(Qt.UserRole, entry.name)
+                self._sidebar_list.addItem(item)
+
+        # Separator — use a dedicated widget to avoid hover highlight
+        sep = QtWidgets.QListWidgetItem()
+        sep.setFlags(Qt.NoItemFlags)
+        sep.setSizeHint(QtCore.QSize(0, 13))
+        self._sidebar_list.addItem(sep)
+        sep_container = QtWidgets.QWidget()
+        sep_container.setStyleSheet("background: transparent;")
+        sep_lay = QtWidgets.QVBoxLayout(sep_container)
+        sep_lay.setContentsMargins(8, 6, 8, 6)
+        sep_line = QtWidgets.QFrame()
+        sep_line.setFixedHeight(1)
+        sep_line.setStyleSheet("background: #333;")
+        sep_lay.addWidget(sep_line)
+        self._sidebar_list.setItemWidget(sep, sep_container)
+
+        # My Tools
+        my_count = sum(
+            1 for p in installed.values()
+            if p.get("source") in ("local_script", "published")
+        )
+        my_item = QtWidgets.QListWidgetItem("{} ({})".format(t("my_tools"), my_count))
+        my_item.setData(Qt.UserRole, self._MYTOOLS_KEY)
+        self._sidebar_list.addItem(my_item)
+
+        # Restore or default selection
+        self._sidebar_list.blockSignals(False)
+        restored = False
+        if prev:
+            for i in range(self._sidebar_list.count()):
+                item = self._sidebar_list.item(i)
+                if item and item.data(Qt.UserRole) == prev:
+                    self._sidebar_list.setCurrentRow(i)
+                    restored = True
+                    break
+        if not restored:
+            # Default: first registry, or My Tools if no registries
+            if self._sidebar_list.count() > 0:
+                first = self._sidebar_list.item(0)
+                if first and first.flags() & Qt.ItemIsSelectable:
+                    self._sidebar_list.setCurrentRow(0)
+                else:
+                    # Skip separator, select My Tools
+                    self._sidebar_list.setCurrentRow(self._sidebar_list.count() - 1)
+
+    def _on_sidebar_changed(self, row):
+        """Handle sidebar selection change."""
+        item = self._sidebar_list.item(row)
+        if not item or not (item.flags() & Qt.ItemIsSelectable):
+            return
+        self._sidebar_selection = item.data(Qt.UserRole)
+        is_my_tools = self._sidebar_selection == self._MYTOOLS_KEY
+        # Show tabs for registries, register button for My Tools
+        self._tab_all.setVisible(not is_my_tools)
+        self._tab_installed.setVisible(not is_my_tools)
+        self._register_btn.setVisible(is_my_tools)
+
+        if not is_my_tools:
+            # Default to "installed", fall back to "all" if none installed
+            packages = self._registry_client.get_packages() if self._registry_client else {}
+            installed = self._install_manager.get_installed_packages() if self._install_manager else {}
+            has_installed = any(
+                pkg_id in installed
+                for pkg_id, pkg_data in packages.items()
+                if pkg_data.get("_registry_name") == self._sidebar_selection
+            )
+            self._current_tab = "installed" if has_installed else "all"
+            self._tab_installed.setChecked(self._current_tab == "installed")
+            self._tab_all.setChecked(self._current_tab == "all")
+
+        self._rebuild_cards()
 
     # ---- internal ----
 
@@ -469,7 +561,7 @@ class CartonWindow(QtWidgets.QDialog):
             return None
 
     def _rebuild_cards(self):
-        """Rebuild the card list. Grouped by registry."""
+        """Rebuild the card list based on sidebar selection."""
         # Stop any in-flight icon fetcher from a previous rebuild
         if self._icon_fetcher and self._icon_fetcher.isRunning():
             self._icon_fetcher.quit()
@@ -485,104 +577,80 @@ class CartonWindow(QtWidgets.QDialog):
 
         packages = self._registry_client.get_packages() if self._registry_client else {}
         installed = self._install_manager.get_installed_packages() if self._install_manager else {}
+        selection = self._sidebar_selection
 
-        all_items = {}
+        visible_items = []
 
-        for pkg_id, pkg_data in packages.items():
-            item = dict(pkg_data)
-            if pkg_id in installed:
-                item["_installed_ver"] = installed[pkg_id].get("version")
-                inst = installed[pkg_id]
-                if inst.get("source") in ("local_script", "published") and inst.get("local_path"):
+        if selection == self._MYTOOLS_KEY:
+            # My Tools: show locally registered scripts
+            for pkg_id, pkg_data in installed.items():
+                if pkg_data.get("source") in ("local_script", "published"):
+                    item = dict(pkg_data)
+                    item["_installed_ver"] = pkg_data.get("version")
                     item["_local_script"] = True
-            all_items[pkg_id] = item
+                    visible_items.append((pkg_id, item))
+            visible_items.sort(key=lambda x: x[1].get("display_name", ""))
+        else:
+            # Registry view: show packages from selected registry
+            for pkg_id, pkg_data in packages.items():
+                if pkg_data.get("_registry_name") != selection:
+                    continue
+                item = dict(pkg_data)
+                is_installed = pkg_id in installed
+                if is_installed:
+                    item["_installed_ver"] = installed[pkg_id].get("version")
+                    inst = installed[pkg_id]
+                    if inst.get("source") in ("local_script", "published") and inst.get("local_path"):
+                        item["_local_script"] = True
+                if self._current_tab == "installed" and not is_installed:
+                    continue
+                visible_items.append((pkg_id, item))
+            visible_items.sort(key=lambda x: x[1].get("display_name", ""))
 
-        for pkg_id, pkg_data in installed.items():
-            source = pkg_data.get("source", "")
-            if source in ("local_script", "published") and pkg_id not in all_items:
-                has_local_file = bool(pkg_data.get("local_path"))
-                all_items[pkg_id] = {
-                    "name": pkg_data.get("name", ""),
-                    "display_name": pkg_data.get("display_name", ""),
-                    "type": pkg_data.get("type", "python_package"),
-                    "icon": pkg_data.get("icon", "📄"),
-                    "description": pkg_data.get("description", ""),
-                    "author": pkg_data.get("author", ""),
-                    "tags": [],
-                    "latest_version": pkg_data.get("version", "0.0.0"),
-                    "_installed_ver": pkg_data.get("version", "0.0.0"),
-                    "_local_script": has_local_file,
-                    "_registry_name": "Local",
-                }
+        for pkg_id, pkg_data in visible_items:
+            installed_ver = pkg_data.get("_installed_ver")
+            pkg_name = pkg_data.get("name", "")
 
-        # Registry grouping — preserve config order
-        groups = OrderedDict()
-        if self._config:
-            for entry in self._config.registries:
-                groups[entry.name] = []
-        for pkg_id, pkg_data in sorted(all_items.items(), key=lambda x: x[1].get("display_name", "")):
-            is_installed = pkg_id in installed
-            if self._current_tab == "installed" and not is_installed:
-                continue
-            reg_name = pkg_data.get("_registry_name", "Local")
-            if reg_name not in groups:
-                groups[reg_name] = []
-            groups[reg_name].append((pkg_id, pkg_data))
-        # Remove empty groups (registries with no visible packages)
-        groups = OrderedDict((k, v) for k, v in groups.items() if v)
+            # Icon resolution
+            icon_path = None
+            icon_value = pkg_data.get("icon", "")
+            if isinstance(icon_value, bool) and icon_value:
+                base_dir = pkg_data.get("_registry_base_dir", "")
+                is_remote = pkg_data.get("_registry_remote", False)
+                if base_dir:
+                    if is_remote:
+                        if self._config:
+                            cached = os.path.join(
+                                self._config.install_dir, ".icon_cache",
+                                "{}.png".format(pkg_name),
+                            )
+                            if os.path.exists(cached):
+                                icon_path = cached
+                            else:
+                                icon_fetch_tasks.append((pkg_id, base_dir, pkg_name))
+                    else:
+                        candidate = os.path.join(base_dir, "icons", "{}.png".format(pkg_name))
+                        if os.path.exists(candidate):
+                            icon_path = candidate
 
-        for reg_name, items in groups.items():
-            group_header = _RegistryGroup(reg_name, count=len(items))
+            card = PackageCard(pkg_id, pkg_data, installed_version=installed_ver, icon_path=icon_path)
+            card.launch_requested.connect(self._on_launch)
+            card.install_requested.connect(self._on_install)
+            card.publish_requested.connect(self._on_publish)
+            card.update_requested.connect(self._on_update)
+            card.setCursor(Qt.PointingHandCursor)
+            self._card_map[pkg_id] = card
+
+            is_local = pkg_data.get("_local_script", False)
+            is_published_local = (pkg_id in installed and
+                                  installed[pkg_id].get("source") in ("local_script", "published"))
+            if is_local or is_published_local:
+                card.mousePressEvent = lambda e, pid=pkg_id: self._show_edit(pid)
+            else:
+                card.mousePressEvent = lambda e, pid=pkg_id: self._show_detail(pid)
+
             idx = self._card_layout.count() - 1
-            self._card_layout.insertWidget(idx, group_header)
-
-            for pkg_id, pkg_data in items:
-                installed_ver = pkg_data.get("_installed_ver")
-                pkg_name = pkg_data.get("name", "")
-
-                # Icon: local icons are resolved immediately,
-                # remote icons are deferred to background thread
-                icon_path = None
-                icon_value = pkg_data.get("icon", "")
-                if isinstance(icon_value, bool) and icon_value:
-                    base_dir = pkg_data.get("_registry_base_dir", "")
-                    is_remote = pkg_data.get("_registry_remote", False)
-                    if base_dir:
-                        if is_remote:
-                            # Check cache synchronously, queue download if missing
-                            if self._config:
-                                cached = os.path.join(
-                                    self._config.install_dir, ".icon_cache",
-                                    "{}.png".format(pkg_name),
-                                )
-                                if os.path.exists(cached):
-                                    icon_path = cached
-                                else:
-                                    icon_fetch_tasks.append((pkg_id, base_dir, pkg_name))
-                        else:
-                            candidate = os.path.join(base_dir, "icons", "{}.png".format(pkg_name))
-                            if os.path.exists(candidate):
-                                icon_path = candidate
-
-                card = PackageCard(pkg_id, pkg_data, installed_version=installed_ver, icon_path=icon_path)
-                card.launch_requested.connect(self._on_launch)
-                card.install_requested.connect(self._on_install)
-                card.publish_requested.connect(self._on_publish)
-                card.update_requested.connect(self._on_update)
-                card.setCursor(Qt.PointingHandCursor)
-                self._card_map[pkg_id] = card
-
-                is_local = pkg_data.get("_local_script", False)
-                is_published_local = (pkg_id in installed and
-                                      installed[pkg_id].get("source") in ("local_script", "published"))
-                if is_local or is_published_local:
-                    card.mousePressEvent = lambda e, pid=pkg_id: self._show_edit(pid)
-                else:
-                    card.mousePressEvent = lambda e, pid=pkg_id: self._show_detail(pid)
-
-                group_header.add_card(card)
-                idx = self._card_layout.count() - 1
-                self._card_layout.insertWidget(idx, card)
+            self._card_layout.insertWidget(idx, card)
 
         # Start background icon download for uncached remote icons
         if icon_fetch_tasks:
@@ -649,17 +717,6 @@ class CartonWindow(QtWidgets.QDialog):
                 tags = " ".join(widget._pkg_data.get("tags", [])).lower()
                 visible = not text or text in name or text in display or text in tags
                 widget.setVisible(visible)
-            elif isinstance(widget, _RegistryGroup):
-                if not text:
-                    widget.setVisible(True)
-                else:
-                    has_visible = any(
-                        text in c._pkg_data.get("name", "").lower()
-                        or text in c._pkg_data.get("display_name", "").lower()
-                        or text in " ".join(c._pkg_data.get("tags", [])).lower()
-                        for c in widget._cards
-                    )
-                    widget.setVisible(has_visible)
 
     def _set_tab(self, tab):
         self._current_tab = tab
