@@ -28,6 +28,39 @@ _WINDOW_WIDTH = 640
 _WINDOW_HEIGHT = 600
 
 
+class _IconFetcher(QtCore.QThread):
+    """Background thread that downloads remote icons in bulk."""
+
+    icon_ready = QtCore.Signal(str, str)  # (pkg_id, local_path)
+
+    def __init__(self, tasks, config, parent=None):
+        """tasks: list of (pkg_id, base_url, pkg_name)"""
+        super().__init__(parent)
+        self._tasks = tasks
+        self._config = config
+
+    def run(self):
+        if not self._config:
+            return
+        cache_dir = os.path.join(self._config.install_dir, ".icon_cache")
+        os.makedirs(cache_dir, exist_ok=True)
+        for pkg_id, base_url, pkg_name in self._tasks:
+            cached = os.path.join(cache_dir, "{}.png".format(pkg_name))
+            if os.path.exists(cached):
+                self.icon_ready.emit(pkg_id, cached)
+                continue
+            icon_url = urljoin(base_url, "icons/{}.png".format(pkg_name))
+            try:
+                req = Request(icon_url)
+                resp = urlopen(req, timeout=5)
+                data = resp.read()
+                with open(cached, "wb") as f:
+                    f.write(data)
+                self.icon_ready.emit(pkg_id, cached)
+            except Exception:
+                pass
+
+
 class _RegistryGroup(QtWidgets.QWidget):
     """Registry group header. Click to collapse/expand."""
 
@@ -127,6 +160,8 @@ class CartonWindow(QtWidgets.QDialog):
         self._script_manager = None
         self._publisher = None
         self._config = None
+        self._icon_fetcher = None
+        self._card_map = {}  # pkg_id -> PackageCard (for deferred icon updates)
 
         self._setup_ui()
 
@@ -360,6 +395,14 @@ class CartonWindow(QtWidgets.QDialog):
 
     def _rebuild_cards(self):
         """Rebuild the card list. Grouped by registry."""
+        # Stop any in-flight icon fetcher from a previous rebuild
+        if self._icon_fetcher and self._icon_fetcher.isRunning():
+            self._icon_fetcher.quit()
+            self._icon_fetcher.wait()
+            self._icon_fetcher = None
+        self._card_map = {}
+        icon_fetch_tasks = []
+
         while self._card_layout.count() > 1:
             item = self._card_layout.takeAt(0)
             if item.widget():
@@ -417,7 +460,8 @@ class CartonWindow(QtWidgets.QDialog):
                 installed_ver = pkg_data.get("_installed_ver")
                 pkg_name = pkg_data.get("name", "")
 
-                # Icon: from registry's icons/ (local or remote)
+                # Icon: local icons are resolved immediately,
+                # remote icons are deferred to background thread
                 icon_path = None
                 icon_value = pkg_data.get("icon", "")
                 if isinstance(icon_value, bool) and icon_value:
@@ -425,9 +469,16 @@ class CartonWindow(QtWidgets.QDialog):
                     is_remote = pkg_data.get("_registry_remote", False)
                     if base_dir:
                         if is_remote:
-                            icon_path = self._fetch_remote_icon(
-                                base_dir, pkg_name,
-                            )
+                            # Check cache synchronously, queue download if missing
+                            if self._config:
+                                cached = os.path.join(
+                                    self._config.install_dir, ".icon_cache",
+                                    "{}.png".format(pkg_name),
+                                )
+                                if os.path.exists(cached):
+                                    icon_path = cached
+                                else:
+                                    icon_fetch_tasks.append((pkg_id, base_dir, pkg_name))
                         else:
                             candidate = os.path.join(base_dir, "icons", "{}.png".format(pkg_name))
                             if os.path.exists(candidate):
@@ -439,6 +490,7 @@ class CartonWindow(QtWidgets.QDialog):
                 card.publish_requested.connect(self._on_publish)
                 card.update_requested.connect(self._on_update)
                 card.setCursor(Qt.PointingHandCursor)
+                self._card_map[pkg_id] = card
 
                 is_local = pkg_data.get("_local_script", False)
                 is_published_local = (pkg_id in installed and
@@ -451,6 +503,18 @@ class CartonWindow(QtWidgets.QDialog):
                 group_header.add_card(card)
                 idx = self._card_layout.count() - 1
                 self._card_layout.insertWidget(idx, card)
+
+        # Start background icon download for uncached remote icons
+        if icon_fetch_tasks:
+            self._icon_fetcher = _IconFetcher(icon_fetch_tasks, self._config, parent=self)
+            self._icon_fetcher.icon_ready.connect(self._on_icon_ready)
+            self._icon_fetcher.start()
+
+    def _on_icon_ready(self, pkg_id, icon_path):
+        """Slot called from background thread when an icon is downloaded."""
+        card = self._card_map.get(pkg_id)
+        if card:
+            card.set_icon(icon_path)
 
     def _show_detail(self, pkg_id):
         packages = self._registry_client.get_packages() if self._registry_client else {}

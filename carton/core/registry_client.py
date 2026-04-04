@@ -2,6 +2,7 @@
 
 import json
 import os
+import zipfile
 
 try:
     from urllib.request import urlopen, Request
@@ -13,6 +14,11 @@ try:
     from urllib.parse import urljoin
 except ImportError:
     from urlparse import urljoin
+
+try:
+    from io import BytesIO
+except ImportError:
+    from StringIO import StringIO as BytesIO
 
 
 class RegistryClient:
@@ -67,6 +73,7 @@ class RegistryClient:
             return
 
         self._merge_packages(entry, data)
+        self._fetch_icons_archive(entry)
 
     def _merge_packages(self, entry, data):
         """Merge packages from a loaded registry into the package dict."""
@@ -95,6 +102,21 @@ class RegistryClient:
                         )
 
             self._packages[pkg_id] = item
+
+    def _fetch_icons_archive(self, entry):
+        """Download icons.zip from a remote registry and extract to icon cache."""
+        cache_dir = os.path.join(self._config.install_dir, ".icon_cache")
+        icons_url = urljoin(entry.base_dir, "icons.zip")
+        try:
+            req = Request(icons_url)
+            resp = urlopen(req, timeout=10)
+            data = resp.read()
+            os.makedirs(cache_dir, exist_ok=True)
+            with zipfile.ZipFile(BytesIO(data)) as zf:
+                zf.extractall(cache_dir)
+        except Exception:
+            # Fall back to per-icon download handled by UI layer
+            pass
 
     def get_packages(self):
         """Return the merged package dictionary. Fetches if not yet loaded."""

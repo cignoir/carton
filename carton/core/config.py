@@ -128,3 +128,7 @@ class Config:
     @property
     def staging_dir(self):
         return os.path.join(self.install_dir, ".staging")
+
+    @property
+    def icon_cache_dir(self):
+        return os.path.join(self.install_dir, ".icon_cache")

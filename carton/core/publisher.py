@@ -196,6 +196,9 @@ class Publisher:
         with open(reg_path, "w", encoding="utf-8") as f:
             json.dump(registry, f, indent=2, ensure_ascii=False)
 
+        # Rebuild icons.zip so remote consumers can bulk-download
+        self._rebuild_icons_archive(registry_entry.base_dir)
+
     def _persist_uuid_to_source(self, local_path, pkg_id, is_folder):
         """Write UUID back into the source folder's package.json.
 
@@ -291,6 +294,19 @@ class Publisher:
             except (json.JSONDecodeError, OSError):
                 continue
         return results
+
+    def _rebuild_icons_archive(self, registry_base):
+        """Rebuild icons.zip from all PNGs in the icons/ directory."""
+        icons_dir = os.path.join(registry_base, "icons")
+        if not os.path.isdir(icons_dir):
+            return
+        pngs = [f for f in os.listdir(icons_dir) if f.lower().endswith(".png")]
+        if not pngs:
+            return
+        archive_path = os.path.join(registry_base, "icons.zip")
+        with zipfile.ZipFile(archive_path, "w", zipfile.ZIP_DEFLATED) as zf:
+            for png in pngs:
+                zf.write(os.path.join(icons_dir, png), png)
 
     def _compute_sha256(self, file_path):
         sha = hashlib.sha256()

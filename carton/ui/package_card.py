@@ -233,3 +233,14 @@ class PackageCard(QtWidgets.QFrame):
             btn_layout.addWidget(install_btn)
 
         layout.addLayout(btn_layout)
+
+    def set_icon(self, icon_path):
+        """Update the icon after initial construction (e.g. async download)."""
+        if icon_path and os.path.exists(icon_path):
+            pixmap = QtGui.QPixmap(icon_path)
+            self._icon_label.setPixmap(
+                pixmap.scaled(40, 40, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+            )
+            self._icon_label.setStyleSheet(
+                "QLabel { background: transparent; border-radius: 8px; }"
+            )
