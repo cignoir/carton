@@ -48,6 +48,8 @@ _STRINGS = {
         "confirm_publish": "Publish {} v{} to '{}'?",
         "publish_success": "{} published!",
         "publish_no_registry": "No registries configured.\nAdd a registry from Settings.",
+        "publish_create_registry": "Create new registry",
+        "publish_add_existing_registry": "Add existing registry",
         "publish_select_registry": "Target registry:",
         "publish_already_published": "v{} is already published.\nIncrement the version from the edit screen before re-publishing.",
         "no_download_url": "No download URL available",
@@ -63,15 +65,7 @@ _STRINGS = {
         "register_error": "Register Error",
         "update_error": "Update Error",
 
-        # Setup
-        "setup_title": "Carton — Setup",
-        "setup_no_registry": (
-            "No registries configured.\n\n"
-            "A registry is a folder that manages your tool catalog.\n"
-            "You can share it with a team or create one for personal use.\n\n"
-            "Create a new registry?"
-        ),
-        "setup_no_registry_hint": "You can add a registry anytime from Settings (⚙).",
+        # Registry creation
         "setup_select_folder": "Select folder to create registry",
         "setup_registry_name": "Enter registry name:",
 
@@ -165,6 +159,8 @@ _STRINGS = {
         "confirm_publish": "{} v{} を '{}' に公開しますか？",
         "publish_success": "{} を公開しました！",
         "publish_no_registry": "レジストリが登録されていません。\n設定からレジストリを追加してください。",
+        "publish_create_registry": "レジストリを新規作成",
+        "publish_add_existing_registry": "既存のレジストリを追加",
         "publish_select_registry": "公開先レジストリ:",
         "publish_already_published": "v{} は既に公開済みです。\n編集画面からバージョンを上げてから再公開してください。",
         "no_download_url": "ダウンロード先が見つかりません",
@@ -180,15 +176,7 @@ _STRINGS = {
         "register_error": "登録エラー",
         "update_error": "更新エラー",
 
-        # Setup
-        "setup_title": "Carton — セットアップ",
-        "setup_no_registry": (
-            "レジストリが登録されていません。\n\n"
-            "レジストリはツールの一覧を管理するフォルダです。\n"
-            "チームで共有したり、個人用に作成できます。\n\n"
-            "新しいレジストリを作成しますか？"
-        ),
-        "setup_no_registry_hint": "設定 (⚙) からいつでもレジストリを追加できます。",
+        # Registry creation
         "setup_select_folder": "レジストリを作成するフォルダを選択",
         "setup_registry_name": "レジストリの名前を入力:",
 

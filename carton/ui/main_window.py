@@ -61,6 +61,74 @@ class _IconFetcher(QtCore.QThread):
                 pass
 
 
+class _PublishTargetDialog(QtWidgets.QDialog):
+    """Dialog to choose a publish target registry."""
+
+    def __init__(self, registries, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle(t("publish"))
+        self.setMinimumWidth(360)
+        self._result_registry = None
+
+        layout = QtWidgets.QVBoxLayout(self)
+        layout.setSpacing(12)
+
+        # Dropdown for existing local registries
+        if registries:
+            label = QtWidgets.QLabel(t("publish_select_registry"))
+            label.setStyleSheet("font-weight: 600;")
+            layout.addWidget(label)
+
+            self._combo = QtWidgets.QComboBox()
+            for r in registries:
+                self._combo.addItem(r.name, r)
+            layout.addWidget(self._combo)
+
+            select_btn = QtWidgets.QPushButton(t("publish"))
+            select_btn.setStyleSheet(
+                "QPushButton { background: #4CAF50; color: white; border: none;"
+                "  border-radius: 6px; padding: 8px; font-weight: 600; }"
+                "QPushButton:hover { background: #5cbf60; }"
+            )
+            select_btn.clicked.connect(self._on_select)
+            layout.addWidget(select_btn)
+
+            sep = QtWidgets.QFrame()
+            sep.setFrameShape(QtWidgets.QFrame.HLine)
+            sep.setStyleSheet("color: #3a3a3a;")
+            layout.addWidget(sep)
+        else:
+            self._combo = None
+
+        # Create new / Add existing buttons
+        new_btn = QtWidgets.QPushButton(t("publish_create_registry"))
+        new_btn.setStyleSheet(
+            "QPushButton { background: transparent; color: #4FC3F7;"
+            "  border: 1px solid #4FC3F7; border-radius: 6px; padding: 8px; }"
+            "QPushButton:hover { background: #1a3040; }"
+        )
+        new_btn.clicked.connect(lambda: self.done(2))
+        layout.addWidget(new_btn)
+
+        add_btn = QtWidgets.QPushButton(t("publish_add_existing_registry"))
+        add_btn.setStyleSheet(
+            "QPushButton { background: transparent; color: #aaa;"
+            "  border: 1px solid #555; border-radius: 6px; padding: 8px; }"
+            "QPushButton:hover { background: #2a2a2a; }"
+        )
+        add_btn.clicked.connect(lambda: self.done(3))
+        layout.addWidget(add_btn)
+
+    def _on_select(self):
+        if self._combo:
+            self._result_registry = self._combo.currentData()
+        self.accept()
+
+    @property
+    def selected_registry(self):
+        return self._result_registry
+
+
 class _RegistryGroup(QtWidgets.QWidget):
     """Registry group header. Click to collapse/expand."""
 
@@ -249,11 +317,11 @@ class CartonWindow(QtWidgets.QDialog):
                 "QPushButton:hover { color: #a0a0a0; }"
                 "QPushButton:checked { color: #e0e0e0; border-bottom: 2px solid #3572A5; }"
             )
-        self._tab_all.setChecked(True)
+        self._tab_installed.setChecked(True)
         self._tab_all.clicked.connect(lambda: self._set_tab("all"))
         self._tab_installed.clicked.connect(lambda: self._set_tab("installed"))
-        tab_layout.addWidget(self._tab_all)
         tab_layout.addWidget(self._tab_installed)
+        tab_layout.addWidget(self._tab_all)
         tab_layout.addStretch()
 
         add_btn = QtWidgets.QPushButton(t("add"))
@@ -297,7 +365,7 @@ class CartonWindow(QtWidgets.QDialog):
         self._detail.launch_requested.connect(self._on_launch)
         self._stack.addWidget(self._detail)
 
-        self._current_tab = "all"
+        self._current_tab = "installed"
 
     # ---- public API ----
 
@@ -305,33 +373,16 @@ class CartonWindow(QtWidgets.QDialog):
         QtCore.QTimer.singleShot(0, self._do_deferred_init)
 
     def _do_deferred_init(self):
-        if self._config and not self._config.registries:
-            self._prompt_registry_setup()
         self.refresh()
         self._loading_label.setVisible(False)
 
-    def _prompt_registry_setup(self):
-        """Show a setup dialog when no registries are configured."""
-        reply = QtWidgets.QMessageBox.question(
-            self, t("setup_title"),
-            t("setup_no_registry"),
-            QtWidgets.QMessageBox.Yes | QtWidgets.QMessageBox.No,
-        )
-        if reply == QtWidgets.QMessageBox.Yes:
-            self._create_new_registry()
-        else:
-            QtWidgets.QMessageBox.information(
-                self, "Carton",
-                t("setup_no_registry_hint"),
-            )
-
     def _create_new_registry(self):
-        """Create a new empty registry directory."""
+        """Create a new empty registry directory. Returns the RegistryEntry or None."""
         folder = QtWidgets.QFileDialog.getExistingDirectory(
             self, t("setup_select_folder"),
         )
         if not folder:
-            return
+            return None
 
         name, ok = QtWidgets.QInputDialog.getText(
             self, "Registry Name",
@@ -339,7 +390,7 @@ class CartonWindow(QtWidgets.QDialog):
             text=os.path.basename(folder),
         )
         if not ok or not name:
-            return
+            return None
 
         import json
         reg_path = os.path.join(folder, "registry.json")
@@ -351,6 +402,30 @@ class CartonWindow(QtWidgets.QDialog):
 
         self._config.add_registry(name, reg_path)
         self._config.save()
+        # Return the newly added entry
+        return self._config.registries[-1]
+
+    def _add_existing_registry(self):
+        """Browse for an existing registry.json. Returns the RegistryEntry or None."""
+        path = QtWidgets.QFileDialog.getOpenFileName(
+            self, t("settings_select_registry"), "",
+            "Registry (registry.json);;JSON (*.json)",
+        )[0]
+        if not path:
+            return None
+
+        base = os.path.basename(os.path.dirname(path))
+        name, ok = QtWidgets.QInputDialog.getText(
+            self, "Registry Name",
+            t("setup_registry_name"),
+            text=base,
+        )
+        if not ok or not name:
+            return None
+
+        self._config.add_registry(name, path)
+        self._config.save()
+        return self._config.registries[-1]
 
     def set_services(self, registry_client, install_manager, downloader,
                      self_updater=None, config=None, script_manager=None,
@@ -635,24 +710,27 @@ class CartonWindow(QtWidgets.QDialog):
         display = pkg_data.get("display_name", pkg_id)
         local_version = pkg_data.get("version", "0.0.0")
 
-        # Select target registry for publishing (local only)
+        # Select target registry for publishing
         registries = [r for r in self._config.registries if not r.is_remote]
-        if not registries:
-            QtWidgets.QMessageBox.warning(
-                self, t("publish"), t("publish_no_registry"),
-            )
-            return
+        dlg = _PublishTargetDialog(registries, parent=self)
+        result = dlg.exec_()
 
-        if len(registries) == 1:
-            target_registry = registries[0]
-        else:
-            names = [r.name for r in registries]
-            chosen, ok = QtWidgets.QInputDialog.getItem(
-                self, t("publish"), t("publish_select_registry"), names, 0, False,
-            )
-            if not ok:
+        if result == 0:  # Rejected / cancelled
+            return
+        elif result == 1:  # Accepted — selected from dropdown
+            target_registry = dlg.selected_registry
+            if not target_registry:
                 return
-            target_registry = next(r for r in registries if r.name == chosen)
+        elif result == 2:  # Create new registry
+            target_registry = self._create_new_registry()
+            if not target_registry:
+                return
+        elif result == 3:  # Add existing registry
+            target_registry = self._add_existing_registry()
+            if not target_registry:
+                return
+        else:
+            return
 
         reply = QtWidgets.QMessageBox.question(
             self, t("publish"),
