@@ -4,6 +4,17 @@ import json
 import os
 from collections import OrderedDict
 
+try:
+    from urllib.request import urlopen, Request
+    from urllib.error import URLError
+except ImportError:
+    from urllib2 import urlopen, Request, URLError
+
+try:
+    from urllib.parse import urljoin
+except ImportError:
+    from urlparse import urljoin
+
 from carton.ui.compat import QtWidgets, QtCore, Qt, wrapInstance
 from carton.ui.i18n import t
 from carton.ui.package_card import PackageCard
@@ -325,6 +336,27 @@ class CartonWindow(QtWidgets.QDialog):
 
     # ---- internal ----
 
+    def _fetch_remote_icon(self, base_url, pkg_name):
+        """Download a remote icon and cache locally. Returns local path or None."""
+        if not self._config:
+            return None
+        cache_dir = os.path.join(self._config.install_dir, ".icon_cache")
+        cached = os.path.join(cache_dir, "{}.png".format(pkg_name))
+        if os.path.exists(cached):
+            return cached
+
+        icon_url = urljoin(base_url, "icons/{}.png".format(pkg_name))
+        try:
+            req = Request(icon_url)
+            resp = urlopen(req, timeout=5)
+            data = resp.read()
+            os.makedirs(cache_dir, exist_ok=True)
+            with open(cached, "wb") as f:
+                f.write(data)
+            return cached
+        except Exception:
+            return None
+
     def _rebuild_cards(self):
         """Rebuild the card list. Grouped by registry."""
         while self._card_layout.count() > 1:
@@ -384,15 +416,21 @@ class CartonWindow(QtWidgets.QDialog):
                 installed_ver = pkg_data.get("_installed_ver")
                 pkg_name = pkg_data.get("name", "")
 
-                # Icon: directly reference from registry's icons/
+                # Icon: from registry's icons/ (local or remote)
                 icon_path = None
                 icon_value = pkg_data.get("icon", "")
                 if isinstance(icon_value, bool) and icon_value:
                     base_dir = pkg_data.get("_registry_base_dir", "")
+                    is_remote = pkg_data.get("_registry_remote", False)
                     if base_dir:
-                        candidate = os.path.join(base_dir, "icons", "{}.png".format(pkg_name))
-                        if os.path.exists(candidate):
-                            icon_path = candidate
+                        if is_remote:
+                            icon_path = self._fetch_remote_icon(
+                                base_dir, pkg_name,
+                            )
+                        else:
+                            candidate = os.path.join(base_dir, "icons", "{}.png".format(pkg_name))
+                            if os.path.exists(candidate):
+                                icon_path = candidate
 
                 card = PackageCard(pkg_id, pkg_data, installed_version=installed_ver, icon_path=icon_path)
                 card.launch_requested.connect(self._on_launch)
