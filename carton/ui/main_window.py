@@ -440,8 +440,11 @@ class CartonWindow(QtWidgets.QDialog):
                     "_registry_name": "Local",
                 }
 
-        # Registry grouping
+        # Registry grouping — preserve config order
         groups = OrderedDict()
+        if self._config:
+            for entry in self._config.registries:
+                groups[entry.name] = []
         for pkg_id, pkg_data in sorted(all_items.items(), key=lambda x: x[1].get("display_name", "")):
             is_installed = pkg_id in installed
             if self._current_tab == "installed" and not is_installed:
@@ -450,6 +453,8 @@ class CartonWindow(QtWidgets.QDialog):
             if reg_name not in groups:
                 groups[reg_name] = []
             groups[reg_name].append((pkg_id, pkg_data))
+        # Remove empty groups (registries with no visible packages)
+        groups = OrderedDict((k, v) for k, v in groups.items() if v)
 
         for reg_name, items in groups.items():
             group_header = _RegistryGroup(reg_name, count=len(items))
