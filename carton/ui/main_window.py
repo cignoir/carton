@@ -631,6 +631,7 @@ class CartonWindow(QtWidgets.QDialog):
             pkg_data["version"] = result["version"]
             pkg_data["author"] = result["author"]
             pkg_data["icon"] = result["icon"]
+            pkg_data["homepage"] = result["homepage"]
             pkg_data["description"] = result["description"]
             pkg_data["entry_point"] = result["entry_point"]
             self._install_manager._installed["packages"][pkg_id] = pkg_data

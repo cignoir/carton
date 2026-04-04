@@ -89,17 +89,24 @@ class PackageCard(QtWidgets.QFrame):
         )
         self._icon_label.setAlignment(Qt.AlignCenter)
         icon_value = self._pkg_data.get("icon", "")
-        if isinstance(icon_value, str) and icon_value and not icon_value.endswith((".png", ".jpg", ".svg")) and icon_value not in ("true", "false"):
+
+        # Resolve icon source: icon_path (from registry), direct file path, emoji, or default
+        resolved_path = self._icon_path
+        if not resolved_path and isinstance(icon_value, str) and icon_value.endswith((".png", ".jpg", ".svg")):
+            if os.path.isabs(icon_value) and os.path.exists(icon_value):
+                resolved_path = icon_value
+
+        if resolved_path and os.path.exists(resolved_path):
+            pixmap = QtGui.QPixmap(resolved_path)
+            self._icon_label.setPixmap(
+                pixmap.scaled(40, 40, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+            )
+        elif isinstance(icon_value, str) and icon_value and icon_value not in ("true", "false") and not icon_value.endswith((".png", ".jpg", ".svg")):
             # Emoji icon
             self._icon_label.setText(icon_value)
             self._icon_label.setStyleSheet(
                 "QLabel { background: transparent; border-radius: 8px;"
                 "  font-size: 24px; }"
-            )
-        elif self._icon_path and os.path.exists(self._icon_path):
-            pixmap = QtGui.QPixmap(self._icon_path)
-            self._icon_label.setPixmap(
-                pixmap.scaled(40, 40, Qt.KeepAspectRatio, Qt.SmoothTransformation)
             )
         else:
             # Default icon
