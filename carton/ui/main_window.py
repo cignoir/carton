@@ -24,14 +24,14 @@ from carton.ui.add_dialog import AddDialog
 from carton.ui.edit_dialog import EditDialog
 
 _WINDOW_TITLE = "Carton"
-_WINDOW_WIDTH = 480
+_WINDOW_WIDTH = 640
 _WINDOW_HEIGHT = 600
 
 
 class _RegistryGroup(QtWidgets.QWidget):
     """Registry group header. Click to collapse/expand."""
 
-    def __init__(self, registry_name, parent=None):
+    def __init__(self, registry_name, count=0, parent=None):
         super().__init__(parent)
         self._collapsed = False
         self._cards = []
@@ -45,7 +45,8 @@ class _RegistryGroup(QtWidgets.QWidget):
         self._arrow.setStyleSheet("color: #555; font-size: 10px; background: transparent;")
         layout.addWidget(self._arrow)
 
-        label = QtWidgets.QLabel(registry_name.upper())
+        label_text = f"{registry_name.upper()} ({count})" if count else registry_name.upper()
+        label = QtWidgets.QLabel(label_text)
         label.setStyleSheet(
             "color: #6e6e6e; font-size: 11px; font-weight: 600;"
             " letter-spacing: 1px; background: transparent;"
@@ -408,7 +409,7 @@ class CartonWindow(QtWidgets.QDialog):
             groups[reg_name].append((pkg_id, pkg_data))
 
         for reg_name, items in groups.items():
-            group_header = _RegistryGroup(reg_name)
+            group_header = _RegistryGroup(reg_name, count=len(items))
             idx = self._card_layout.count() - 1
             self._card_layout.insertWidget(idx, group_header)
 
