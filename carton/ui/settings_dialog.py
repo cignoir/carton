@@ -20,11 +20,11 @@ def _wide_input(parent, title, label, text="", width=480):
     dialog.setWindowTitle(title)
     dialog.setFixedWidth(width)
     dialog.setStyleSheet(
-        "QDialog { background: #1e1e1e; }"
-        "QLabel { color: #e0e0e0; font-size: 13px; }"
-        "QLineEdit { background: #2b2b2b; border: 1px solid #3c3c3c;"
-        "  border-radius: 4px; padding: 8px; color: #e0e0e0; font-size: 13px; }"
-        "QLineEdit:focus { border-color: #3572A5; }"
+        "QDialog { background: #282c34; }"
+        "QLabel { color: #abb2bf; font-size: 13px; }"
+        "QLineEdit { background: #1d1f23; border: 1px solid #3e4452;"
+        "  border-radius: 4px; padding: 8px; color: #abb2bf; font-size: 13px; }"
+        "QLineEdit:focus { border-color: #4d78cc; }"
     )
     layout = QtWidgets.QVBoxLayout(dialog)
     layout.setContentsMargins(20, 16, 20, 16)
@@ -36,9 +36,9 @@ def _wide_input(parent, title, label, text="", width=480):
     btn_layout.addStretch()
     ok_btn = QtWidgets.QPushButton("OK")
     ok_btn.setStyleSheet(
-        "QPushButton { background: #3572A5; color: white;"
+        "QPushButton { background: #4d78cc; color: white;"
         "  border: none; border-radius: 4px; padding: 6px 20px; }"
-        "QPushButton:hover { background: #4682B5; }"
+        "QPushButton:hover { background: #5a8ae6; }"
     )
     ok_btn.setDefault(True)
     ok_btn.clicked.connect(dialog.accept)
@@ -58,14 +58,14 @@ class SettingsDialog(QtWidgets.QDialog):
         self.setWindowTitle(t("settings_title"))
         self.setFixedSize(600, 420)
         self.setStyleSheet(
-            "QDialog { background: #1e1e1e; }"
-            "QLabel { color: #e0e0e0; font-size: 13px; }"
+            "QDialog { background: #282c34; }"
+            "QLabel { color: #abb2bf; font-size: 13px; }"
             "QListWidget {"
-            "  background: #2b2b2b; border: 1px solid #3c3c3c;"
-            "  border-radius: 4px; color: #e0e0e0; font-size: 13px;"
+            "  background: #1d1f23; border: 1px solid #3e4452;"
+            "  border-radius: 4px; color: #abb2bf; font-size: 13px;"
             "}"
             "QListWidget::item { padding: 6px; }"
-            "QListWidget::item:selected { background: #3572A5; }"
+            "QListWidget::item:selected { background: #4d78cc; }"
         )
         self._setup_ui()
 
@@ -77,7 +77,7 @@ class SettingsDialog(QtWidgets.QDialog):
         # -- Sidebar --
         sidebar = QtWidgets.QWidget()
         sidebar.setFixedWidth(140)
-        sidebar.setStyleSheet("QWidget { background: #181818; }")
+        sidebar.setStyleSheet("QWidget { background: #21252b; }")
         sb_layout = QtWidgets.QVBoxLayout(sidebar)
         sb_layout.setContentsMargins(8, 12, 8, 12)
         sb_layout.setSpacing(4)
@@ -85,9 +85,9 @@ class SettingsDialog(QtWidgets.QDialog):
         self._nav = QtWidgets.QListWidget()
         self._nav.setStyleSheet(
             "QListWidget { background: transparent; border: none; outline: none; }"
-            "QListWidget::item { color: #aaa; padding: 6px 8px; border-radius: 4px; }"
-            "QListWidget::item:selected { background: #2a2a2a; color: #e0e0e0; }"
-            "QListWidget::item:hover { background: #222; }"
+            "QListWidget::item { color: #7f848e; padding: 6px 8px; border-radius: 4px; }"
+            "QListWidget::item:selected { background: #2c313a; color: #d19a66; border-left: 3px solid #d19a66; }"
+            "QListWidget::item:hover { background: #2c313a; }"
         )
         self._nav.addItem(t("settings_general"))
         self._nav.addItem(t("settings_registries"))
@@ -120,16 +120,16 @@ class SettingsDialog(QtWidgets.QDialog):
 
         # Language
         lang_label = QtWidgets.QLabel(t("settings_language"))
-        lang_label.setStyleSheet("color: #888; font-size: 12px; font-weight: bold;")
+        lang_label.setStyleSheet("color: #5c6370; font-size: 12px; font-weight: bold;")
         layout.addWidget(lang_label)
 
         self._lang_combo = QtWidgets.QComboBox()
         self._lang_combo.setStyleSheet(
-            "QComboBox { background: #2b2b2b; border: 1px solid #3c3c3c;"
-            "  border-radius: 4px; padding: 6px; color: #e0e0e0; font-size: 13px; }"
-            "QComboBox:focus { border-color: #3572A5; }"
-            "QComboBox QAbstractItemView { background: #2b2b2b; color: #e0e0e0;"
-            "  selection-background-color: #3572A5; }"
+            "QComboBox { background: #1d1f23; border: 1px solid #3e4452;"
+            "  border-radius: 4px; padding: 6px; color: #abb2bf; font-size: 13px; }"
+            "QComboBox:focus { border-color: #4d78cc; }"
+            "QComboBox QAbstractItemView { background: #1d1f23; color: #abb2bf;"
+            "  selection-background-color: #4d78cc; }"
         )
         self._lang_combo.addItem(t("settings_language_auto"), "auto")
         self._lang_combo.addItem("English", "en")
@@ -165,7 +165,7 @@ class SettingsDialog(QtWidgets.QDialog):
         layout.setSpacing(12)
 
         reg_label = QtWidgets.QLabel(t("settings_registries"))
-        reg_label.setStyleSheet("color: #888; font-size: 12px; font-weight: bold;")
+        reg_label.setStyleSheet("color: #5c6370; font-size: 12px; font-weight: bold;")
         layout.addWidget(reg_label)
 
         self._reg_list = QtWidgets.QListWidget()
@@ -178,27 +178,27 @@ class SettingsDialog(QtWidgets.QDialog):
 
         add_btn = QtWidgets.QPushButton(t("add"))
         add_btn.setStyleSheet(
-            "QPushButton { background: #4CAF50; color: white; border: none;"
+            "QPushButton { background: #98c379; color: white; border: none;"
             "  border-radius: 4px; padding: 6px 12px; }"
-            "QPushButton:hover { background: #5CBF60; }"
+            "QPushButton:hover { background: #a9d487; }"
         )
         add_btn.clicked.connect(self._add_registry)
         reg_btn_layout.addWidget(add_btn)
 
         edit_btn = QtWidgets.QPushButton(t("edit"))
         edit_btn.setStyleSheet(
-            "QPushButton { background: transparent; color: #e0e0e0;"
-            "  border: 1px solid #3c3c3c; border-radius: 4px; padding: 6px 12px; }"
-            "QPushButton:hover { background: #2b2b2b; }"
+            "QPushButton { background: transparent; color: #abb2bf;"
+            "  border: 1px solid #3e4452; border-radius: 4px; padding: 6px 12px; }"
+            "QPushButton:hover { background: #1d1f23; }"
         )
         edit_btn.clicked.connect(self._edit_registry)
         reg_btn_layout.addWidget(edit_btn)
 
         remove_btn = QtWidgets.QPushButton(t("remove"))
         remove_btn.setStyleSheet(
-            "QPushButton { background: transparent; color: #e57373;"
-            "  border: 1px solid #e57373; border-radius: 4px; padding: 6px 12px; }"
-            "QPushButton:hover { background: #3c2020; }"
+            "QPushButton { background: transparent; color: #e06c75;"
+            "  border: 1px solid #e06c75; border-radius: 4px; padding: 6px 12px; }"
+            "QPushButton:hover { background: #382025; }"
         )
         remove_btn.clicked.connect(self._remove_registry)
         reg_btn_layout.addWidget(remove_btn)
@@ -208,9 +208,9 @@ class SettingsDialog(QtWidgets.QDialog):
         up_btn = QtWidgets.QPushButton("▲")
         up_btn.setFixedWidth(32)
         up_btn.setStyleSheet(
-            "QPushButton { background: #2b2b2b; color: #888; border: 1px solid #3c3c3c;"
+            "QPushButton { background: #1d1f23; color: #5c6370; border: 1px solid #3e4452;"
             "  border-radius: 4px; }"
-            "QPushButton:hover { color: #e0e0e0; }"
+            "QPushButton:hover { color: #abb2bf; }"
         )
         up_btn.clicked.connect(self._move_up)
         reg_btn_layout.addWidget(up_btn)
@@ -218,9 +218,9 @@ class SettingsDialog(QtWidgets.QDialog):
         down_btn = QtWidgets.QPushButton("▼")
         down_btn.setFixedWidth(32)
         down_btn.setStyleSheet(
-            "QPushButton { background: #2b2b2b; color: #888; border: 1px solid #3c3c3c;"
+            "QPushButton { background: #1d1f23; color: #5c6370; border: 1px solid #3e4452;"
             "  border-radius: 4px; }"
-            "QPushButton:hover { color: #e0e0e0; }"
+            "QPushButton:hover { color: #abb2bf; }"
         )
         down_btn.clicked.connect(self._move_down)
         reg_btn_layout.addWidget(down_btn)
@@ -240,9 +240,9 @@ class SettingsDialog(QtWidgets.QDialog):
 
         uninstall_btn = QtWidgets.QPushButton(t("settings_uninstall"))
         uninstall_btn.setStyleSheet(
-            "QPushButton { color: #e57373; background: transparent;"
-            "  border: 1px solid #e57373; border-radius: 4px; padding: 8px; }"
-            "QPushButton:hover { background: #3c2020; }"
+            "QPushButton { color: #e06c75; background: transparent;"
+            "  border: 1px solid #e06c75; border-radius: 4px; padding: 8px; }"
+            "QPushButton:hover { background: #382025; }"
         )
         uninstall_btn.clicked.connect(self._uninstall_carton)
         layout.addWidget(uninstall_btn)
@@ -393,24 +393,24 @@ class SettingsDialog(QtWidgets.QDialog):
         dialog.setWindowTitle(t("settings_edit_registry"))
         dialog.setFixedWidth(500)
         dialog.setStyleSheet(
-            "QDialog { background: #1e1e1e; }"
-            "QLabel { color: #e0e0e0; font-size: 13px; }"
-            "QLineEdit { background: #2b2b2b; border: 1px solid #3c3c3c;"
-            "  border-radius: 4px; padding: 8px; color: #e0e0e0; font-size: 13px; }"
-            "QLineEdit:focus { border-color: #3572A5; }"
+            "QDialog { background: #282c34; }"
+            "QLabel { color: #abb2bf; font-size: 13px; }"
+            "QLineEdit { background: #1d1f23; border: 1px solid #3e4452;"
+            "  border-radius: 4px; padding: 8px; color: #abb2bf; font-size: 13px; }"
+            "QLineEdit:focus { border-color: #4d78cc; }"
         )
         layout = QtWidgets.QVBoxLayout(dialog)
         layout.setContentsMargins(20, 20, 20, 20)
         layout.setSpacing(12)
 
         name_label = QtWidgets.QLabel(t("settings_registry_name"))
-        name_label.setStyleSheet("color: #888; font-size: 12px;")
+        name_label.setStyleSheet("color: #5c6370; font-size: 12px;")
         layout.addWidget(name_label)
         name_input = QtWidgets.QLineEdit(entry.name)
         layout.addWidget(name_input)
 
         path_label = QtWidgets.QLabel(t("label_path"))
-        path_label.setStyleSheet("color: #888; font-size: 12px;")
+        path_label.setStyleSheet("color: #5c6370; font-size: 12px;")
         layout.addWidget(path_label)
         path_input = QtWidgets.QLineEdit(entry.path)
         layout.addWidget(path_input)
@@ -419,18 +419,18 @@ class SettingsDialog(QtWidgets.QDialog):
         btn_layout.addStretch()
         cancel_btn = QtWidgets.QPushButton(t("cancel"))
         cancel_btn.setStyleSheet(
-            "QPushButton { background: transparent; color: #888;"
-            "  border: 1px solid #3c3c3c; border-radius: 4px; padding: 6px 16px; }"
-            "QPushButton:hover { background: #2b2b2b; }"
+            "QPushButton { background: transparent; color: #5c6370;"
+            "  border: 1px solid #3e4452; border-radius: 4px; padding: 6px 16px; }"
+            "QPushButton:hover { background: #1d1f23; }"
         )
         cancel_btn.clicked.connect(dialog.reject)
         btn_layout.addWidget(cancel_btn)
 
         save_btn = QtWidgets.QPushButton(t("save"))
         save_btn.setStyleSheet(
-            "QPushButton { background: #3572A5; color: white;"
+            "QPushButton { background: #4d78cc; color: white;"
             "  border: none; border-radius: 4px; padding: 6px 16px; }"
-            "QPushButton:hover { background: #4682B5; }"
+            "QPushButton:hover { background: #5a8ae6; }"
         )
         save_btn.clicked.connect(dialog.accept)
         save_btn.setDefault(True)

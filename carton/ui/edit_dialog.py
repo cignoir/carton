@@ -34,17 +34,17 @@ class EditDialog(QtWidgets.QDialog):
         self.setWindowTitle(t("edit_title"))
         self.setFixedSize(440, 480)
         self.setStyleSheet(
-            "QDialog { background: #1e1e1e; }"
-            "QLabel { color: #e0e0e0; font-size: 13px; }"
+            "QDialog { background: #282c34; }"
+            "QLabel { color: #abb2bf; font-size: 13px; }"
             "QLineEdit, QComboBox {"
-            "  background: #2b2b2b; border: 1px solid #3c3c3c;"
-            "  border-radius: 4px; padding: 6px; color: #e0e0e0;"
+            "  background: #1d1f23; border: 1px solid #3e4452;"
+            "  border-radius: 4px; padding: 6px; color: #abb2bf;"
             "  font-size: 13px;"
             "}"
-            "QLineEdit:focus, QComboBox:focus { border-color: #3572A5; }"
-            "QRadioButton { color: #e0e0e0; font-size: 13px; }"
-            "QComboBox QAbstractItemView { background: #2b2b2b; color: #e0e0e0;"
-            "  selection-background-color: #3572A5; }"
+            "QLineEdit:focus, QComboBox:focus { border-color: #4d78cc; }"
+            "QRadioButton { color: #abb2bf; font-size: 13px; }"
+            "QComboBox QAbstractItemView { background: #1d1f23; color: #abb2bf;"
+            "  selection-background-color: #4d78cc; }"
         )
 
         self._setup_ui()
@@ -56,7 +56,7 @@ class EditDialog(QtWidgets.QDialog):
 
         form = QtWidgets.QFormLayout()
         form.setSpacing(8)
-        label_style = "color: #888; font-size: 12px;"
+        label_style = "color: #5c6370; font-size: 12px;"
 
         # Display Name
         name_label = QtWidgets.QLabel(t("label_display_name"))
@@ -79,9 +79,9 @@ class EditDialog(QtWidgets.QDialog):
         icon_browse_btn = QtWidgets.QPushButton(t("file"))
         icon_browse_btn.setFixedWidth(60)
         icon_browse_btn.setStyleSheet(
-            "QPushButton { background: #2b2b2b; color: #aaa;"
-            "  border: 1px solid #3c3c3c; border-radius: 4px; padding: 4px; font-size: 12px; }"
-            "QPushButton:hover { background: #3a3a3a; }"
+            "QPushButton { background: #1d1f23; color: #7f848e;"
+            "  border: 1px solid #3e4452; border-radius: 4px; padding: 4px; font-size: 12px; }"
+            "QPushButton:hover { background: #3e4452; }"
         )
         icon_browse_btn.clicked.connect(self._browse_icon)
         icon_row.addWidget(icon_browse_btn)
@@ -113,7 +113,7 @@ class EditDialog(QtWidgets.QDialog):
             path_label.setStyleSheet(label_style)
             path_val = QtWidgets.QLineEdit(local_path)
             path_val.setReadOnly(True)
-            path_val.setStyleSheet(path_val.styleSheet() + " color: #666;")
+            path_val.setStyleSheet(path_val.styleSheet() + " color: #5c6370;")
             form.addRow(path_label, path_val)
 
         layout.addLayout(form)
@@ -124,7 +124,7 @@ class EditDialog(QtWidgets.QDialog):
 
         mode_group = QtWidgets.QGroupBox(t("label_run_mode"))
         mode_group.setStyleSheet(
-            "QGroupBox { color: #888; font-size: 12px; border: 1px solid #3c3c3c;"
+            "QGroupBox { color: #5c6370; font-size: 12px; border: 1px solid #3e4452;"
             "  border-radius: 4px; margin-top: 8px; padding-top: 16px; }"
             "QGroupBox::title { subcontrol-origin: margin; left: 10px; }"
         )
@@ -175,9 +175,9 @@ class EditDialog(QtWidgets.QDialog):
         # Remove button (left-aligned)
         remove_btn = QtWidgets.QPushButton(t("remove"))
         remove_btn.setStyleSheet(
-            "QPushButton { color: #e57373; background: transparent;"
-            "  border: 1px solid #e57373; border-radius: 4px; padding: 6px 12px; }"
-            "QPushButton:hover { background: #3c2020; }"
+            "QPushButton { color: #e06c75; background: transparent;"
+            "  border: 1px solid #e06c75; border-radius: 4px; padding: 6px 12px; }"
+            "QPushButton:hover { background: #382025; }"
         )
         remove_btn.clicked.connect(self._on_remove)
         btn_layout.addWidget(remove_btn)
@@ -185,9 +185,9 @@ class EditDialog(QtWidgets.QDialog):
         if self._published_registries:
             unpub_btn = QtWidgets.QPushButton(t("unpublish"))
             unpub_btn.setStyleSheet(
-                "QPushButton { color: #FFB74D; background: transparent;"
-                "  border: 1px solid #FFB74D; border-radius: 4px; padding: 6px 12px; }"
-                "QPushButton:hover { background: #3c3020; }"
+                "QPushButton { color: #d19a66; background: transparent;"
+                "  border: 1px solid #d19a66; border-radius: 4px; padding: 6px 12px; }"
+                "QPushButton:hover { background: #382517; }"
             )
             unpub_btn.clicked.connect(self._on_unpublish)
             btn_layout.addWidget(unpub_btn)
@@ -196,18 +196,18 @@ class EditDialog(QtWidgets.QDialog):
 
         cancel_btn = QtWidgets.QPushButton(t("cancel"))
         cancel_btn.setStyleSheet(
-            "QPushButton { background: transparent; color: #888;"
-            "  border: 1px solid #3c3c3c; border-radius: 4px; padding: 6px 16px; }"
-            "QPushButton:hover { background: #2b2b2b; }"
+            "QPushButton { background: transparent; color: #5c6370;"
+            "  border: 1px solid #3e4452; border-radius: 4px; padding: 6px 16px; }"
+            "QPushButton:hover { background: #1d1f23; }"
         )
         cancel_btn.clicked.connect(self.reject)
         btn_layout.addWidget(cancel_btn)
 
         save_btn = QtWidgets.QPushButton(t("save"))
         save_btn.setStyleSheet(
-            "QPushButton { background: #3572A5; color: white;"
+            "QPushButton { background: #4d78cc; color: white;"
             "  border: none; border-radius: 4px; padding: 6px 16px; }"
-            "QPushButton:hover { background: #4682B5; }"
+            "QPushButton:hover { background: #5a8ae6; }"
         )
         save_btn.clicked.connect(self._on_save)
         save_btn.setDefault(True)

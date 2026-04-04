@@ -86,16 +86,16 @@ class _PublishTargetDialog(QtWidgets.QDialog):
 
             select_btn = QtWidgets.QPushButton(t("publish"))
             select_btn.setStyleSheet(
-                "QPushButton { background: #4CAF50; color: white; border: none;"
+                "QPushButton { background: #98c379; color: white; border: none;"
                 "  border-radius: 6px; padding: 8px; font-weight: 600; }"
-                "QPushButton:hover { background: #5cbf60; }"
+                "QPushButton:hover { background: #a9d487; }"
             )
             select_btn.clicked.connect(self._on_select)
             layout.addWidget(select_btn)
 
             sep = QtWidgets.QFrame()
             sep.setFrameShape(QtWidgets.QFrame.HLine)
-            sep.setStyleSheet("color: #3a3a3a;")
+            sep.setStyleSheet("color: #4e5666;")
             layout.addWidget(sep)
         else:
             self._combo = None
@@ -103,18 +103,18 @@ class _PublishTargetDialog(QtWidgets.QDialog):
         # Create new / Add existing buttons
         new_btn = QtWidgets.QPushButton(t("publish_create_registry"))
         new_btn.setStyleSheet(
-            "QPushButton { background: transparent; color: #4FC3F7;"
-            "  border: 1px solid #4FC3F7; border-radius: 6px; padding: 8px; }"
-            "QPushButton:hover { background: #1a3040; }"
+            "QPushButton { background: transparent; color: #61afef;"
+            "  border: 1px solid #61afef; border-radius: 6px; padding: 8px; }"
+            "QPushButton:hover { background: #1d3040; }"
         )
         new_btn.clicked.connect(lambda: self.done(2))
         layout.addWidget(new_btn)
 
         add_btn = QtWidgets.QPushButton(t("publish_add_existing_registry"))
         add_btn.setStyleSheet(
-            "QPushButton { background: transparent; color: #aaa;"
-            "  border: 1px solid #555; border-radius: 6px; padding: 8px; }"
-            "QPushButton:hover { background: #2a2a2a; }"
+            "QPushButton { background: transparent; color: #7f848e;"
+            "  border: 1px solid #495162; border-radius: 6px; padding: 8px; }"
+            "QPushButton:hover { background: #2c313a; }"
         )
         add_btn.clicked.connect(lambda: self.done(3))
         layout.addWidget(add_btn)
@@ -132,21 +132,21 @@ class _PublishTargetDialog(QtWidgets.QDialog):
 
 _STYLE = """
 QWidget {
-    background-color: #1e1e1e;
-    color: #e0e0e0;
+    background-color: #282c34;
+    color: #abb2bf;
     font-family: "Segoe UI", "Yu Gothic UI", sans-serif;
 }
 QLineEdit {
-    background: #252526;
-    border: 1px solid #333;
+    background: #1d1f23;
+    border: 1px solid #3e4452;
     border-radius: 6px;
     padding: 7px 12px;
-    color: #e0e0e0;
+    color: #abb2bf;
     font-size: 13px;
-    selection-background-color: #264f78;
+    selection-background-color: #3e4452;
 }
 QLineEdit:focus {
-    border-color: #3572A5;
+    border-color: #4d78cc;
 }
 QScrollArea {
     border: none;
@@ -158,12 +158,12 @@ QScrollBar:vertical {
     margin: 0;
 }
 QScrollBar::handle:vertical {
-    background: #3a3a3a;
+    background: #4e5666;
     border-radius: 4px;
     min-height: 30px;
 }
 QScrollBar::handle:vertical:hover {
-    background: #555;
+    background: #495162;
 }
 QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
     height: 0;
@@ -213,7 +213,7 @@ class CartonWindow(QtWidgets.QDialog):
         # -- Sidebar --
         sidebar = QtWidgets.QWidget()
         sidebar.setFixedWidth(160)
-        sidebar.setStyleSheet("QWidget { background: #181818; }")
+        sidebar.setStyleSheet("QWidget { background: #21252b; }")
         sidebar_layout = QtWidgets.QVBoxLayout(sidebar)
         sidebar_layout.setContentsMargins(8, 12, 8, 12)
         sidebar_layout.setSpacing(4)
@@ -221,9 +221,9 @@ class CartonWindow(QtWidgets.QDialog):
         self._sidebar_list = QtWidgets.QListWidget()
         self._sidebar_list.setStyleSheet(
             "QListWidget { background: transparent; border: none; outline: none; }"
-            "QListWidget::item { color: #aaa; padding: 6px 8px; border-radius: 4px; }"
-            "QListWidget::item:selected { background: #2a2a2a; color: #e0e0e0; }"
-            "QListWidget::item:hover { background: #222; }"
+            "QListWidget::item { color: #7f848e; padding: 6px 8px; border-radius: 4px; }"
+            "QListWidget::item:selected { background: #2c313a; color: #d19a66; border-left: 3px solid #d19a66; }"
+            "QListWidget::item:hover { background: #2c313a; }"
             "QListWidget::item:disabled { background: transparent; padding: 0; }"
             "QListWidget::item:disabled:hover { background: transparent; }"
         )
@@ -234,8 +234,8 @@ class CartonWindow(QtWidgets.QDialog):
         settings_btn = QtWidgets.QPushButton("⚙  " + t("settings_title").split("—")[-1].strip())
         settings_btn.setStyleSheet(
             "QPushButton { background: transparent; border: none;"
-            "  color: #555; font-size: 11px; text-align: left; padding: 6px 8px; }"
-            "QPushButton:hover { color: #aaa; }"
+            "  color: #495162; font-size: 11px; text-align: left; padding: 6px 8px; }"
+            "QPushButton:hover { color: #7f848e; }"
         )
         settings_btn.clicked.connect(self._open_settings)
         sidebar_layout.addWidget(settings_btn)
@@ -260,16 +260,16 @@ class CartonWindow(QtWidgets.QDialog):
         banner_layout.setSpacing(8)
         self._update_banner_label = QtWidgets.QLabel()
         self._update_banner_label.setStyleSheet(
-            "color: #FFB74D; font-size: 11px; background: transparent;"
+            "color: #d19a66; font-size: 11px; background: transparent;"
         )
         banner_layout.addWidget(self._update_banner_label)
         banner_layout.addStretch()
         self._update_banner_btn = QtWidgets.QPushButton(t("update"))
         self._update_banner_btn.setFixedHeight(20)
         self._update_banner_btn.setStyleSheet(
-            "QPushButton { background: #FF9800; color: white; border: none;"
+            "QPushButton { background: #d19a66; color: white; border: none;"
             "  border-radius: 3px; padding: 0 10px; font-size: 11px; }"
-            "QPushButton:hover { background: #FFA826; }"
+            "QPushButton:hover { background: #e0a972; }"
         )
         self._update_banner_btn.clicked.connect(self._on_self_update)
         self._update_banner_btn.setVisible(False)
@@ -286,9 +286,9 @@ class CartonWindow(QtWidgets.QDialog):
         refresh_btn = QtWidgets.QPushButton("↻")
         refresh_btn.setFixedSize(28, 28)
         refresh_btn.setStyleSheet(
-            "QPushButton { background: transparent; border: 1px solid #333;"
-            "  border-radius: 6px; font-size: 16px; color: #777; }"
-            "QPushButton:hover { background: #2a2a2a; color: #e0e0e0; border-color: #444; }"
+            "QPushButton { background: transparent; border: 1px solid #3e4452;"
+            "  border-radius: 6px; font-size: 16px; color: #5c6370; }"
+            "QPushButton:hover { background: #2c313a; color: #abb2bf; border-color: #4e5666; }"
         )
         refresh_btn.clicked.connect(self.refresh)
         search_row.addWidget(refresh_btn)
@@ -304,9 +304,9 @@ class CartonWindow(QtWidgets.QDialog):
             btn.setFixedHeight(28)
             btn.setStyleSheet(
                 "QPushButton { background: transparent; border: none;"
-                "  color: #666; font-size: 12px; padding: 0 12px; }"
-                "QPushButton:hover { color: #a0a0a0; }"
-                "QPushButton:checked { color: #e0e0e0; border-bottom: 2px solid #3572A5; }"
+                "  color: #5c6370; font-size: 12px; padding: 0 12px; }"
+                "QPushButton:hover { color: #7f848e; }"
+                "QPushButton:checked { color: #d19a66; border-bottom: 2px solid #d19a66; }"
             )
         self._tab_installed.setChecked(True)
         self._tab_all.clicked.connect(lambda: self._set_tab("all"))
@@ -318,9 +318,9 @@ class CartonWindow(QtWidgets.QDialog):
         self._register_btn = QtWidgets.QPushButton(t("register_script"))
         self._register_btn.setFixedHeight(28)
         self._register_btn.setStyleSheet(
-            "QPushButton { background: transparent; border: 1px solid #333;"
-            "  border-radius: 6px; color: #777; font-size: 12px; padding: 0 10px; }"
-            "QPushButton:hover { background: #2a2a2a; color: #e0e0e0; border-color: #444; }"
+            "QPushButton { background: transparent; border: 1px solid #3e4452;"
+            "  border-radius: 6px; color: #5c6370; font-size: 12px; padding: 0 10px; }"
+            "QPushButton:hover { background: #2c313a; color: #abb2bf; border-color: #4e5666; }"
         )
         self._register_btn.clicked.connect(self._on_add_script)
         self._register_btn.setVisible(False)
@@ -339,7 +339,7 @@ class CartonWindow(QtWidgets.QDialog):
         self._card_layout.setSpacing(8)
 
         self._loading_label = QtWidgets.QLabel(t("loading"))
-        self._loading_label.setStyleSheet("color: #666; font-size: 13px; background: transparent;")
+        self._loading_label.setStyleSheet("color: #5c6370; font-size: 13px; background: transparent;")
         self._loading_label.setAlignment(Qt.AlignCenter)
         self._card_layout.addWidget(self._loading_label)
         self._card_layout.addStretch()
@@ -477,7 +477,7 @@ class CartonWindow(QtWidgets.QDialog):
         sep_lay.setContentsMargins(8, 6, 8, 6)
         sep_line = QtWidgets.QFrame()
         sep_line.setFixedHeight(1)
-        sep_line.setStyleSheet("background: #333;")
+        sep_line.setStyleSheet("background: #3e4452;")
         sep_lay.addWidget(sep_line)
         self._sidebar_list.setItemWidget(sep, sep_container)
 
@@ -985,16 +985,16 @@ class CartonWindow(QtWidgets.QDialog):
                             btn.setText(t("installing"))
                             btn.setEnabled(False)
                             btn.setStyleSheet(
-                                "QPushButton { background: #3a3a3a; color: #666; border: none;"
+                                "QPushButton { background: #4e5666; color: #5c6370; border: none;"
                                 "  border-radius: 6px; padding: 6px; font-weight: 600; font-size: 12px; }"
                             )
                         else:
                             btn.setText(t("install"))
                             btn.setEnabled(True)
                             btn.setStyleSheet(
-                                "QPushButton { background: #4CAF50; color: #1e1e1e; border: none;"
+                                "QPushButton { background: #98c379; color: #282c34; border: none;"
                                 "  border-radius: 6px; padding: 6px; font-weight: 600; font-size: 12px; }"
-                                "QPushButton:hover { background: #5cbf60; }"
+                                "QPushButton:hover { background: #a9d487; }"
                             )
                         return
 

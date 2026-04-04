@@ -121,15 +121,15 @@ class AddDialog(QtWidgets.QDialog):
         self.setWindowTitle(t("add_title"))
         self.setFixedSize(440, 360)
         self.setStyleSheet(
-            "QDialog { background: #1e1e1e; }"
-            "QLabel { color: #e0e0e0; font-size: 13px; }"
+            "QDialog { background: #282c34; }"
+            "QLabel { color: #abb2bf; font-size: 13px; }"
             "QLineEdit {"
-            "  background: #2b2b2b; border: 1px solid #3c3c3c;"
-            "  border-radius: 4px; padding: 6px; color: #e0e0e0;"
+            "  background: #1d1f23; border: 1px solid #3e4452;"
+            "  border-radius: 4px; padding: 6px; color: #abb2bf;"
             "  font-size: 13px;"
             "}"
-            "QLineEdit:focus { border-color: #3572A5; }"
-            "QRadioButton { color: #e0e0e0; font-size: 13px; }"
+            "QLineEdit:focus { border-color: #4d78cc; }"
+            "QRadioButton { color: #abb2bf; font-size: 13px; }"
         )
 
         self._result = None
@@ -151,18 +151,18 @@ class AddDialog(QtWidgets.QDialog):
 
         file_btn = QtWidgets.QPushButton(t("file"))
         file_btn.setStyleSheet(
-            "QPushButton { background: #3c3c3c; color: #e0e0e0; border: none;"
+            "QPushButton { background: #3e4452; color: #abb2bf; border: none;"
             "  border-radius: 4px; padding: 6px 10px; }"
-            "QPushButton:hover { background: #4c4c4c; }"
+            "QPushButton:hover { background: #3e4452; }"
         )
         file_btn.clicked.connect(self._browse_file)
         select_layout.addWidget(file_btn)
 
         folder_btn = QtWidgets.QPushButton(t("folder"))
         folder_btn.setStyleSheet(
-            "QPushButton { background: #3c3c3c; color: #e0e0e0; border: none;"
+            "QPushButton { background: #3e4452; color: #abb2bf; border: none;"
             "  border-radius: 4px; padding: 6px 10px; }"
-            "QPushButton:hover { background: #4c4c4c; }"
+            "QPushButton:hover { background: #3e4452; }"
         )
         folder_btn.clicked.connect(self._browse_folder)
         select_layout.addWidget(folder_btn)
@@ -171,7 +171,7 @@ class AddDialog(QtWidgets.QDialog):
         # Form
         form = QtWidgets.QFormLayout()
         form.setSpacing(8)
-        label_style = "color: #888; font-size: 12px;"
+        label_style = "color: #5c6370; font-size: 12px;"
 
         name_label = QtWidgets.QLabel(t("label_display_name"))
         name_label.setStyleSheet(label_style)
@@ -186,9 +186,9 @@ class AddDialog(QtWidgets.QDialog):
         icon_browse_btn = QtWidgets.QPushButton(t("file"))
         icon_browse_btn.setFixedWidth(60)
         icon_browse_btn.setStyleSheet(
-            "QPushButton { background: #2b2b2b; color: #aaa;"
-            "  border: 1px solid #3c3c3c; border-radius: 4px; padding: 4px; font-size: 12px; }"
-            "QPushButton:hover { background: #3a3a3a; }"
+            "QPushButton { background: #1d1f23; color: #7f848e;"
+            "  border: 1px solid #3e4452; border-radius: 4px; padding: 4px; font-size: 12px; }"
+            "QPushButton:hover { background: #3e4452; }"
         )
         icon_browse_btn.clicked.connect(self._browse_icon)
         icon_row.addWidget(icon_browse_btn)
@@ -205,7 +205,7 @@ class AddDialog(QtWidgets.QDialog):
         self._mode_group = QtWidgets.QGroupBox(t("label_run_mode"))
         mode_group = self._mode_group
         mode_group.setStyleSheet(
-            "QGroupBox { color: #888; font-size: 12px; border: 1px solid #3c3c3c;"
+            "QGroupBox { color: #5c6370; font-size: 12px; border: 1px solid #3e4452;"
             "  border-radius: 4px; margin-top: 8px; padding-top: 16px; }"
             "QGroupBox::title { subcontrol-origin: margin; left: 10px; }"
         )
@@ -221,11 +221,11 @@ class AddDialog(QtWidgets.QDialog):
         self._func_combo = QtWidgets.QComboBox()
         self._func_combo.setEditable(True)
         self._func_combo.setStyleSheet(
-            "QComboBox { background: #2b2b2b; border: 1px solid #3c3c3c;"
-            "  border-radius: 4px; padding: 4px 6px; color: #e0e0e0; font-size: 13px; }"
-            "QComboBox:focus { border-color: #3572A5; }"
-            "QComboBox QAbstractItemView { background: #2b2b2b; color: #e0e0e0;"
-            "  selection-background-color: #3572A5; }"
+            "QComboBox { background: #1d1f23; border: 1px solid #3e4452;"
+            "  border-radius: 4px; padding: 4px 6px; color: #abb2bf; font-size: 13px; }"
+            "QComboBox:focus { border-color: #4d78cc; }"
+            "QComboBox QAbstractItemView { background: #1d1f23; color: #abb2bf;"
+            "  selection-background-color: #4d78cc; }"
         )
         self._func_combo.lineEdit().setPlaceholderText(t("label_function"))
         mode_func_layout.addWidget(self._func_combo)
@@ -241,18 +241,18 @@ class AddDialog(QtWidgets.QDialog):
 
         cancel_btn = QtWidgets.QPushButton(t("cancel"))
         cancel_btn.setStyleSheet(
-            "QPushButton { background: transparent; color: #888;"
-            "  border: 1px solid #3c3c3c; border-radius: 4px; padding: 6px 16px; }"
-            "QPushButton:hover { background: #2b2b2b; }"
+            "QPushButton { background: transparent; color: #5c6370;"
+            "  border: 1px solid #3e4452; border-radius: 4px; padding: 6px 16px; }"
+            "QPushButton:hover { background: #1d1f23; }"
         )
         cancel_btn.clicked.connect(self.reject)
         btn_layout.addWidget(cancel_btn)
 
         register_btn = QtWidgets.QPushButton(t("register"))
         register_btn.setStyleSheet(
-            "QPushButton { background: #4CAF50; color: white;"
+            "QPushButton { background: #98c379; color: white;"
             "  border: none; border-radius: 4px; padding: 6px 16px; }"
-            "QPushButton:hover { background: #5CBF60; }"
+            "QPushButton:hover { background: #a9d487; }"
         )
         register_btn.clicked.connect(self._on_register)
         register_btn.setDefault(True)

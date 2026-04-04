@@ -35,6 +35,10 @@ _STRINGS = {
         "label_maya": "Maya",
         "label_tags": "Tags",
         "label_changelog": "Changelog",
+        "label_size": "Size",
+        "label_released": "Released",
+        "label_type": "Type",
+        "open_homepage": "Open Homepage",
 
         # Main window
         "search_placeholder": "Search packages...",
@@ -137,6 +141,10 @@ _STRINGS = {
         "label_maya": "Maya",
         "label_tags": "タグ",
         "label_changelog": "変更履歴",
+        "label_size": "サイズ",
+        "label_released": "リリース日",
+        "label_type": "タイプ",
+        "open_homepage": "ホームページを開く",
 
         "close": "閉じる",
         "save": "保存",
