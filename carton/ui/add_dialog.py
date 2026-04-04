@@ -180,9 +180,19 @@ class AddDialog(QtWidgets.QDialog):
 
         icon_label = QtWidgets.QLabel(t("label_icon"))
         icon_label.setStyleSheet(label_style)
+        icon_row = QtWidgets.QHBoxLayout()
         self._icon_input = QtWidgets.QLineEdit("🔧")
-        # No width limit — allows emoji or image path
-        form.addRow(icon_label, self._icon_input)
+        icon_row.addWidget(self._icon_input)
+        icon_browse_btn = QtWidgets.QPushButton(t("file"))
+        icon_browse_btn.setFixedWidth(60)
+        icon_browse_btn.setStyleSheet(
+            "QPushButton { background: #2b2b2b; color: #aaa;"
+            "  border: 1px solid #3c3c3c; border-radius: 4px; padding: 4px; font-size: 12px; }"
+            "QPushButton:hover { background: #3a3a3a; }"
+        )
+        icon_browse_btn.clicked.connect(self._browse_icon)
+        icon_row.addWidget(icon_browse_btn)
+        form.addRow(icon_label, icon_row)
 
         desc_label = QtWidgets.QLabel(t("label_description"))
         desc_label.setStyleSheet(label_style)
@@ -249,6 +259,14 @@ class AddDialog(QtWidgets.QDialog):
         btn_layout.addWidget(register_btn)
 
         layout.addLayout(btn_layout)
+
+    def _browse_icon(self):
+        path, _ = QtWidgets.QFileDialog.getOpenFileName(
+            self, t("label_icon"), "",
+            "Images (*.png *.jpg *.svg);;All (*)",
+        )
+        if path:
+            self._icon_input.setText(path)
 
     def _browse_file(self):
         path, _ = QtWidgets.QFileDialog.getOpenFileName(
