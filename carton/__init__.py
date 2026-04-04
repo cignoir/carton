@@ -5,7 +5,20 @@ Usage:
     carton.show()
 """
 
-__version__ = "0.1.0"
+import json as _json
+import os as _os
+
+
+def _read_version():
+    pkg = _os.path.join(_os.path.dirname(_os.path.dirname(__file__)), "package.json")
+    try:
+        with open(pkg, "r", encoding="utf-8") as f:
+            return _json.load(f).get("version", "0.0.0")
+    except Exception:
+        return "0.0.0"
+
+
+__version__ = _read_version()
 
 _window = None
 _initialized = False
