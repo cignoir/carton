@@ -88,7 +88,11 @@ _STRINGS = {
 
         # Settings
         "settings_title": "Carton — Settings",
+        "settings_general": "General",
         "settings_registries": "Registries",
+        "settings_advanced": "Advanced",
+        "settings_language": "Language",
+        "settings_language_auto": "Auto (system)",
         "edit": "Edit",
         "settings_edit_registry": "Edit Registry",
         "settings_select_registry": "Select registry.json",
@@ -202,7 +206,11 @@ _STRINGS = {
 
         # Settings
         "settings_title": "Carton — 設定",
+        "settings_general": "一般",
         "settings_registries": "レジストリ",
+        "settings_advanced": "詳細",
+        "settings_language": "言語",
+        "settings_language_auto": "自動 (システム)",
         "edit": "編集",
         "settings_edit_registry": "レジストリの編集",
         "settings_select_registry": "registry.json を選択",

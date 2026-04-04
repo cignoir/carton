@@ -1,4 +1,4 @@
-"""Carton settings dialog — registry management + uninstall."""
+"""Carton settings dialog — sidebar layout with categorized pages."""
 
 import json
 import os
@@ -11,7 +11,7 @@ except ImportError:
     from urllib2 import urlopen, Request, URLError
 
 from carton.ui.compat import QtWidgets, QtCore, Qt
-from carton.ui.i18n import t
+from carton.ui.i18n import t, get_language, set_language
 
 
 def _wide_input(parent, title, label, text="", width=480):
@@ -50,13 +50,13 @@ def _wide_input(parent, title, label, text="", width=480):
 
 
 class SettingsDialog(QtWidgets.QDialog):
-    """Add, remove, reorder registries + uninstall."""
+    """Settings dialog with sidebar navigation."""
 
     def __init__(self, config, parent=None):
         super().__init__(parent)
         self._config = config
         self.setWindowTitle(t("settings_title"))
-        self.setFixedSize(500, 400)
+        self.setFixedSize(600, 420)
         self.setStyleSheet(
             "QDialog { background: #1e1e1e; }"
             "QLabel { color: #e0e0e0; font-size: 13px; }"
@@ -70,11 +70,100 @@ class SettingsDialog(QtWidgets.QDialog):
         self._setup_ui()
 
     def _setup_ui(self):
-        layout = QtWidgets.QVBoxLayout(self)
+        root = QtWidgets.QHBoxLayout(self)
+        root.setContentsMargins(0, 0, 0, 0)
+        root.setSpacing(0)
+
+        # -- Sidebar --
+        sidebar = QtWidgets.QWidget()
+        sidebar.setFixedWidth(140)
+        sidebar.setStyleSheet("QWidget { background: #181818; }")
+        sb_layout = QtWidgets.QVBoxLayout(sidebar)
+        sb_layout.setContentsMargins(8, 12, 8, 12)
+        sb_layout.setSpacing(4)
+
+        self._nav = QtWidgets.QListWidget()
+        self._nav.setStyleSheet(
+            "QListWidget { background: transparent; border: none; outline: none; }"
+            "QListWidget::item { color: #aaa; padding: 6px 8px; border-radius: 4px; }"
+            "QListWidget::item:selected { background: #2a2a2a; color: #e0e0e0; }"
+            "QListWidget::item:hover { background: #222; }"
+        )
+        self._nav.addItem(t("settings_general"))
+        self._nav.addItem(t("settings_registries"))
+        self._nav.addItem(t("settings_advanced"))
+        self._nav.currentRowChanged.connect(self._on_nav_changed)
+        sb_layout.addWidget(self._nav)
+        sb_layout.addStretch()
+
+        root.addWidget(sidebar)
+
+        # -- Pages --
+        self._pages = QtWidgets.QStackedWidget()
+        self._pages.addWidget(self._build_general_page())
+        self._pages.addWidget(self._build_registries_page())
+        self._pages.addWidget(self._build_advanced_page())
+        root.addWidget(self._pages)
+
+        self._nav.setCurrentRow(0)
+
+    def _on_nav_changed(self, row):
+        self._pages.setCurrentIndex(row)
+
+    # ---- General page ----
+
+    def _build_general_page(self):
+        page = QtWidgets.QWidget()
+        layout = QtWidgets.QVBoxLayout(page)
+        layout.setContentsMargins(20, 20, 20, 20)
+        layout.setSpacing(16)
+
+        # Language
+        lang_label = QtWidgets.QLabel(t("settings_language"))
+        lang_label.setStyleSheet("color: #888; font-size: 12px; font-weight: bold;")
+        layout.addWidget(lang_label)
+
+        self._lang_combo = QtWidgets.QComboBox()
+        self._lang_combo.setStyleSheet(
+            "QComboBox { background: #2b2b2b; border: 1px solid #3c3c3c;"
+            "  border-radius: 4px; padding: 6px; color: #e0e0e0; font-size: 13px; }"
+            "QComboBox:focus { border-color: #3572A5; }"
+            "QComboBox QAbstractItemView { background: #2b2b2b; color: #e0e0e0;"
+            "  selection-background-color: #3572A5; }"
+        )
+        self._lang_combo.addItem(t("settings_language_auto"), "auto")
+        self._lang_combo.addItem("English", "en")
+        self._lang_combo.addItem("日本語", "ja")
+
+        current = self._config.language
+        for i in range(self._lang_combo.count()):
+            if self._lang_combo.itemData(i) == current:
+                self._lang_combo.setCurrentIndex(i)
+                break
+
+        self._lang_combo.currentIndexChanged.connect(self._on_language_changed)
+        layout.addWidget(self._lang_combo)
+
+        layout.addStretch()
+        return page
+
+    def _on_language_changed(self, index):
+        lang = self._lang_combo.itemData(index)
+        self._config.language = lang
+        self._config.save()
+        if lang == "auto":
+            from carton.ui.i18n import detect_language
+            lang = detect_language()
+        set_language(lang)
+
+    # ---- Registries page ----
+
+    def _build_registries_page(self):
+        page = QtWidgets.QWidget()
+        layout = QtWidgets.QVBoxLayout(page)
         layout.setContentsMargins(20, 20, 20, 20)
         layout.setSpacing(12)
 
-        # Registry list
         reg_label = QtWidgets.QLabel(t("settings_registries"))
         reg_label.setStyleSheet("color: #888; font-size: 12px; font-weight: bold;")
         layout.addWidget(reg_label)
@@ -85,7 +174,6 @@ class SettingsDialog(QtWidgets.QDialog):
         self._reg_list.itemDoubleClicked.connect(self._edit_registry)
         layout.addWidget(self._reg_list)
 
-        # Registry operation buttons
         reg_btn_layout = QtWidgets.QHBoxLayout()
 
         add_btn = QtWidgets.QPushButton(t("add"))
@@ -138,33 +226,30 @@ class SettingsDialog(QtWidgets.QDialog):
         reg_btn_layout.addWidget(down_btn)
 
         layout.addLayout(reg_btn_layout)
+        return page
+
+    # ---- Advanced page ----
+
+    def _build_advanced_page(self):
+        page = QtWidgets.QWidget()
+        layout = QtWidgets.QVBoxLayout(page)
+        layout.setContentsMargins(20, 20, 20, 20)
+        layout.setSpacing(16)
 
         layout.addStretch()
 
-        # Uninstall
         uninstall_btn = QtWidgets.QPushButton(t("settings_uninstall"))
         uninstall_btn.setStyleSheet(
             "QPushButton { color: #e57373; background: transparent;"
-            "  border: 1px solid #e57373; border-radius: 4px; padding: 6px; }"
+            "  border: 1px solid #e57373; border-radius: 4px; padding: 8px; }"
             "QPushButton:hover { background: #3c2020; }"
         )
         uninstall_btn.clicked.connect(self._uninstall_carton)
         layout.addWidget(uninstall_btn)
 
-        # Close button
-        btn_layout = QtWidgets.QHBoxLayout()
-        btn_layout.addStretch()
+        return page
 
-        close_btn = QtWidgets.QPushButton(t("close"))
-        close_btn.setStyleSheet(
-            "QPushButton { background: #3572A5; color: white;"
-            "  border: none; border-radius: 4px; padding: 6px 16px; }"
-            "QPushButton:hover { background: #4682B5; }"
-        )
-        close_btn.clicked.connect(self.accept)
-        btn_layout.addWidget(close_btn)
-
-        layout.addLayout(btn_layout)
+    # ---- Registry operations ----
 
     def _add_registry(self):
         """Add a registry — local file, GitHub repo, or remote URL."""
@@ -406,6 +491,8 @@ class SettingsDialog(QtWidgets.QDialog):
         self._reg_list.clear()
         for entry in self._config.registries:
             self._reg_list.addItem("{} — {}".format(entry.name, entry.path))
+
+    # ---- Uninstall ----
 
     def _uninstall_carton(self):
         """Uninstall Carton itself."""
