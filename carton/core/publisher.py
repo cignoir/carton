@@ -62,7 +62,7 @@ class Publisher:
         dest_dir = os.path.join(registry_base, "packages", pkg_id, version)
         os.makedirs(dest_dir, exist_ok=True)
 
-        zip_name = "{}-{}.package".format(name, version)
+        zip_name = "{}-{}.zip".format(name, version)
         dest_zip = os.path.join(dest_dir, zip_name)
         shutil.copy2(zip_path, dest_zip)
 
@@ -112,7 +112,7 @@ class Publisher:
         """Create a zip file."""
         staging = self._config.staging_dir
         os.makedirs(staging, exist_ok=True)
-        zip_path = os.path.join(staging, "{}-{}.package".format(name, version))
+        zip_path = os.path.join(staging, "{}-{}.zip".format(name, version))
 
         pkg_json = {
             "id": pkg_id,
@@ -180,7 +180,7 @@ class Publisher:
             entry["icon"] = icon
 
         # download_url is a relative path
-        rel_path = "packages/{}/{}/{}-{}.package".format(pkg_id, version, name, version)
+        rel_path = "packages/{}/{}/{}-{}.zip".format(pkg_id, version, name, version)
         entry["versions"][version] = {
             "maya_versions": ["2024", "2025", "2026", "2027"],
             "download_url": rel_path,
