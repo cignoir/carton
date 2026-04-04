@@ -1,4 +1,4 @@
-"""Bump the version in package.json.
+"""Bump the version in package.json and carton/__init__.py.
 
 Usage:
     python scripts/bump_version.py patch   # 0.1.8 -> 0.1.9
@@ -9,9 +9,12 @@ Usage:
 
 import json
 import os
+import re
 import sys
 
-_PKG_PATH = os.path.join(os.path.dirname(os.path.dirname(__file__)), "package.json")
+_ROOT = os.path.dirname(os.path.dirname(__file__))
+_PKG_PATH = os.path.join(_ROOT, "package.json")
+_INIT_PATH = os.path.join(_ROOT, "carton", "__init__.py")
 
 
 def _read():
@@ -23,6 +26,20 @@ def _write(data):
     with open(_PKG_PATH, "w", encoding="utf-8") as f:
         json.dump(data, f, indent=2, ensure_ascii=False)
         f.write("\n")
+
+
+def _update_init(new_ver):
+    with open(_INIT_PATH, "r", encoding="utf-8") as f:
+        content = f.read()
+    content = re.sub(
+        r'^__version__\s*=\s*"[^"]*"',
+        '__version__ = "{}"'.format(new_ver),
+        content,
+        count=1,
+        flags=re.MULTILINE,
+    )
+    with open(_INIT_PATH, "w", encoding="utf-8") as f:
+        f.write(content)
 
 
 def bump(kind):
@@ -46,6 +63,7 @@ def bump(kind):
     new_ver = ".".join(map(str, parts))
     data["version"] = new_ver
     _write(data)
+    _update_init(new_ver)
     print("{} -> {}".format(old, new_ver))
     return new_ver
 
