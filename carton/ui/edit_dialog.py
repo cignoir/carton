@@ -86,7 +86,7 @@ class EditDialog(QtWidgets.QDialog):
         local_path = self._pkg_data.get("local_path", "")
         if local_path:
             path_label = QtWidgets.QLabel(t("label_path"))
-            path_label.setStyleSheet(label_style)
+            path_label.setStyleSheet(theme.LABEL_DIM)
             path_val = QtWidgets.QLineEdit(local_path)
             path_val.setReadOnly(True)
             path_val.setStyleSheet(path_val.styleSheet() + " color: {};".format(theme.TEXT_DIM))
