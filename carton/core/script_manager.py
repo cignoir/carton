@@ -123,6 +123,11 @@ class ScriptManager:
             maya.mel.eval('source "{}"; {}();'.format(script, procedure))
         elif ep_type == "python":
             import importlib
+            # Ensure the package path is in sys.path before importing
+            local_path = pkg_data.get("local_path", "")
+            if local_path and os.path.exists(local_path):
+                self._add_to_env(local_path, pkg_data.get("type", ""),
+                                 pkg_data.get("is_folder", False))
             module_name = entry.get("module", "")
             func_name = entry.get("function", "show")
             mod = importlib.import_module(module_name)
