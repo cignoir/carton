@@ -80,7 +80,13 @@ class Publisher:
         except OSError:
             pass
 
-        # 3. Update registry.json
+        # 3. Copy icon file to registry icons/ directory
+        registry_icon = icon
+        if self._is_icon_file(icon):
+            self._copy_icon_to_registry(icon, name, registry_base)
+            registry_icon = True
+
+        # 4. Update registry.json and rebuild icons.zip
         self._update_registry(
             registry_entry=registry_entry,
             pkg_id=pkg_id,
@@ -89,7 +95,7 @@ class Publisher:
             version=version,
             pkg_type=pkg_type,
             description=description,
-            icon=icon,
+            icon=registry_icon,
             author=author,
             sha256=sha256,
             size_bytes=size_bytes,
@@ -130,7 +136,7 @@ class Publisher:
             "author": author,
             "maya_versions": ["2024", "2025", "2026", "2027"],
             "entry_point": entry_point,
-            "icon": icon,
+            "icon": True if self._is_icon_file(icon) else icon,
         }
 
         _EXCLUDE_DIRS = {"__pycache__", ".git", ".svn", ".hg", "tests", "test", "dist", "build", ".vscode", ".idea"}
@@ -300,6 +306,22 @@ class Publisher:
             except (json.JSONDecodeError, OSError):
                 continue
         return results
+
+    @staticmethod
+    def _is_icon_file(icon):
+        """Return True if icon value is an existing image file path."""
+        return (isinstance(icon, str)
+                and icon.endswith((".png", ".jpg", ".svg"))
+                and os.path.isabs(icon)
+                and os.path.exists(icon))
+
+    @staticmethod
+    def _copy_icon_to_registry(icon_path, pkg_name, registry_base):
+        """Copy an icon file to the registry's icons/ directory as {pkg_name}.png."""
+        icons_dir = os.path.join(registry_base, "icons")
+        os.makedirs(icons_dir, exist_ok=True)
+        dest = os.path.join(icons_dir, "{}.png".format(pkg_name))
+        shutil.copy2(icon_path, dest)
 
     def _rebuild_icons_archive(self, registry_base):
         """Rebuild icons.zip from all PNGs in the icons/ directory."""

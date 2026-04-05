@@ -220,7 +220,8 @@ class PackageDetailPanel(QtWidgets.QWidget):
             import webbrowser
             webbrowser.open(self._homepage)
 
-    def show_package(self, pkg_id, registry_data, installed_version=None):
+    def show_package(self, pkg_id, registry_data, installed_version=None,
+                     icon_path=None):
         """Display package information."""
         self._pkg_id = pkg_id
         pkg_type = registry_data.get("type", "python_package")
@@ -235,7 +236,17 @@ class PackageDetailPanel(QtWidgets.QWidget):
                 bg=theme.BG_SECONDARY)
         )
         icon_value = registry_data.get("icon", "")
-        if (isinstance(icon_value, str) and icon_value
+
+        if icon_path and os.path.exists(icon_path):
+            pixmap = QtGui.QPixmap(icon_path)
+            self._icon_label.setPixmap(
+                pixmap.scaled(52, 52, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+            )
+            self._icon_label.setStyleSheet(
+                "QLabel {{ background: {bg}; border-radius: 12px; }}".format(
+                    bg=theme.BG_SECONDARY)
+            )
+        elif (isinstance(icon_value, str) and icon_value
                 and icon_value not in ("true", "false")
                 and not icon_value.endswith((".png", ".jpg", ".svg"))):
             self._icon_label.setText(icon_value)

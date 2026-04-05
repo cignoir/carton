@@ -489,6 +489,33 @@ class CartonWindow(QtWidgets.QDialog):
 
     # ---- internal ----
 
+    def _resolve_icon_path(self, pkg_data):
+        """Resolve an icon file path from package data. Returns path or None."""
+        icon_value = pkg_data.get("icon", "")
+        pkg_name = pkg_data.get("name", "")
+        if isinstance(icon_value, bool) and icon_value:
+            base_dir = pkg_data.get("_registry_base_dir", "")
+            is_remote = pkg_data.get("_registry_remote", False)
+            if base_dir:
+                if is_remote:
+                    if self._config:
+                        cached = os.path.join(
+                            self._config.install_dir, ".icon_cache",
+                            "{}.png".format(pkg_name),
+                        )
+                        if os.path.exists(cached):
+                            return cached
+                else:
+                    candidate = os.path.join(base_dir, "icons", "{}.png".format(pkg_name))
+                    if os.path.exists(candidate):
+                        return candidate
+        elif (isinstance(icon_value, str)
+              and icon_value.endswith((".png", ".jpg", ".svg"))
+              and os.path.isabs(icon_value)
+              and os.path.exists(icon_value)):
+            return icon_value
+        return None
+
     def _fetch_remote_icon(self, base_url, pkg_name):
         """Download a remote icon and cache locally. Returns local path or None."""
         if not self._config:
@@ -562,26 +589,13 @@ class CartonWindow(QtWidgets.QDialog):
             pkg_name = pkg_data.get("name", "")
 
             # Icon resolution
-            icon_path = None
+            icon_path = self._resolve_icon_path(pkg_data)
             icon_value = pkg_data.get("icon", "")
-            if isinstance(icon_value, bool) and icon_value:
+            if not icon_path and isinstance(icon_value, bool) and icon_value:
                 base_dir = pkg_data.get("_registry_base_dir", "")
                 is_remote = pkg_data.get("_registry_remote", False)
-                if base_dir:
-                    if is_remote:
-                        if self._config:
-                            cached = os.path.join(
-                                self._config.install_dir, ".icon_cache",
-                                "{}.png".format(pkg_name),
-                            )
-                            if os.path.exists(cached):
-                                icon_path = cached
-                            else:
-                                icon_fetch_tasks.append((pkg_id, base_dir, pkg_name))
-                    else:
-                        candidate = os.path.join(base_dir, "icons", "{}.png".format(pkg_name))
-                        if os.path.exists(candidate):
-                            icon_path = candidate
+                if is_remote and base_dir:
+                    icon_fetch_tasks.append((pkg_id, base_dir, pkg_name))
 
             card = PackageCard(pkg_id, pkg_data, installed_version=installed_ver, icon_path=icon_path)
             card.launch_requested.connect(self._on_launch)
@@ -619,7 +633,12 @@ class CartonWindow(QtWidgets.QDialog):
         pkg_data = packages.get(pkg_id, {})
         installed = self._install_manager.get_installed_packages() if self._install_manager else {}
         installed_ver = installed.get(pkg_id, {}).get("version")
-        self._detail.show_package(pkg_id, pkg_data, installed_version=installed_ver)
+
+        # Resolve icon path for the detail panel
+        icon_path = self._resolve_icon_path(pkg_data)
+
+        self._detail.show_package(pkg_id, pkg_data, installed_version=installed_ver,
+                                  icon_path=icon_path)
         self._stack.setCurrentIndex(1)
 
     def _show_edit(self, pkg_id):
