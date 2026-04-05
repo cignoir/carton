@@ -765,7 +765,12 @@ class CartonWindow(QtWidgets.QDialog):
             self.refresh()
         except Exception as e:
             self._set_publish_button_state(pkg_id, busy=False)
-            QtWidgets.QMessageBox.warning(self, t("publish_error"), str(e))
+            from carton.core.publisher import VersionConflictError
+            if isinstance(e, VersionConflictError):
+                msg = t("publish_already_published", e.version)
+            else:
+                msg = str(e)
+            QtWidgets.QMessageBox.warning(self, t("publish_error"), msg)
 
     def _on_unpublish(self, pkg_id, registry_entry):
         if not self._publisher:

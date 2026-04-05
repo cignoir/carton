@@ -8,6 +8,14 @@ import zipfile
 from datetime import datetime, timezone
 
 
+class VersionConflictError(RuntimeError):
+    """Raised when attempting to publish a version that already exists."""
+
+    def __init__(self, version):
+        self.version = version
+        super().__init__(version)
+
+
 class Publisher:
     """Publish locally registered scripts to a registry.
 
@@ -103,9 +111,7 @@ class Publisher:
             registry = json.load(f)
         entry = registry.get("packages", {}).get(pkg_id)
         if entry and version in entry.get("versions", {}):
-            raise RuntimeError(
-                "v{} is already published. Increment the version before re-publishing.".format(version)
-            )
+            raise VersionConflictError(version)
 
     def _create_zip(self, local_path, name, version, is_folder,
                     entry_point, display_name, icon, description, pkg_type, pkg_id, author):
