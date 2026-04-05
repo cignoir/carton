@@ -5,6 +5,7 @@ import os
 from carton.ui.compat import QtWidgets, QtCore, QtGui, Qt
 from carton.ui.i18n import t
 from carton.ui.package_card import TypeBadge
+from carton.ui import theme
 
 
 def _format_size(size_bytes):
@@ -49,9 +50,10 @@ class PackageDetailPanel(QtWidgets.QWidget):
         back_btn = QtWidgets.QPushButton(t("back"))
         back_btn.setFlat(True)
         back_btn.setStyleSheet(
-            "QPushButton { color: #5c6370; font-size: 12px; text-align: left;"
-            "  background: transparent; border: none; padding: 0; }"
-            "QPushButton:hover { color: #abb2bf; }"
+            "QPushButton {{ color: {dim}; font-size: 12px; text-align: left;"
+            "  background: transparent; border: none; padding: 0; }}"
+            "QPushButton:hover {{ color: {text}; }}".format(
+                dim=theme.TEXT_DIM, text=theme.TEXT_PRIMARY)
         )
         back_btn.clicked.connect(self.back_requested.emit)
         layout.addWidget(back_btn)
@@ -66,7 +68,7 @@ class PackageDetailPanel(QtWidgets.QWidget):
         self._icon_label.setFixedSize(64, 64)
         self._icon_label.setAlignment(Qt.AlignCenter)
         self._icon_label.setStyleSheet(
-            "QLabel { background: #1d1f23; border-radius: 12px; }"
+            "QLabel {{ background: {bg}; border-radius: 12px; }}".format(bg=theme.BG_SECONDARY)
         )
         hero.addWidget(self._icon_label)
 
@@ -79,7 +81,8 @@ class PackageDetailPanel(QtWidgets.QWidget):
         name_row.setSpacing(8)
         self._name_label = QtWidgets.QLabel()
         self._name_label.setStyleSheet(
-            "font-size: 20px; font-weight: 600; color: #d7dae0; background: transparent;"
+            "font-size: 20px; font-weight: 600; color: {}; background: transparent;".format(
+                theme.TEXT_HEADING)
         )
         name_row.addWidget(self._name_label)
 
@@ -91,7 +94,7 @@ class PackageDetailPanel(QtWidgets.QWidget):
         # Author + version subtitle
         self._subtitle_label = QtWidgets.QLabel()
         self._subtitle_label.setStyleSheet(
-            "font-size: 12px; color: #5c6370; background: transparent;"
+            "font-size: 12px; color: {}; background: transparent;".format(theme.TEXT_DIM)
         )
         title_block.addWidget(self._subtitle_label)
 
@@ -109,9 +112,10 @@ class PackageDetailPanel(QtWidgets.QWidget):
         self._uninstall_btn = QtWidgets.QPushButton(t("uninstall"))
         self._uninstall_btn.setFixedWidth(120)
         self._uninstall_btn.setStyleSheet(
-            "QPushButton { color: #e06c75; background: transparent; border: 1px solid #3e4452;"
-            "  border-radius: 6px; padding: 6px; font-size: 11px; }"
-            "QPushButton:hover { background: #382025; border-color: #e06c75; }"
+            "QPushButton {{ color: {red}; background: transparent; border: 1px solid {border};"
+            "  border-radius: 6px; padding: 6px; font-size: 11px; }}"
+            "QPushButton:hover {{ background: {red_bg}; border-color: {red}; }}".format(
+                red=theme.ACCENT_RED, border=theme.BORDER, red_bg=theme.ACCENT_RED_BG)
         )
         self._uninstall_btn.clicked.connect(
             lambda: self.uninstall_requested.emit(self._pkg_id)
@@ -126,8 +130,8 @@ class PackageDetailPanel(QtWidgets.QWidget):
         # ── Description ──
         self._desc_label = QtWidgets.QLabel()
         self._desc_label.setStyleSheet(
-            "font-size: 13px; color: #abb2bf; background: transparent;"
-            "  line-height: 1.5;"
+            "font-size: 13px; color: {}; background: transparent;"
+            "  line-height: 1.5;".format(theme.TEXT_PRIMARY)
         )
         self._desc_label.setWordWrap(True)
         layout.addWidget(self._desc_label)
@@ -137,12 +141,7 @@ class PackageDetailPanel(QtWidgets.QWidget):
         # ── Homepage link ──
         self._homepage_btn = QtWidgets.QPushButton()
         self._homepage_btn.setFlat(True)
-        self._homepage_btn.setStyleSheet(
-            "QPushButton { color: #61afef; font-size: 12px; text-align: left;"
-            "  background: transparent; border: none; padding: 0;"
-            "  text-decoration: underline; }"
-            "QPushButton:hover { color: #8bc4f7; }"
-        )
+        self._homepage_btn.setStyleSheet(theme.btn_link())
         self._homepage_btn.setCursor(Qt.PointingHandCursor)
         self._homepage_btn.clicked.connect(self._open_homepage)
         layout.addWidget(self._homepage_btn)
@@ -153,7 +152,7 @@ class PackageDetailPanel(QtWidgets.QWidget):
         sep = QtWidgets.QFrame()
         sep.setFrameShape(QtWidgets.QFrame.HLine)
         sep.setFixedHeight(1)
-        sep.setStyleSheet("background: #3e4452;")
+        sep.setStyleSheet("background: {};".format(theme.BORDER))
         layout.addWidget(sep)
 
         layout.addSpacing(12)
@@ -163,8 +162,10 @@ class PackageDetailPanel(QtWidgets.QWidget):
         info_grid.setHorizontalSpacing(24)
         info_grid.setVerticalSpacing(8)
 
-        label_style = "color: #495162; font-size: 11px; font-weight: 600; background: transparent;"
-        value_style = "color: #7f848e; font-size: 12px; background: transparent;"
+        label_style = "color: {muted}; font-size: 11px; font-weight: 600; background: transparent;".format(
+            muted=theme.TEXT_MUTED)
+        value_style = "color: {dim}; font-size: 12px; background: transparent;".format(
+            dim=theme.TEXT_SECONDARY)
 
         # Row 0: Type | Maya
         info_grid.addWidget(self._make_label(t("label_type"), label_style), 0, 0)
@@ -229,17 +230,19 @@ class PackageDetailPanel(QtWidgets.QWidget):
         # Icon
         self._icon_label.setPixmap(QtGui.QPixmap())  # Clear
         self._icon_label.setText("")
+        _detail_icon_style = (
+            "QLabel {{ background: {bg}; border-radius: 12px; font-size: 28px; }}".format(
+                bg=theme.BG_SECONDARY)
+        )
         icon_value = registry_data.get("icon", "")
-        if isinstance(icon_value, str) and icon_value and icon_value not in ("true", "false") and not icon_value.endswith((".png", ".jpg", ".svg")):
+        if (isinstance(icon_value, str) and icon_value
+                and icon_value not in ("true", "false")
+                and not icon_value.endswith((".png", ".jpg", ".svg"))):
             self._icon_label.setText(icon_value)
-            self._icon_label.setStyleSheet(
-                "QLabel { background: #1d1f23; border-radius: 12px; font-size: 28px; }"
-            )
+            self._icon_label.setStyleSheet(_detail_icon_style)
         else:
-            self._icon_label.setStyleSheet(
-                "QLabel { background: #1d1f23; border-radius: 12px; font-size: 28px; }"
-            )
-            self._icon_label.setText("📦")
+            self._icon_label.setStyleSheet(_detail_icon_style)
+            self._icon_label.setText("\U0001f4e6")
 
         # Name
         self._name_label.setText(registry_data.get("display_name", pkg_id))
@@ -291,17 +294,18 @@ class PackageDetailPanel(QtWidgets.QWidget):
         self._changelog_val.setText(version_info.get("changelog", "") or "—")
 
         # Action button
+        # Safely reconnect action button
+        try:
+            self._action_btn.clicked.disconnect()
+        except RuntimeError:
+            pass
+
         if installed_version:
             self._action_btn.setText(t("launch"))
             self._action_btn.setStyleSheet(
-                "QPushButton { background: #4d78cc; color: white; border: none;"
-                "  border-radius: 6px; padding: 8px; font-weight: 600; font-size: 13px; }"
-                "QPushButton:hover { background: #5a8ae6; }"
+                theme.btn_card_action(theme.ACCENT_BLUE, theme.ACCENT_BLUE_HOVER,
+                                      radius=6, padding=8, font_size=13)
             )
-            try:
-                self._action_btn.clicked.disconnect()
-            except RuntimeError:
-                pass
             self._action_btn.clicked.connect(
                 lambda: self.launch_requested.emit(self._pkg_id)
             )
@@ -309,14 +313,10 @@ class PackageDetailPanel(QtWidgets.QWidget):
         else:
             self._action_btn.setText(t("install"))
             self._action_btn.setStyleSheet(
-                "QPushButton { background: #98c379; color: #282c34; border: none;"
-                "  border-radius: 6px; padding: 8px; font-weight: 600; font-size: 13px; }"
-                "QPushButton:hover { background: #a9d487; }"
+                theme.btn_card_action(theme.ACCENT_GREEN, theme.ACCENT_GREEN_HOVER,
+                                      text_color=theme.BG_PRIMARY,
+                                      radius=6, padding=8, font_size=13)
             )
-            try:
-                self._action_btn.clicked.disconnect()
-            except RuntimeError:
-                pass
             self._action_btn.clicked.connect(
                 lambda: self.install_requested.emit(self._pkg_id)
             )

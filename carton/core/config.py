@@ -4,10 +4,7 @@ import json
 import os
 import sys
 
-try:
-    from urllib.parse import urlparse
-except ImportError:
-    from urlparse import urlparse
+from carton.compat_urllib import urlparse
 
 
 def _is_url(path):
@@ -38,6 +35,9 @@ class RegistryEntry:
     @classmethod
     def from_dict(cls, d):
         return cls(name=d.get("name", ""), path=d.get("path", ""))
+
+    def __str__(self):
+        return "{} — {}".format(self.name, self.path)
 
     @property
     def is_remote(self):

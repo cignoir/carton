@@ -4,6 +4,8 @@ import os
 
 from carton.ui.compat import QtWidgets, QtCore, QtGui, Qt
 from carton.ui.i18n import t
+from carton.ui import theme
+from carton.ui.utils import resolve_icon
 
 _DEFAULT_ICON = None
 
@@ -16,10 +18,10 @@ def _get_default_icon_path():
 
 # Badge configuration per type
 _BADGE_CONFIG = {
-    "python_package": ("PY", "#4d78cc"),
-    "mel_script": ("MEL", "#98c379"),
-    "plugin": ("PLG", "#d19a66"),
-    "local": ("LOCAL", "#5c6370"),
+    "python_package": ("PY", theme.ACCENT_BLUE),
+    "mel_script": ("MEL", theme.ACCENT_GREEN),
+    "plugin": ("PLG", theme.ACCENT_ORANGE),
+    "local": ("LOCAL", theme.TEXT_DIM),
 }
 
 
@@ -28,7 +30,7 @@ class TypeBadge(QtWidgets.QLabel):
 
     def __init__(self, pkg_type, parent=None):
         super().__init__(parent)
-        label, color = _BADGE_CONFIG.get(pkg_type, ("?", "#5c6370"))
+        label, color = _BADGE_CONFIG.get(pkg_type, ("?", theme.TEXT_DIM))
         self.setText(label)
         self.setFixedHeight(18)
         self.setAlignment(Qt.AlignCenter)
@@ -66,15 +68,16 @@ class PackageCard(QtWidgets.QFrame):
     def _setup_ui(self):
         self.setFrameShape(QtWidgets.QFrame.StyledPanel)
         self.setStyleSheet(
-            "PackageCard {"
-            "  background: #1d1f23;"
-            "  border: 1px solid #353b45;"
+            "PackageCard {{"
+            "  background: {bg};"
+            "  border: 1px solid {border};"
             "  border-radius: 8px;"
-            "}"
-            "PackageCard:hover {"
-            "  background: #2c313a;"
-            "  border-color: #4e5666;"
-            "}"
+            "}}"
+            "PackageCard:hover {{"
+            "  background: {hover};"
+            "  border-color: {border_hover};"
+            "}}".format(bg=theme.BG_SECONDARY, border=theme.BORDER_LIGHT,
+                        hover=theme.BG_HOVER, border_hover=theme.BORDER_HOVER)
         )
         self.setFixedHeight(80)
 
@@ -96,32 +99,8 @@ class PackageCard(QtWidgets.QFrame):
             if os.path.isabs(icon_value) and os.path.exists(icon_value):
                 resolved_path = icon_value
 
-        if resolved_path and os.path.exists(resolved_path):
-            pixmap = QtGui.QPixmap(resolved_path)
-            self._icon_label.setPixmap(
-                pixmap.scaled(40, 40, Qt.KeepAspectRatio, Qt.SmoothTransformation)
-            )
-        elif isinstance(icon_value, str) and icon_value and icon_value not in ("true", "false") and not icon_value.endswith((".png", ".jpg", ".svg")):
-            # Emoji icon
-            self._icon_label.setText(icon_value)
-            self._icon_label.setStyleSheet(
-                "QLabel { background: transparent; border-radius: 8px;"
-                "  font-size: 24px; }"
-            )
-        else:
-            # Default icon
-            default = _get_default_icon_path()
-            if os.path.exists(default):
-                pixmap = QtGui.QPixmap(default)
-                self._icon_label.setPixmap(
-                    pixmap.scaled(40, 40, Qt.KeepAspectRatio, Qt.SmoothTransformation)
-                )
-            else:
-                self._icon_label.setText("📦")
-                self._icon_label.setStyleSheet(
-                    "QLabel { background: transparent; border-radius: 8px;"
-                    "  font-size: 24px; }"
-                )
+        resolve_icon(self._icon_label, icon_value, resolved_path,
+                     size=40, default_icon_path=_get_default_icon_path())
         layout.addWidget(self._icon_label)
 
         # Info
@@ -133,7 +112,10 @@ class PackageCard(QtWidgets.QFrame):
         title_layout.setSpacing(8)
 
         name_label = QtWidgets.QLabel(self._pkg_data.get("display_name", self._pkg_id))
-        name_label.setStyleSheet("font-size: 14px; font-weight: 600; color: #d7dae0; background: transparent;")
+        name_label.setStyleSheet(
+            "font-size: 14px; font-weight: 600; color: {}; background: transparent;".format(
+                theme.TEXT_HEADING)
+        )
         title_layout.addWidget(name_label)
 
         badge = TypeBadge(self._pkg_data.get("type", "python_package"))
@@ -150,14 +132,18 @@ class PackageCard(QtWidgets.QFrame):
             ver_text = "v{}".format(latest) if latest else ""
 
         ver_label = QtWidgets.QLabel(ver_text)
-        ver_label.setStyleSheet("font-size: 11px; color: #5c6370; background: transparent;")
+        ver_label.setStyleSheet(
+            "font-size: 11px; color: {}; background: transparent;".format(theme.TEXT_DIM)
+        )
         title_layout.addWidget(ver_label)
         title_layout.addStretch()
 
         author = self._pkg_data.get("author", "")
         if author:
             author_label = QtWidgets.QLabel(author)
-            author_label.setStyleSheet("font-size: 11px; color: #495162; background: transparent;")
+            author_label.setStyleSheet(
+                "font-size: 11px; color: {}; background: transparent;".format(theme.TEXT_MUTED)
+            )
             title_layout.addWidget(author_label)
 
         info_layout.addLayout(title_layout)
@@ -165,7 +151,9 @@ class PackageCard(QtWidgets.QFrame):
         # Description
         desc = self._pkg_data.get("description", "")
         desc_label = QtWidgets.QLabel(desc)
-        desc_label.setStyleSheet("font-size: 12px; color: #7f848e; background: transparent;")
+        desc_label.setStyleSheet(
+            "font-size: 12px; color: {}; background: transparent;".format(theme.TEXT_SECONDARY)
+        )
         desc_label.setWordWrap(True)
         info_layout.addWidget(desc_label)
 
@@ -192,11 +180,8 @@ class PackageCard(QtWidgets.QFrame):
                 update_btn = QtWidgets.QPushButton(t("update"))
                 update_btn.setFixedWidth(80)
                 update_btn.setStyleSheet(
-                    "QPushButton {"
-                    "  background: #d19a66; color: #282c34; border: none;"
-                    "  border-radius: 6px; padding: 6px; font-weight: 600; font-size: 12px;"
-                    "}"
-                    "QPushButton:hover { background: #e0a972; }"
+                    theme.btn_card_action(theme.ACCENT_ORANGE, theme.ACCENT_ORANGE_HOVER,
+                                          text_color=theme.BG_PRIMARY)
                 )
                 update_btn.clicked.connect(lambda: self.update_requested.emit(self._pkg_id))
                 btn_layout.addWidget(update_btn)
@@ -204,11 +189,7 @@ class PackageCard(QtWidgets.QFrame):
             launch_btn = QtWidgets.QPushButton(t("launch"))
             launch_btn.setFixedWidth(80)
             launch_btn.setStyleSheet(
-                "QPushButton {"
-                "  background: #4d78cc; color: white; border: none;"
-                "  border-radius: 6px; padding: 6px; font-weight: 600; font-size: 12px;"
-                "}"
-                "QPushButton:hover { background: #5a8ae6; }"
+                theme.btn_card_action(theme.ACCENT_BLUE, theme.ACCENT_BLUE_HOVER)
             )
             launch_btn.clicked.connect(lambda: self.launch_requested.emit(self._pkg_id))
             btn_layout.addWidget(launch_btn)
@@ -217,12 +198,7 @@ class PackageCard(QtWidgets.QFrame):
                 publish_btn = QtWidgets.QPushButton(t("publish"))
                 publish_btn.setFixedWidth(80)
                 publish_btn.setStyleSheet(
-                    "QPushButton {"
-                    "  background: transparent; color: #98c379;"
-                    "  border: 1px solid #5c7a4e; border-radius: 6px; padding: 4px;"
-                    "  font-size: 11px; font-weight: 600;"
-                    "}"
-                    "QPushButton:hover { background: #2a3325; border-color: #98c379; }"
+                    theme.btn_card_outlined(theme.ACCENT_GREEN, "#5c7a4e", "#2a3325")
                 )
                 publish_btn.clicked.connect(lambda: self.publish_requested.emit(self._pkg_id))
                 btn_layout.addWidget(publish_btn)
@@ -230,11 +206,8 @@ class PackageCard(QtWidgets.QFrame):
             install_btn = QtWidgets.QPushButton(t("install"))
             install_btn.setFixedWidth(80)
             install_btn.setStyleSheet(
-                "QPushButton {"
-                "  background: #98c379; color: #282c34; border: none;"
-                "  border-radius: 6px; padding: 6px; font-weight: 600; font-size: 12px;"
-                "}"
-                "QPushButton:hover { background: #a9d487; }"
+                theme.btn_card_action(theme.ACCENT_GREEN, theme.ACCENT_GREEN_HOVER,
+                                      text_color=theme.BG_PRIMARY)
             )
             install_btn.clicked.connect(lambda: self.install_requested.emit(self._pkg_id))
             btn_layout.addWidget(install_btn)
@@ -244,10 +217,4 @@ class PackageCard(QtWidgets.QFrame):
     def set_icon(self, icon_path):
         """Update the icon after initial construction (e.g. async download)."""
         if icon_path and os.path.exists(icon_path):
-            pixmap = QtGui.QPixmap(icon_path)
-            self._icon_label.setPixmap(
-                pixmap.scaled(40, 40, Qt.KeepAspectRatio, Qt.SmoothTransformation)
-            )
-            self._icon_label.setStyleSheet(
-                "QLabel { background: transparent; border-radius: 8px; }"
-            )
+            resolve_icon(self._icon_label, None, icon_path, size=40)

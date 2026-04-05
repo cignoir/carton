@@ -1,24 +1,11 @@
 """Dialog for editing metadata of local tools."""
 
 import os
-import re
 
 from carton.ui.compat import QtWidgets, QtCore, Qt
 from carton.ui.i18n import t
-
-
-def _list_functions(path):
-    """Return a list of all public function names in a Python file."""
-    functions = []
-    try:
-        with open(path, "r", encoding="utf-8") as f:
-            for line in f:
-                m = re.match(r"^def ([a-zA-Z][a-zA-Z0-9_]*)\s*\(", line)
-                if m:
-                    functions.append(m.group(1))
-    except (OSError, UnicodeDecodeError):
-        pass
-    return functions
+from carton.ui import theme
+from carton.ui.utils import list_functions
 
 
 class EditDialog(QtWidgets.QDialog):
@@ -34,17 +21,11 @@ class EditDialog(QtWidgets.QDialog):
         self.setWindowTitle(t("edit_title"))
         self.setFixedSize(440, 480)
         self.setStyleSheet(
-            "QDialog { background: #282c34; }"
-            "QLabel { color: #abb2bf; font-size: 13px; }"
-            "QLineEdit, QComboBox {"
-            "  background: #1d1f23; border: 1px solid #3e4452;"
-            "  border-radius: 4px; padding: 6px; color: #abb2bf;"
-            "  font-size: 13px;"
-            "}"
-            "QLineEdit:focus, QComboBox:focus { border-color: #4d78cc; }"
-            "QRadioButton { color: #abb2bf; font-size: 13px; }"
-            "QComboBox QAbstractItemView { background: #1d1f23; color: #abb2bf;"
-            "  selection-background-color: #4d78cc; }"
+            theme.dialog_style(
+                theme.combobox_style()
+                + "QRadioButton {{ color: {text}; font-size: 13px; }}".format(
+                    text=theme.TEXT_PRIMARY)
+            )
         )
 
         self._setup_ui()
@@ -56,53 +37,48 @@ class EditDialog(QtWidgets.QDialog):
 
         form = QtWidgets.QFormLayout()
         form.setSpacing(8)
-        label_style = "color: #5c6370; font-size: 12px;"
 
         # Display Name
         name_label = QtWidgets.QLabel(t("label_display_name"))
-        name_label.setStyleSheet(label_style)
+        name_label.setStyleSheet(theme.LABEL_DIM)
         self._name_input = QtWidgets.QLineEdit(self._pkg_data.get("display_name", ""))
         form.addRow(name_label, self._name_input)
 
         # Version
         ver_label = QtWidgets.QLabel(t("label_version"))
-        ver_label.setStyleSheet(label_style)
+        ver_label.setStyleSheet(theme.LABEL_DIM)
         self._ver_input = QtWidgets.QLineEdit(self._pkg_data.get("version", "0.0.0"))
         form.addRow(ver_label, self._ver_input)
 
         # Icon
         icon_label = QtWidgets.QLabel(t("label_icon"))
-        icon_label.setStyleSheet(label_style)
+        icon_label.setStyleSheet(theme.LABEL_DIM)
         icon_row = QtWidgets.QHBoxLayout()
         self._icon_input = QtWidgets.QLineEdit(self._pkg_data.get("icon", "🔧"))
         icon_row.addWidget(self._icon_input)
         icon_browse_btn = QtWidgets.QPushButton(t("file"))
         icon_browse_btn.setFixedWidth(60)
-        icon_browse_btn.setStyleSheet(
-            "QPushButton { background: #1d1f23; color: #7f848e;"
-            "  border: 1px solid #3e4452; border-radius: 4px; padding: 4px; font-size: 12px; }"
-            "QPushButton:hover { background: #3e4452; }"
-        )
+        icon_browse_btn.setStyleSheet(theme.btn_small_browse())
         icon_browse_btn.clicked.connect(self._browse_icon)
         icon_row.addWidget(icon_browse_btn)
         form.addRow(icon_label, icon_row)
 
         # Homepage
         homepage_label = QtWidgets.QLabel(t("label_homepage"))
-        homepage_label.setStyleSheet(label_style)
+        homepage_label.setStyleSheet(theme.LABEL_DIM)
         self._homepage_input = QtWidgets.QLineEdit(self._pkg_data.get("homepage", ""))
         self._homepage_input.setPlaceholderText("https://...")
         form.addRow(homepage_label, self._homepage_input)
 
         # Author
         author_label = QtWidgets.QLabel(t("label_author"))
-        author_label.setStyleSheet(label_style)
+        author_label.setStyleSheet(theme.LABEL_DIM)
         self._author_input = QtWidgets.QLineEdit(self._pkg_data.get("author", ""))
         form.addRow(author_label, self._author_input)
 
         # Description
         desc_label = QtWidgets.QLabel(t("label_description"))
-        desc_label.setStyleSheet(label_style)
+        desc_label.setStyleSheet(theme.LABEL_DIM)
         self._desc_input = QtWidgets.QLineEdit(self._pkg_data.get("description", ""))
         form.addRow(desc_label, self._desc_input)
 
@@ -113,7 +89,7 @@ class EditDialog(QtWidgets.QDialog):
             path_label.setStyleSheet(label_style)
             path_val = QtWidgets.QLineEdit(local_path)
             path_val.setReadOnly(True)
-            path_val.setStyleSheet(path_val.styleSheet() + " color: #5c6370;")
+            path_val.setStyleSheet(path_val.styleSheet() + " color: {};".format(theme.TEXT_DIM))
             form.addRow(path_label, path_val)
 
         layout.addLayout(form)
@@ -123,11 +99,7 @@ class EditDialog(QtWidgets.QDialog):
         ep_type = entry.get("type", "python")
 
         mode_group = QtWidgets.QGroupBox(t("label_run_mode"))
-        mode_group.setStyleSheet(
-            "QGroupBox { color: #5c6370; font-size: 12px; border: 1px solid #3e4452;"
-            "  border-radius: 4px; margin-top: 8px; padding-top: 16px; }"
-            "QGroupBox::title { subcontrol-origin: margin; left: 10px; }"
-        )
+        mode_group.setStyleSheet(theme.groupbox_style())
         mode_layout = QtWidgets.QVBoxLayout(mode_group)
 
         self._mode_exec = QtWidgets.QRadioButton(t("add_exec_mode"))
@@ -143,7 +115,7 @@ class EditDialog(QtWidgets.QDialog):
 
         # Populate function list in dropdown
         if local_path and os.path.isfile(local_path) and local_path.endswith(".py"):
-            funcs = _list_functions(local_path)
+            funcs = list_functions(local_path)
             if funcs:
                 self._func_combo.addItems(funcs)
                 self._func_combo.setCurrentIndex(0)
@@ -174,41 +146,25 @@ class EditDialog(QtWidgets.QDialog):
 
         # Remove button (left-aligned)
         remove_btn = QtWidgets.QPushButton(t("remove"))
-        remove_btn.setStyleSheet(
-            "QPushButton { color: #e06c75; background: transparent;"
-            "  border: 1px solid #e06c75; border-radius: 4px; padding: 6px 12px; }"
-            "QPushButton:hover { background: #382025; }"
-        )
+        remove_btn.setStyleSheet(theme.btn_danger())
         remove_btn.clicked.connect(self._on_remove)
         btn_layout.addWidget(remove_btn)
 
         if self._published_registries:
             unpub_btn = QtWidgets.QPushButton(t("unpublish"))
-            unpub_btn.setStyleSheet(
-                "QPushButton { color: #d19a66; background: transparent;"
-                "  border: 1px solid #d19a66; border-radius: 4px; padding: 6px 12px; }"
-                "QPushButton:hover { background: #382517; }"
-            )
+            unpub_btn.setStyleSheet(theme.btn_warning())
             unpub_btn.clicked.connect(self._on_unpublish)
             btn_layout.addWidget(unpub_btn)
 
         btn_layout.addStretch()
 
         cancel_btn = QtWidgets.QPushButton(t("cancel"))
-        cancel_btn.setStyleSheet(
-            "QPushButton { background: transparent; color: #5c6370;"
-            "  border: 1px solid #3e4452; border-radius: 4px; padding: 6px 16px; }"
-            "QPushButton:hover { background: #1d1f23; }"
-        )
+        cancel_btn.setStyleSheet(theme.btn_ghost())
         cancel_btn.clicked.connect(self.reject)
         btn_layout.addWidget(cancel_btn)
 
         save_btn = QtWidgets.QPushButton(t("save"))
-        save_btn.setStyleSheet(
-            "QPushButton { background: #4d78cc; color: white;"
-            "  border: none; border-radius: 4px; padding: 6px 16px; }"
-            "QPushButton:hover { background: #5a8ae6; }"
-        )
+        save_btn.setStyleSheet(theme.btn_primary())
         save_btn.clicked.connect(self._on_save)
         save_btn.setDefault(True)
         btn_layout.addWidget(save_btn)

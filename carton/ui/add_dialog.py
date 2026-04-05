@@ -12,6 +12,8 @@ import re
 
 from carton.ui.compat import QtWidgets, QtCore, Qt
 from carton.ui.i18n import t
+from carton.ui import theme
+from carton.ui.utils import list_functions
 
 
 def _detect_from_folder(folder_path):
@@ -87,20 +89,6 @@ def _detect_function_in_file(path):
     return None
 
 
-def _list_functions(path):
-    """Return a list of all public function names in a Python file."""
-    functions = []
-    try:
-        with open(path, "r", encoding="utf-8") as f:
-            for line in f:
-                m = re.match(r"^def ([a-zA-Z][a-zA-Z0-9_]*)\s*\(", line)
-                if m:
-                    functions.append(m.group(1))
-    except (OSError, UnicodeDecodeError):
-        pass
-    return functions
-
-
 def _has_functions(path):
     """Check whether the file contains def statements."""
     try:
@@ -121,15 +109,10 @@ class AddDialog(QtWidgets.QDialog):
         self.setWindowTitle(t("add_title"))
         self.setFixedSize(440, 360)
         self.setStyleSheet(
-            "QDialog { background: #282c34; }"
-            "QLabel { color: #abb2bf; font-size: 13px; }"
-            "QLineEdit {"
-            "  background: #1d1f23; border: 1px solid #3e4452;"
-            "  border-radius: 4px; padding: 6px; color: #abb2bf;"
-            "  font-size: 13px;"
-            "}"
-            "QLineEdit:focus { border-color: #4d78cc; }"
-            "QRadioButton { color: #abb2bf; font-size: 13px; }"
+            theme.dialog_style(
+                "QRadioButton {{ color: {text}; font-size: 13px; }}".format(
+                    text=theme.TEXT_PRIMARY)
+            )
         )
 
         self._result = None
@@ -150,20 +133,12 @@ class AddDialog(QtWidgets.QDialog):
         select_layout.addWidget(self._path_input)
 
         file_btn = QtWidgets.QPushButton(t("file"))
-        file_btn.setStyleSheet(
-            "QPushButton { background: #3e4452; color: #abb2bf; border: none;"
-            "  border-radius: 4px; padding: 6px 10px; }"
-            "QPushButton:hover { background: #3e4452; }"
-        )
+        file_btn.setStyleSheet(theme.btn_muted())
         file_btn.clicked.connect(self._browse_file)
         select_layout.addWidget(file_btn)
 
         folder_btn = QtWidgets.QPushButton(t("folder"))
-        folder_btn.setStyleSheet(
-            "QPushButton { background: #3e4452; color: #abb2bf; border: none;"
-            "  border-radius: 4px; padding: 6px 10px; }"
-            "QPushButton:hover { background: #3e4452; }"
-        )
+        folder_btn.setStyleSheet(theme.btn_muted())
         folder_btn.clicked.connect(self._browse_folder)
         select_layout.addWidget(folder_btn)
         layout.addLayout(select_layout)
@@ -171,31 +146,25 @@ class AddDialog(QtWidgets.QDialog):
         # Form
         form = QtWidgets.QFormLayout()
         form.setSpacing(8)
-        label_style = "color: #5c6370; font-size: 12px;"
-
         name_label = QtWidgets.QLabel(t("label_display_name"))
-        name_label.setStyleSheet(label_style)
+        name_label.setStyleSheet(theme.LABEL_DIM)
         self._name_input = QtWidgets.QLineEdit()
         form.addRow(name_label, self._name_input)
 
         icon_label = QtWidgets.QLabel(t("label_icon"))
-        icon_label.setStyleSheet(label_style)
+        icon_label.setStyleSheet(theme.LABEL_DIM)
         icon_row = QtWidgets.QHBoxLayout()
         self._icon_input = QtWidgets.QLineEdit("🔧")
         icon_row.addWidget(self._icon_input)
         icon_browse_btn = QtWidgets.QPushButton(t("file"))
         icon_browse_btn.setFixedWidth(60)
-        icon_browse_btn.setStyleSheet(
-            "QPushButton { background: #1d1f23; color: #7f848e;"
-            "  border: 1px solid #3e4452; border-radius: 4px; padding: 4px; font-size: 12px; }"
-            "QPushButton:hover { background: #3e4452; }"
-        )
+        icon_browse_btn.setStyleSheet(theme.btn_small_browse())
         icon_browse_btn.clicked.connect(self._browse_icon)
         icon_row.addWidget(icon_browse_btn)
         form.addRow(icon_label, icon_row)
 
         desc_label = QtWidgets.QLabel(t("label_description"))
-        desc_label.setStyleSheet(label_style)
+        desc_label.setStyleSheet(theme.LABEL_DIM)
         self._desc_input = QtWidgets.QLineEdit()
         form.addRow(desc_label, self._desc_input)
 
@@ -204,11 +173,7 @@ class AddDialog(QtWidgets.QDialog):
         # Run mode
         self._mode_group = QtWidgets.QGroupBox(t("label_run_mode"))
         mode_group = self._mode_group
-        mode_group.setStyleSheet(
-            "QGroupBox { color: #5c6370; font-size: 12px; border: 1px solid #3e4452;"
-            "  border-radius: 4px; margin-top: 8px; padding-top: 16px; }"
-            "QGroupBox::title { subcontrol-origin: margin; left: 10px; }"
-        )
+        mode_group.setStyleSheet(theme.groupbox_style())
         mode_layout = QtWidgets.QVBoxLayout(mode_group)
 
         self._mode_exec = QtWidgets.QRadioButton(t("add_exec_mode"))
@@ -220,13 +185,7 @@ class AddDialog(QtWidgets.QDialog):
         mode_func_layout.addWidget(self._mode_func)
         self._func_combo = QtWidgets.QComboBox()
         self._func_combo.setEditable(True)
-        self._func_combo.setStyleSheet(
-            "QComboBox { background: #1d1f23; border: 1px solid #3e4452;"
-            "  border-radius: 4px; padding: 4px 6px; color: #abb2bf; font-size: 13px; }"
-            "QComboBox:focus { border-color: #4d78cc; }"
-            "QComboBox QAbstractItemView { background: #1d1f23; color: #abb2bf;"
-            "  selection-background-color: #4d78cc; }"
-        )
+        self._func_combo.setStyleSheet(theme.combobox_style())
         self._func_combo.lineEdit().setPlaceholderText(t("label_function"))
         mode_func_layout.addWidget(self._func_combo)
         mode_layout.addLayout(mode_func_layout)
@@ -240,20 +199,12 @@ class AddDialog(QtWidgets.QDialog):
         btn_layout.addStretch()
 
         cancel_btn = QtWidgets.QPushButton(t("cancel"))
-        cancel_btn.setStyleSheet(
-            "QPushButton { background: transparent; color: #5c6370;"
-            "  border: 1px solid #3e4452; border-radius: 4px; padding: 6px 16px; }"
-            "QPushButton:hover { background: #1d1f23; }"
-        )
+        cancel_btn.setStyleSheet(theme.btn_ghost())
         cancel_btn.clicked.connect(self.reject)
         btn_layout.addWidget(cancel_btn)
 
         register_btn = QtWidgets.QPushButton(t("register"))
-        register_btn.setStyleSheet(
-            "QPushButton { background: #98c379; color: white;"
-            "  border: none; border-radius: 4px; padding: 6px 16px; }"
-            "QPushButton:hover { background: #a9d487; }"
-        )
+        register_btn.setStyleSheet(theme.btn_success())
         register_btn.clicked.connect(self._on_register)
         register_btn.setDefault(True)
         btn_layout.addWidget(register_btn)
@@ -320,7 +271,7 @@ class AddDialog(QtWidgets.QDialog):
             # Populate function list in dropdown
             self._func_combo.clear()
             if path.endswith(".py"):
-                funcs = _list_functions(path)
+                funcs = list_functions(path)
                 if funcs:
                     self._func_combo.addItems(funcs)
                     self._func_combo.setCurrentIndex(0)

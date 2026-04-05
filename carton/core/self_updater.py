@@ -4,11 +4,7 @@ import json
 import os
 from datetime import datetime, timezone
 
-try:
-    from urllib.request import urlopen, Request
-    from urllib.error import URLError
-except ImportError:
-    from urllib2 import urlopen, Request, URLError
+from carton.compat_urllib import urlopen, Request, URLError
 
 import carton
 from carton.models.version import Version

@@ -3,12 +3,7 @@
 import os
 import shutil
 
-try:
-    from urllib.request import urlopen
-    from urllib.error import URLError
-except ImportError:
-    from urllib2 import urlopen, URLError
-
+from carton.compat_urllib import urlopen, URLError
 from carton.core.hash_verify import verify_sha256
 
 _MAX_RETRIES = 3

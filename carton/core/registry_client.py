@@ -4,21 +4,7 @@ import json
 import os
 import zipfile
 
-try:
-    from urllib.request import urlopen, Request
-    from urllib.error import URLError
-except ImportError:
-    from urllib2 import urlopen, Request, URLError
-
-try:
-    from urllib.parse import urljoin
-except ImportError:
-    from urlparse import urljoin
-
-try:
-    from io import BytesIO
-except ImportError:
-    from StringIO import StringIO as BytesIO
+from carton.compat_urllib import urlopen, Request, URLError, urljoin, BytesIO
 
 
 class RegistryClient:

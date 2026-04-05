@@ -5,6 +5,20 @@ import os
 from carton.core.handlers.base import PackageHandler
 
 
+def _get_inner_handler(inner_type):
+    """Return handler instance for the given inner type, or None."""
+    if inner_type == "python_package":
+        from carton.core.handlers.python_handler import PythonPackageHandler
+        return PythonPackageHandler()
+    elif inner_type == "mel_script":
+        from carton.core.handlers.mel_handler import MelScriptHandler
+        return MelScriptHandler()
+    elif inner_type == "plugin":
+        from carton.core.handlers.plugin_handler import PluginHandler
+        return PluginHandler()
+    return None
+
+
 class LocalHandler(PackageHandler):
     """Delegate local scripts based on their inner type."""
 
@@ -45,31 +59,13 @@ class LocalHandler(PackageHandler):
 
     def launch(self, meta):
         """Delegate based on inner type."""
-        inner_type = self._detect_inner_type(meta)
-        entry = meta.get("entry_point", {})
-
-        if inner_type == "python_package":
-            from carton.core.handlers.python_handler import PythonPackageHandler
-            PythonPackageHandler().launch(meta)
-        elif inner_type == "mel_script":
-            from carton.core.handlers.mel_handler import MelScriptHandler
-            MelScriptHandler().launch(meta)
-        elif inner_type == "plugin":
-            from carton.core.handlers.plugin_handler import PluginHandler
-            PluginHandler().launch(meta)
+        handler = _get_inner_handler(self._detect_inner_type(meta))
+        if handler:
+            handler.launch(meta)
 
     def is_loaded(self, meta):
-        inner_type = self._detect_inner_type(meta)
-        if inner_type == "python_package":
-            from carton.core.handlers.python_handler import PythonPackageHandler
-            return PythonPackageHandler().is_loaded(meta)
-        elif inner_type == "mel_script":
-            from carton.core.handlers.mel_handler import MelScriptHandler
-            return MelScriptHandler().is_loaded(meta)
-        elif inner_type == "plugin":
-            from carton.core.handlers.plugin_handler import PluginHandler
-            return PluginHandler().is_loaded(meta)
-        return False
+        handler = _get_inner_handler(self._detect_inner_type(meta))
+        return handler.is_loaded(meta) if handler else False
 
     def _activate_by_type(self, local_path, meta, env_manager):
         """Add to environment variables based on inner type."""

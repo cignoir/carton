@@ -4,19 +4,10 @@ import json
 import os
 from collections import OrderedDict
 
-try:
-    from urllib.request import urlopen, Request
-    from urllib.error import URLError
-except ImportError:
-    from urllib2 import urlopen, Request, URLError
-
-try:
-    from urllib.parse import urljoin
-except ImportError:
-    from urlparse import urljoin
-
+from carton.compat_urllib import urlopen, Request, URLError, urljoin
 from carton.ui.compat import QtWidgets, QtCore, Qt, wrapInstance
 from carton.ui.i18n import t
+from carton.ui import theme
 from carton.ui.package_card import PackageCard
 from carton.ui.package_detail import PackageDetailPanel
 from carton.ui.settings_dialog import SettingsDialog
@@ -86,16 +77,14 @@ class _PublishTargetDialog(QtWidgets.QDialog):
 
             select_btn = QtWidgets.QPushButton(t("publish"))
             select_btn.setStyleSheet(
-                "QPushButton { background: #98c379; color: white; border: none;"
-                "  border-radius: 6px; padding: 8px; font-weight: 600; }"
-                "QPushButton:hover { background: #a9d487; }"
+                theme.btn_outline(theme.ACCENT_GREEN, theme.ACCENT_GREEN_HOVER)
             )
             select_btn.clicked.connect(self._on_select)
             layout.addWidget(select_btn)
 
             sep = QtWidgets.QFrame()
             sep.setFrameShape(QtWidgets.QFrame.HLine)
-            sep.setStyleSheet("color: #4e5666;")
+            sep.setStyleSheet("color: {};".format(theme.BORDER_HOVER))
             layout.addWidget(sep)
         else:
             self._combo = None
@@ -103,18 +92,14 @@ class _PublishTargetDialog(QtWidgets.QDialog):
         # Create new / Add existing buttons
         new_btn = QtWidgets.QPushButton(t("publish_create_registry"))
         new_btn.setStyleSheet(
-            "QPushButton { background: transparent; color: #61afef;"
-            "  border: 1px solid #61afef; border-radius: 6px; padding: 8px; }"
-            "QPushButton:hover { background: #1d3040; }"
+            theme.btn_outline(theme.ACCENT_LINK, "#1d3040")
         )
         new_btn.clicked.connect(lambda: self.done(2))
         layout.addWidget(new_btn)
 
         add_btn = QtWidgets.QPushButton(t("publish_add_existing_registry"))
         add_btn.setStyleSheet(
-            "QPushButton { background: transparent; color: #7f848e;"
-            "  border: 1px solid #495162; border-radius: 6px; padding: 8px; }"
-            "QPushButton:hover { background: #2c313a; }"
+            theme.btn_outline(theme.TEXT_SECONDARY, theme.BG_HOVER)
         )
         add_btn.clicked.connect(lambda: self.done(3))
         layout.addWidget(add_btn)
@@ -130,48 +115,7 @@ class _PublishTargetDialog(QtWidgets.QDialog):
 
 
 
-_STYLE = """
-QWidget {
-    background-color: #282c34;
-    color: #abb2bf;
-    font-family: "Segoe UI", "Yu Gothic UI", sans-serif;
-}
-QLineEdit {
-    background: #1d1f23;
-    border: 1px solid #3e4452;
-    border-radius: 6px;
-    padding: 7px 12px;
-    color: #abb2bf;
-    font-size: 13px;
-    selection-background-color: #3e4452;
-}
-QLineEdit:focus {
-    border-color: #4d78cc;
-}
-QScrollArea {
-    border: none;
-    background: transparent;
-}
-QScrollBar:vertical {
-    background: transparent;
-    width: 8px;
-    margin: 0;
-}
-QScrollBar::handle:vertical {
-    background: #4e5666;
-    border-radius: 4px;
-    min-height: 30px;
-}
-QScrollBar::handle:vertical:hover {
-    background: #495162;
-}
-QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
-    height: 0;
-}
-QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {
-    background: transparent;
-}
-"""
+_STYLE = theme.MAIN_STYLE
 
 
 class CartonWindow(QtWidgets.QDialog):
@@ -213,29 +157,23 @@ class CartonWindow(QtWidgets.QDialog):
         # -- Sidebar --
         sidebar = QtWidgets.QWidget()
         sidebar.setFixedWidth(160)
-        sidebar.setStyleSheet("QWidget { background: #21252b; }")
+        sidebar.setStyleSheet("QWidget {{ background: {}; }}".format(theme.BG_SIDEBAR))
         sidebar_layout = QtWidgets.QVBoxLayout(sidebar)
         sidebar_layout.setContentsMargins(8, 12, 8, 12)
         sidebar_layout.setSpacing(4)
 
         self._sidebar_list = QtWidgets.QListWidget()
-        self._sidebar_list.setStyleSheet(
-            "QListWidget { background: transparent; border: none; outline: none; }"
-            "QListWidget::item { color: #7f848e; padding: 6px 8px; border-radius: 4px; }"
-            "QListWidget::item:selected { background: #2c313a; color: #d19a66; border-left: 3px solid #d19a66; }"
-            "QListWidget::item:hover { background: #2c313a; }"
-            "QListWidget::item:disabled { background: transparent; padding: 0; }"
-            "QListWidget::item:disabled:hover { background: transparent; }"
-        )
+        self._sidebar_list.setStyleSheet(theme.sidebar_list_style_extended())
         self._sidebar_list.currentRowChanged.connect(self._on_sidebar_changed)
         sidebar_layout.addWidget(self._sidebar_list)
 
         # Settings button at bottom of sidebar
         settings_btn = QtWidgets.QPushButton("⚙  " + t("settings_title").split("—")[-1].strip())
         settings_btn.setStyleSheet(
-            "QPushButton { background: transparent; border: none;"
-            "  color: #495162; font-size: 11px; text-align: left; padding: 6px 8px; }"
-            "QPushButton:hover { color: #7f848e; }"
+            "QPushButton {{ background: transparent; border: none;"
+            "  color: {muted}; font-size: 11px; text-align: left; padding: 6px 8px; }}"
+            "QPushButton:hover {{ color: {dim}; }}".format(
+                muted=theme.TEXT_MUTED, dim=theme.TEXT_SECONDARY)
         )
         settings_btn.clicked.connect(self._open_settings)
         sidebar_layout.addWidget(settings_btn)
@@ -253,23 +191,24 @@ class CartonWindow(QtWidgets.QDialog):
         self._update_banner.setFixedHeight(32)
         self._update_banner.setStyleSheet(
             "QWidget { background: #2a2517; border: 1px solid #3e3520; border-radius: 6px; }"
-        )
+        )  # Unique banner colors intentionally not in theme
         self._update_banner.setVisible(False)
         banner_layout = QtWidgets.QHBoxLayout(self._update_banner)
         banner_layout.setContentsMargins(10, 0, 6, 0)
         banner_layout.setSpacing(8)
         self._update_banner_label = QtWidgets.QLabel()
         self._update_banner_label.setStyleSheet(
-            "color: #d19a66; font-size: 11px; background: transparent;"
+            "color: {}; font-size: 11px; background: transparent;".format(theme.ACCENT_ORANGE)
         )
         banner_layout.addWidget(self._update_banner_label)
         banner_layout.addStretch()
         self._update_banner_btn = QtWidgets.QPushButton(t("update"))
         self._update_banner_btn.setFixedHeight(20)
         self._update_banner_btn.setStyleSheet(
-            "QPushButton { background: #d19a66; color: white; border: none;"
-            "  border-radius: 3px; padding: 0 10px; font-size: 11px; }"
-            "QPushButton:hover { background: #e0a972; }"
+            "QPushButton {{ background: {bg}; color: white; border: none;"
+            "  border-radius: 3px; padding: 0 10px; font-size: 11px; }}"
+            "QPushButton:hover {{ background: {hover}; }}".format(
+                bg=theme.ACCENT_ORANGE, hover=theme.ACCENT_ORANGE_HOVER)
         )
         self._update_banner_btn.clicked.connect(self._on_self_update)
         self._update_banner_btn.setVisible(False)
@@ -286,9 +225,12 @@ class CartonWindow(QtWidgets.QDialog):
         refresh_btn = QtWidgets.QPushButton("↻")
         refresh_btn.setFixedSize(28, 28)
         refresh_btn.setStyleSheet(
-            "QPushButton { background: transparent; border: 1px solid #3e4452;"
-            "  border-radius: 6px; font-size: 16px; color: #5c6370; }"
-            "QPushButton:hover { background: #2c313a; color: #abb2bf; border-color: #4e5666; }"
+            "QPushButton {{ background: transparent; border: 1px solid {border};"
+            "  border-radius: 6px; font-size: 16px; color: {dim}; }}"
+            "QPushButton:hover {{ background: {hover}; color: {text};"
+            "  border-color: {border_hover}; }}".format(
+                border=theme.BORDER, dim=theme.TEXT_DIM, hover=theme.BG_HOVER,
+                text=theme.TEXT_PRIMARY, border_hover=theme.BORDER_HOVER)
         )
         refresh_btn.clicked.connect(self.refresh)
         search_row.addWidget(refresh_btn)
@@ -303,10 +245,13 @@ class CartonWindow(QtWidgets.QDialog):
             btn.setCheckable(True)
             btn.setFixedHeight(28)
             btn.setStyleSheet(
-                "QPushButton { background: transparent; border: none;"
-                "  color: #5c6370; font-size: 12px; padding: 0 12px; }"
-                "QPushButton:hover { color: #7f848e; }"
-                "QPushButton:checked { color: #d19a66; border-bottom: 2px solid #d19a66; }"
+                "QPushButton {{ background: transparent; border: none;"
+                "  color: {dim}; font-size: 12px; padding: 0 12px; }}"
+                "QPushButton:hover {{ color: {sec}; }}"
+                "QPushButton:checked {{ color: {orange};"
+                "  border-bottom: 2px solid {orange}; }}".format(
+                    dim=theme.TEXT_DIM, sec=theme.TEXT_SECONDARY,
+                    orange=theme.ACCENT_ORANGE)
             )
         self._tab_installed.setChecked(True)
         self._tab_all.clicked.connect(lambda: self._set_tab("all"))
@@ -318,9 +263,12 @@ class CartonWindow(QtWidgets.QDialog):
         self._register_btn = QtWidgets.QPushButton(t("register_script"))
         self._register_btn.setFixedHeight(28)
         self._register_btn.setStyleSheet(
-            "QPushButton { background: transparent; border: 1px solid #3e4452;"
-            "  border-radius: 6px; color: #5c6370; font-size: 12px; padding: 0 10px; }"
-            "QPushButton:hover { background: #2c313a; color: #abb2bf; border-color: #4e5666; }"
+            "QPushButton {{ background: transparent; border: 1px solid {border};"
+            "  border-radius: 6px; color: {dim}; font-size: 12px; padding: 0 10px; }}"
+            "QPushButton:hover {{ background: {hover}; color: {text};"
+            "  border-color: {border_hover}; }}".format(
+                border=theme.BORDER, dim=theme.TEXT_DIM, hover=theme.BG_HOVER,
+                text=theme.TEXT_PRIMARY, border_hover=theme.BORDER_HOVER)
         )
         self._register_btn.clicked.connect(self._on_add_script)
         self._register_btn.setVisible(False)
@@ -339,7 +287,9 @@ class CartonWindow(QtWidgets.QDialog):
         self._card_layout.setSpacing(8)
 
         self._loading_label = QtWidgets.QLabel(t("loading"))
-        self._loading_label.setStyleSheet("color: #5c6370; font-size: 13px; background: transparent;")
+        self._loading_label.setStyleSheet(
+            "color: {}; font-size: 13px; background: transparent;".format(theme.TEXT_DIM)
+        )
         self._loading_label.setAlignment(Qt.AlignCenter)
         self._card_layout.addWidget(self._loading_label)
         self._card_layout.addStretch()
@@ -477,7 +427,7 @@ class CartonWindow(QtWidgets.QDialog):
         sep_lay.setContentsMargins(8, 6, 8, 6)
         sep_line = QtWidgets.QFrame()
         sep_line.setFixedHeight(1)
-        sep_line.setStyleSheet("background: #3e4452;")
+        sep_line.setStyleSheet("background: {};".format(theme.BORDER))
         sep_lay.addWidget(sep_line)
         self._sidebar_list.setItemWidget(sep, sep_container)
 
@@ -985,16 +935,17 @@ class CartonWindow(QtWidgets.QDialog):
                             btn.setText(t("installing"))
                             btn.setEnabled(False)
                             btn.setStyleSheet(
-                                "QPushButton { background: #4e5666; color: #5c6370; border: none;"
-                                "  border-radius: 6px; padding: 6px; font-weight: 600; font-size: 12px; }"
+                                theme.btn_card_action(
+                                    theme.BORDER_HOVER, theme.BORDER_HOVER,
+                                    text_color=theme.TEXT_DIM)
                             )
                         else:
                             btn.setText(t("install"))
                             btn.setEnabled(True)
                             btn.setStyleSheet(
-                                "QPushButton { background: #98c379; color: #282c34; border: none;"
-                                "  border-radius: 6px; padding: 6px; font-weight: 600; font-size: 12px; }"
-                                "QPushButton:hover { background: #a9d487; }"
+                                theme.btn_card_action(
+                                    theme.ACCENT_GREEN, theme.ACCENT_GREEN_HOVER,
+                                    text_color=theme.BG_PRIMARY)
                             )
                         return
 
