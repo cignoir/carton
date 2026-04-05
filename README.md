@@ -1,119 +1,108 @@
 # Carton
 
-A local-first package manager for Maya. Manage distribution, installation, and updates of your tools through local registries.
+A local-first package manager for Autodesk Maya.
 
 [日本語版はこちら](README_ja.md)
 
-## Features
+## What is Carton?
 
-- **Local First** — No AWS or cloud services required. Works with local directories only
-- **Multiple Registries** — Add registries per team, project, or personal use
-- **One-Click Install** — Drag & drop a `.py` file onto Maya's viewport
-- **Local Script Registration** — Register single files or folders from the UI. Reference-based, so edits are reflected immediately
-- **Publish / Unpublish** — Share locally registered scripts to a registry, or remove them
-- **Auto Update** — Carton itself updates automatically from GitHub Releases
-- **Language-Specific Installers** — Choose auto-detect, Japanese, or English
-- **Emoji Icons** — Use emoji as package icons. Image files also supported
-- **UUID Persistence** — Package identity is preserved across Remove and re-Add cycles
-- **CLI Admin Tools** — List and force-unpublish packages from the command line
-- **VCS Agnostic** — Registries work with Git, SVN, network drives, or anything
+Carton lets you **distribute, install, and update** Maya tools across your team without any cloud services. Everything runs on local directories or shared drives.
+
+```
+ You                          Team
+ ┌──────────┐   Publish    ┌──────────────────────────┐    Install    ┌──────────┐
+ │ My Tools │ ──────────>  │  Registry (shared drive) │  <────────── │  Artist  │
+ │ - Rigger │              │  registry.json           │              │  Maya    │
+ │ - Shader │              │  packages/               │              └──────────┘
+ └──────────┘              │  icons/                  │              ┌──────────┐
+                           │  icons.zip               │  <────────── │  Artist  │
+                           └──────────────────────────┘    Install    │  Maya    │
+                                                                     └──────────┘
+```
+
+**Registry** = A shared folder containing `registry.json` + packaged tools.
+Anyone with access to the folder can install tools from it.
+
+## Key Concepts
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│  Carton (in Maya)                                                   │
+│                                                                     │
+│  ┌─── My Tools ───────────────┐  ┌─── Registry A ───────────────┐  │
+│  │                             │  │                               │  │
+│  │  Local scripts/folders      │  │  Team-shared packages         │  │
+│  │  registered by reference    │  │  installed from registry.json │  │
+│  │                             │  │                               │  │
+│  │  [Publish] ─────────────────│──│─> adds to registry            │  │
+│  │                             │  │                               │  │
+│  └─────────────────────────────┘  └───────────────────────────────┘  │
+│                                   ┌─── Registry B ───────────────┐  │
+│                                   │  Another team / project       │  │
+│                                   └───────────────────────────────┘  │
+└─────────────────────────────────────────────────────────────────────┘
+```
+
+- **My Tools** — Scripts you register locally. Reference-based: edits to the original files take effect immediately.
+- **Registry** — A shared directory of packaged tools. Can be a local folder, network drive, Git repo, or remote URL.
+- **Publish** — Package a local tool and add it to a registry so others can install it.
 
 ## Requirements
 
 - Maya 2024 / 2025 / 2026 / 2027
-- PySide2 (Maya < 2025) / PySide6 (Maya >= 2025)
 
 ## Quick Start
 
-### Installation
+### Install Carton
 
-1. Download an installer from [Releases](https://github.com/cignoir/carton/releases):
-   - `install_carton_v*` — Auto-detect language from Maya
-   - `install_carton_ja_v*` — Force Japanese
-   - `install_carton_en_v*` — Force English
-2. Open Maya and drag & drop the file onto the viewport
+1. Download an installer from [Releases](https://github.com/cignoir/carton/releases)
+2. Drag & drop the `.py` file onto Maya's viewport
 3. Restart Maya
-4. Menu bar: "Carton" > "Open Carton"
+4. Menu: **Carton > Open Carton**
 
-### Add a Registry
+### Use a Registry
 
-1. Carton > Settings (⚙) > + Add
-2. Select the path to a `registry.json`
+```
+Settings (⚙) > Add > select registry.json
+```
+
+Supports three sources:
+- **Local file** — path to `registry.json`
+- **GitHub repo** — `owner/repo` format
+- **Remote URL** — direct URL to `registry.json`
 
 ### Install a Tool
 
-1. Open Carton — package list from registries is displayed
-2. Click Install
+Open Carton, browse packages, click **Install**.
 
-### Register & Share a Script
+### Register & Share Your Script
 
-1. Carton > + Add > Select a file or folder
-2. Set Display Name, Icon, Run Mode > Register
-3. Click Publish > Select target registry > Shared
+```
+My Tools > + Add > select file or folder
+                 > set name, icon, description
+                 > Register
 
-### Unpublish
-
-- From the Edit dialog: click a local package > Unpublish (shown when the same UUID exists in a registry)
-- From the CLI: `python -m carton unpublish --registry path/to/registry.json --id <uuid>`
-
-## CLI
-
-```bash
-# List all packages in a registry
-python -m carton list path/to/registry.json
-
-# Force-unpublish a package (admin)
-python -m carton unpublish --registry path/to/registry.json --id <uuid>
-python -m carton unpublish --registry path/to/registry.json --id <uuid> --force
+Card > Publish > select target registry
 ```
 
 ## Registry Structure
 
-A registry is a directory containing `registry.json`. Manage it with VCS, put it on a network drive — whatever works for you.
-
 ```
 my-registry/
-├── registry.json
+├── registry.json          # Package index
 ├── packages/
 │   └── {uuid}/{version}/
 │       └── {name}-{version}.zip
-└── icons/
-    └── {name}.png  (optional)
+├── icons/
+│   └── {name}.png         # Per-package icon
+└── icons.zip              # Bundled icons for remote registries
 ```
 
-### registry.json
-
-```json
-{
-  "schema_version": "2.0",
-  "packages": {
-    "uuid-here": {
-      "name": "my_tool",
-      "display_name": "My Tool",
-      "type": "python_package",
-      "icon": "🔧",
-      "description": "Tool description",
-      "author": "your_name",
-      "latest_version": "1.0.0",
-      "versions": {
-        "1.0.0": {
-          "download_url": "packages/uuid-here/1.0.0/my_tool-1.0.0.zip",
-          "sha256": "...",
-          "size_bytes": 12345,
-          "maya_versions": ["2024", "2025", "2026", "2027"],
-          "released_at": "2026-04-03T00:00:00Z"
-        }
-      }
-    }
-  }
-}
-```
-
-`download_url` is relative to registry.json's parent directory. Absolute paths and URLs are also accepted.
+Manage it with Git, put it on a network drive, or host it as static files — whatever works for your team.
 
 ## package.json
 
-Metadata file placed in each tool repository.
+Place this in your tool's root to define metadata:
 
 ```json
 {
@@ -121,9 +110,8 @@ Metadata file placed in each tool repository.
   "display_name": "My Tool",
   "version": "1.0.0",
   "type": "python_package",
-  "description": "Tool description",
+  "description": "What this tool does",
   "author": "your_name",
-  "maya_versions": ["2024", "2025", "2026", "2027"],
   "entry_point": {
     "type": "python",
     "module": "my_tool",
@@ -133,62 +121,26 @@ Metadata file placed in each tool repository.
 }
 ```
 
-`icon` accepts an emoji (`"📷"`) or an image path (`"resources/icon.png"`).
+Supported types: `python_package`, `mel_script`, `plugin`
+
+## CLI
+
+```bash
+python -m carton list path/to/registry.json
+python -m carton unpublish --registry path/to/registry.json --id <uuid>
+```
 
 ## Development
 
-### Build Installers
-
 ```bash
+# Build installers
 python scripts/build_installer.py
-python scripts/build_installer.py --version 1.2.3
-python scripts/build_installer.py --lang ja en    # specific languages only
-```
 
-### Tests
-
-```bash
+# Run tests
 python -m pytest tests/ -v
-```
 
-### Dev Reload in Maya
-
-```python
+# Dev reload in Maya
 exec(open(r"path/to/carton/scripts/dev_reload.py", encoding="utf-8").read())
-```
-
-## Architecture
-
-```
-carton/
-├── carton/                      # Package manager core
-│   ├── __init__.py              # Entry point: startup(), show()
-│   ├── __main__.py              # CLI entry: python -m carton
-│   ├── cli.py                   # Admin CLI (list, unpublish)
-│   ├── core/
-│   │   ├── config.py            # Multi-registry configuration
-│   │   ├── registry_client.py   # Load & merge multiple registries
-│   │   ├── publisher.py         # Publish / unpublish to registry
-│   │   ├── downloader.py        # Local copy / URL download
-│   │   ├── installer.py         # Install / uninstall
-│   │   ├── self_updater.py      # GitHub Releases auto-update
-│   │   ├── script_manager.py    # Local script registration
-│   │   ├── env_manager.py       # Maya environment variable management
-│   │   └── handlers/            # Per-type package handlers
-│   ├── models/
-│   └── ui/
-│       ├── main_window.py       # Registry grouping, unpublish handler
-│       ├── settings_dialog.py   # Registry management UI
-│       ├── add_dialog.py        # Local registration (file / folder)
-│       └── edit_dialog.py       # Metadata editing + unpublish
-├── bootstrap/
-├── installer/
-├── scripts/
-│   ├── build_installer.py       # Build language-specific installers
-│   └── dev_reload.py            # Maya dev reload
-├── .github/workflows/
-│   └── release.yml              # Build & attach to GitHub Releases
-└── tests/
 ```
 
 ## License
