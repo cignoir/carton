@@ -8,39 +8,42 @@ A local-first package manager for Autodesk Maya.
 
 Carton lets you **distribute, install, and update** Maya tools across your team without any cloud services. Everything runs on local directories or shared drives.
 
-```
- You                          Team
- ┌──────────┐   Publish    ┌──────────────────────────┐    Install    ┌──────────┐
- │ My Tools │ ──────────>  │  Registry (shared drive) │  <────────── │  Artist  │
- │ - Rigger │              │  registry.json           │              │  Maya    │
- │ - Shader │              │  packages/               │              └──────────┘
- └──────────┘              │  icons/                  │              ┌──────────┐
-                           │  icons.zip               │  <────────── │  Artist  │
-                           └──────────────────────────┘    Install    │  Maya    │
-                                                                     └──────────┘
+```mermaid
+flowchart LR
+    subgraph You
+        MT["My Tools\n- Rigger\n- Shader"]
+    end
+    subgraph "Registry (shared drive)"
+        R["registry.json\npackages/\nicons/"]
+    end
+    subgraph Team
+        A["Artist A\nMaya"]
+        B["Artist B\nMaya"]
+    end
+    MT -- Publish --> R
+    R -- Install --> A
+    R -- Install --> B
 ```
 
 **Registry** = A shared folder containing `registry.json` + packaged tools.
-Anyone with access to the folder can install tools from it.
+Anyone with access can install tools from it.
 
 ## Key Concepts
 
-```
-┌─────────────────────────────────────────────────────────────────────┐
-│  Carton (in Maya)                                                   │
-│                                                                     │
-│  ┌─── My Tools ───────────────┐  ┌─── Registry A ───────────────┐  │
-│  │                             │  │                               │  │
-│  │  Local scripts/folders      │  │  Team-shared packages         │  │
-│  │  registered by reference    │  │  installed from registry.json │  │
-│  │                             │  │                               │  │
-│  │  [Publish] ─────────────────│──│─> adds to registry            │  │
-│  │                             │  │                               │  │
-│  └─────────────────────────────┘  └───────────────────────────────┘  │
-│                                   ┌─── Registry B ───────────────┐  │
-│                                   │  Another team / project       │  │
-│                                   └───────────────────────────────┘  │
-└─────────────────────────────────────────────────────────────────────┘
+```mermaid
+flowchart TB
+    subgraph Carton["Carton (in Maya)"]
+        subgraph MT["My Tools"]
+            L["Local scripts/folders\nregistered by reference"]
+        end
+        subgraph RA["Registry A"]
+            PA["Team-shared packages\ninstalled from registry.json"]
+        end
+        subgraph RB["Registry B"]
+            PB["Another team / project"]
+        end
+        L -- Publish --> PA
+    end
 ```
 
 - **My Tools** — Scripts you register locally. Reference-based: edits to the original files take effect immediately.
