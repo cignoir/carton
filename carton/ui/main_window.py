@@ -686,6 +686,7 @@ class CartonWindow(QtWidgets.QDialog):
         if result["action"] == "remove":
             if self._script_manager:
                 self._script_manager.unregister(pkg_id)
+            self._rebuild_sidebar()
             self._rebuild_cards()
         elif result["action"] == "save":
             pkg_data["display_name"] = result["display_name"]
@@ -772,6 +773,7 @@ class CartonWindow(QtWidgets.QDialog):
                 namespace=result.get("namespace", ""),
                 home_registry=result.get("home_registry"),
             )
+            self._rebuild_sidebar()
             self._rebuild_cards()
         except Exception as e:
             QtWidgets.QMessageBox.warning(self, t("register_error"), str(e))
