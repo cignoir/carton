@@ -111,7 +111,7 @@ class AddDialog(QtWidgets.QDialog):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setWindowTitle(t("add_title"))
-        self.setFixedSize(440, 360)
+        self.setFixedSize(440, 420)
         self.setStyleSheet(
             theme.dialog_style(
                 "QRadioButton {{ color: {text}; font-size: 13px; }}".format(
@@ -160,7 +160,7 @@ class AddDialog(QtWidgets.QDialog):
         ns_box = QtWidgets.QVBoxLayout()
         ns_box.setSpacing(2)
         self._namespace_input = QtWidgets.QLineEdit()
-        self._namespace_input.setPlaceholderText("optional, required for publish")
+        self._namespace_input.setPlaceholderText("e.g. mystudio (required to publish)")
         self._namespace_preview = QtWidgets.QLabel("")
         self._namespace_preview.setStyleSheet(
             "color: {}; font-size: 11px;".format(theme.TEXT_MUTED)

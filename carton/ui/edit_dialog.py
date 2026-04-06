@@ -20,7 +20,7 @@ class EditDialog(QtWidgets.QDialog):
         self._result = None
 
         self.setWindowTitle(t("edit_title"))
-        self.setFixedSize(440, 480)
+        self.setFixedSize(440, 540)
         self.setStyleSheet(
             theme.dialog_style(
                 theme.combobox_style()
