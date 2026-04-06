@@ -216,12 +216,22 @@ class MayaModuleHandler(PackageHandler):
             shutil.rmtree(package_dir, ignore_errors=True)
 
     def launch(self, meta):
-        # Optional explicit entry_point: behave like a python_package launch
         entry = meta.get("entry_point", {}) or {}
+
+        # Free-form Python launch command (set in EditDialog for modules
+        # whose main window has no obvious top-level function).
+        command = entry.get("command", "")
+        if command:
+            import __main__
+            exec(command, __main__.__dict__)
+            return
+
+        # Structured python entry point: import + call
         if entry.get("type") == "python" and entry.get("module"):
             mod = importlib.import_module(entry["module"])
             func = getattr(mod, entry.get("function", "show"))
             return func()
+
         # Otherwise re-run userSetup.py to (re-)register menus/shelves
         package_dir = meta.get("local_path") or meta.get("path") or ""
         if package_dir and not os.path.isabs(package_dir):

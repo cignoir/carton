@@ -110,8 +110,16 @@ class ScriptManager:
 
     def launch(self, pkg_data):
         """Launch a local script."""
-        entry = pkg_data.get("entry_point", {})
+        entry = pkg_data.get("entry_point", {}) or {}
         ep_type = entry.get("type", "")
+
+        # Maya modules: delegate to the dedicated handler so the same logic
+        # (free-form command, structured python entry, or userSetup re-exec)
+        # runs for both locally-registered and installed-from-registry modules.
+        if pkg_data.get("type") == "maya_module":
+            from carton.core.handlers.maya_module_handler import MayaModuleHandler
+            MayaModuleHandler().launch(pkg_data)
+            return
 
         if ep_type == "plugin":
             # Maya binary plugin (.mll)

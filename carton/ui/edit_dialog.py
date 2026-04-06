@@ -186,19 +186,28 @@ class EditDialog(QtWidgets.QDialog):
         if self._pkg_data.get("type") == "maya_module" and not entry:
             mode_group.setVisible(False)
 
-        # Plugin command (only shown for .mll plugin entries)
+        # Plugin command (also reused for maya_module launch commands).
         self._is_plugin = (ep_type == "plugin"
                            or (local_path and local_path.endswith(".mll")))
-        self._plugin_cmd_label = QtWidgets.QLabel(t("label_plugin_command"))
+        self._is_module = (self._pkg_data.get("type") == "maya_module")
+        self._plugin_cmd_label = QtWidgets.QLabel(
+            t("label_launch_command") if self._is_module else t("label_plugin_command")
+        )
         self._plugin_cmd_label.setStyleSheet(theme.LABEL_DIM)
         self._plugin_cmd_input = QtWidgets.QLineEdit(entry.get("command", ""))
-        self._plugin_cmd_input.setPlaceholderText(
-            "import maya.cmds as mc; mc.exAttrEditor(ui=True)"
-        )
+        if self._is_module:
+            self._plugin_cmd_input.setPlaceholderText(
+                "from siweighteditor.siweighteditor import WeightEditorWindow; WeightEditorWindow()"
+            )
+            self._plugin_cmd_input.setToolTip(t("launch_command_tooltip"))
+        else:
+            self._plugin_cmd_input.setPlaceholderText(
+                "import maya.cmds as mc; mc.exAttrEditor(ui=True)"
+            )
         layout.addWidget(self._plugin_cmd_label)
         layout.addWidget(self._plugin_cmd_input)
 
-        if self._is_plugin:
+        if self._is_plugin or self._is_module:
             mode_group.setVisible(False)
         else:
             self._plugin_cmd_label.setVisible(False)
@@ -263,7 +272,11 @@ class EditDialog(QtWidgets.QDialog):
         local_path = self._pkg_data.get("local_path", "")
         is_mel = local_path.endswith(".mel")
 
-        if self._is_plugin:
+        if self._is_module:
+            # Maya module: entry_point carries only the optional launch command.
+            cmd = self._plugin_cmd_input.text().strip()
+            entry_point = {"command": cmd} if cmd else {}
+        elif self._is_plugin:
             entry_point = {
                 "type": "plugin",
                 "file": os.path.basename(local_path),

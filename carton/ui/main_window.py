@@ -1085,7 +1085,17 @@ class CartonWindow(QtWidgets.QDialog):
         try:
             if pkg_data.get("source") in ("local_script", "published") and self._script_manager:
                 self._script_manager.launch(pkg_data)
-            elif entry_point.get("type") == "exec" and self._script_manager:
+                # Maya modules without an explicit launch command have no
+                # visible feedback (userSetup.py runs deferred), so show a
+                # short confirmation so the click doesn't feel broken.
+                if (pkg_data.get("type") == "maya_module"
+                        and not (entry_point.get("command")
+                                 or entry_point.get("module"))):
+                    QtWidgets.QMessageBox.information(
+                        self, t("activate"), t("activate_done"),
+                    )
+                return
+            if entry_point.get("type") == "exec" and self._script_manager:
                 exec_data = dict(pkg_data)
                 if not exec_data.get("local_path"):
                     pkg_name = pkg_data.get("name", "")
