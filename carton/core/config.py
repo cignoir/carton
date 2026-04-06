@@ -2,6 +2,7 @@
 
 import json
 import os
+import shutil
 import sys
 
 from carton.compat_urllib import urlparse
@@ -20,6 +21,31 @@ def _detect_install_dir():
 
 
 _DEFAULT_INSTALL_DIR = _detect_install_dir()
+
+
+def default_bootstrap_dir():
+    """Return the fixed location of the Carton ``carton/`` Python package.
+
+    This is the directory the bootstrap adds to ``sys.path`` and where
+    ``pending_update.json`` + its staged zip live. It never moves, even if
+    the user reconfigures ``install_dir`` — install_dir is purely a data
+    directory (packages/, installed.json, caches), not a code directory.
+    """
+    return _DEFAULT_INSTALL_DIR
+
+
+def default_config_path():
+    """Return the canonical location of ``config.json``.
+
+    The config file always lives at the default bootstrap location regardless
+    of where ``install_dir`` points, so that we can find it on startup before
+    we know the user's chosen install directory.
+    """
+    return os.path.join(default_bootstrap_dir(), "config.json")
+
+
+class InstallDirChangeError(RuntimeError):
+    """Raised when switching install_dir fails (validation or move error)."""
 
 
 class RegistryEntry:
@@ -78,7 +104,7 @@ class Config:
     def load(cls, path=None):
         """Load config.json. Return defaults if not found."""
         if path is None:
-            path = os.path.join(_DEFAULT_INSTALL_DIR, "config.json")
+            path = default_config_path()
         if os.path.exists(path):
             with open(path, "r", encoding="utf-8") as f:
                 data = json.load(f)
@@ -93,12 +119,100 @@ class Config:
         return cls()
 
     def save(self, path=None):
-        """Write to config.json."""
+        """Write to config.json.
+
+        The config file is always written to the canonical bootstrap location
+        (default: ``~/Documents/maya/carton/config.json`` on Windows) so that
+        ``load()`` can find it regardless of where ``install_dir`` points.
+        """
         if path is None:
-            path = os.path.join(self.install_dir, "config.json")
+            path = default_config_path()
         os.makedirs(os.path.dirname(path), exist_ok=True)
         with open(path, "w", encoding="utf-8") as f:
             json.dump(self.to_dict(), f, indent=2, ensure_ascii=False)
+
+    def change_install_dir(self, new_dir):
+        """Move Carton's install directory to ``new_dir`` and persist the change.
+
+        Moves ``packages/``, ``installed.json``, ``.staging/`` and
+        ``.icon_cache/`` from the current ``install_dir`` to ``new_dir``. The
+        sys.path / MAYA_SCRIPT_PATH entries already registered by the current
+        Maya session point at the old directory, so the caller MUST prompt
+        the user to restart Maya after this returns.
+
+        Raises :class:`InstallDirChangeError` on any validation or I/O
+        failure. On success, ``self.install_dir`` is updated and ``save()``
+        is called.
+        """
+        if not new_dir:
+            raise InstallDirChangeError("New install directory is empty.")
+        new_dir = os.path.abspath(os.path.expanduser(new_dir))
+        old_dir = os.path.abspath(self.install_dir)
+
+        if new_dir == old_dir:
+            return  # No-op
+
+        # Disallow nesting: moving into a subdir of the old tree would make
+        # the move infinite/ambiguous.
+        try:
+            common = os.path.commonpath([old_dir, new_dir])
+        except ValueError:
+            common = ""
+        if common == old_dir:
+            raise InstallDirChangeError(
+                "New directory cannot be inside the current install directory."
+            )
+
+        # New dir must either not exist, or exist and be empty. We refuse to
+        # merge into a populated directory to avoid clobbering unrelated
+        # files.
+        if os.path.exists(new_dir):
+            if not os.path.isdir(new_dir):
+                raise InstallDirChangeError(
+                    "Destination exists and is not a directory: {}".format(new_dir)
+                )
+            if os.listdir(new_dir):
+                raise InstallDirChangeError(
+                    "Destination directory is not empty: {}".format(new_dir)
+                )
+        else:
+            try:
+                os.makedirs(new_dir)
+            except OSError as e:
+                raise InstallDirChangeError(
+                    "Cannot create destination: {}".format(e)
+                )
+
+        # Move each known subpath individually so we never touch files in
+        # the old install_dir that Carton doesn't own (e.g. the user put
+        # their install_dir = ~/maya and we'd otherwise nuke their shelves).
+        _MOVE_ITEMS = ("packages", "installed.json", ".staging", ".icon_cache")
+        moved = []
+        try:
+            for item in _MOVE_ITEMS:
+                src = os.path.join(old_dir, item)
+                if not os.path.exists(src):
+                    continue
+                dst = os.path.join(new_dir, item)
+                shutil.move(src, dst)
+                moved.append((src, dst))
+        except (OSError, shutil.Error) as e:
+            # Roll back anything we already moved so the old location is
+            # usable again.
+            for src, dst in moved:
+                try:
+                    shutil.move(dst, src)
+                except Exception:
+                    pass
+            raise InstallDirChangeError("Failed to move files: {}".format(e))
+
+        self.install_dir = new_dir
+        try:
+            self.save()
+        except OSError as e:
+            raise InstallDirChangeError(
+                "Files moved but config.json save failed: {}".format(e)
+            )
 
     def to_dict(self):
         return {

@@ -9,7 +9,8 @@ import shutil
 import sys
 
 _SRC = r"F:\workspace\carton\carton"
-_DST = os.path.expanduser("~/Documents/maya/carton/carton")
+_BOOTSTRAP_DIR = os.path.expanduser("~/Documents/maya/carton")
+_DST = os.path.join(_BOOTSTRAP_DIR, "carton")
 
 
 def reload_carton():
@@ -31,6 +32,13 @@ def reload_carton():
     if os.path.exists(_DST):
         shutil.rmtree(_DST)
     shutil.copytree(_SRC, _DST)
+
+    # 3b. Ensure the bootstrap dir is on sys.path. If the deployed
+    # userSetup bootstrap is stale (or install_dir was relocated and the
+    # old bootstrap added only the wrong dir to sys.path), this self-heals
+    # the current session so `import carton` below still works.
+    if _BOOTSTRAP_DIR not in sys.path:
+        sys.path.insert(0, _BOOTSTRAP_DIR)
 
     # 4. Recreate menu
     import maya.cmds as cmds

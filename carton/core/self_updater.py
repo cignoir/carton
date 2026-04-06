@@ -7,6 +7,7 @@ from datetime import datetime, timezone
 from carton.compat_urllib import urlopen, Request, URLError
 
 import carton
+from carton.core.config import default_bootstrap_dir
 from carton.models.version import Version
 
 
@@ -77,7 +78,12 @@ class SelfUpdater:
         if not download_url:
             raise RuntimeError("No download URL for update")
 
-        staging_dir = self._config.staging_dir
+        # Stage next to the carton/ Python package — NOT under install_dir.
+        # install_dir may have been relocated by the user and is purely a
+        # data directory; the bootstrap only looks for pending_update.json
+        # in the fixed bootstrap location.
+        bootstrap_dir = default_bootstrap_dir()
+        staging_dir = os.path.join(bootstrap_dir, ".staging")
         os.makedirs(staging_dir, exist_ok=True)
 
         zip_name = "carton-{}.zip".format(version)
@@ -85,25 +91,25 @@ class SelfUpdater:
 
         self._downloader.download(download_url, staged_zip)
 
-        # Write pending_update.json
+        # Write pending_update.json into bootstrap_dir
         pending = {
             "package": "carton",
             "version": version,
             "staged_zip": os.path.join(".staging", zip_name),
             "staged_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
         }
-        pending_path = os.path.join(self._config.install_dir, "pending_update.json")
+        pending_path = os.path.join(bootstrap_dir, "pending_update.json")
         with open(pending_path, "w", encoding="utf-8") as f:
             json.dump(pending, f, indent=2, ensure_ascii=False)
 
         return True
 
     def has_pending_update(self):
-        path = os.path.join(self._config.install_dir, "pending_update.json")
+        path = os.path.join(default_bootstrap_dir(), "pending_update.json")
         return os.path.exists(path)
 
     def get_pending_version(self):
-        path = os.path.join(self._config.install_dir, "pending_update.json")
+        path = os.path.join(default_bootstrap_dir(), "pending_update.json")
         if os.path.exists(path):
             with open(path, "r", encoding="utf-8") as f:
                 return json.load(f).get("version")

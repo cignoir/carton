@@ -42,7 +42,7 @@ class SettingsDialog(QtWidgets.QDialog):
         super().__init__(parent)
         self._config = config
         self.setWindowTitle(t("settings_title"))
-        self.setFixedSize(600, 420)
+        self.setFixedSize(640, 500)
         self.setStyleSheet(
             theme.dialog_style() + theme.listwidget_style()
         )
@@ -112,8 +112,77 @@ class SettingsDialog(QtWidgets.QDialog):
         self._lang_combo.currentIndexChanged.connect(self._on_language_changed)
         layout.addWidget(self._lang_combo)
 
+        # Install directory
+        dir_label = QtWidgets.QLabel(t("settings_install_dir"))
+        dir_label.setStyleSheet(theme.LABEL_DIM_BOLD)
+        layout.addWidget(dir_label)
+
+        dir_row = QtWidgets.QHBoxLayout()
+        dir_row.setSpacing(8)
+        self._install_dir_edit = QtWidgets.QLineEdit(self._config.install_dir)
+        self._install_dir_edit.setReadOnly(True)
+        self._install_dir_edit.setStyleSheet(
+            "QLineEdit {{ background: {bg}; color: {text};"
+            "  border: 1px solid {border}; border-radius: 4px; padding: 4px 6px; }}".format(
+                bg=theme.BG_SECONDARY, text=theme.TEXT_SECONDARY, border=theme.BORDER)
+        )
+        dir_row.addWidget(self._install_dir_edit, stretch=1)
+
+        change_btn = QtWidgets.QPushButton(t("settings_install_dir_change"))
+        change_btn.setStyleSheet(theme.btn_ghost_text())
+        change_btn.clicked.connect(self._on_change_install_dir)
+        dir_row.addWidget(change_btn)
+        layout.addLayout(dir_row)
+
+        hint = QtWidgets.QLabel(t("settings_install_dir_hint"))
+        hint.setWordWrap(True)
+        hint.setStyleSheet(
+            "color: {}; font-size: 11px;".format(theme.TEXT_MUTED)
+        )
+        layout.addWidget(hint)
+
         layout.addStretch()
         return page
+
+    def _on_change_install_dir(self):
+        """Prompt for a new install_dir and migrate Carton's data there."""
+        from carton.core.config import InstallDirChangeError
+
+        current = self._config.install_dir
+        # Start the picker at the parent of the current install dir so the
+        # user lands somewhere sensible (their Documents folder, usually).
+        start_at = os.path.dirname(current) if os.path.isdir(current) else ""
+        new_dir = QtWidgets.QFileDialog.getExistingDirectory(
+            self, t("settings_install_dir_select"), start_at,
+        )
+        if not new_dir:
+            return
+        new_dir = os.path.normpath(new_dir)
+        if os.path.normpath(new_dir) == os.path.normpath(current):
+            return
+
+        reply = QtWidgets.QMessageBox.question(
+            self, t("settings_install_dir"),
+            t("settings_install_dir_confirm", current, new_dir),
+            QtWidgets.QMessageBox.Yes | QtWidgets.QMessageBox.No,
+            QtWidgets.QMessageBox.No,
+        )
+        if reply != QtWidgets.QMessageBox.Yes:
+            return
+
+        try:
+            self._config.change_install_dir(new_dir)
+        except InstallDirChangeError as e:
+            QtWidgets.QMessageBox.warning(
+                self, t("settings_install_dir_error"), str(e),
+            )
+            return
+
+        self._install_dir_edit.setText(self._config.install_dir)
+        QtWidgets.QMessageBox.information(
+            self, t("settings_install_dir"),
+            t("settings_install_dir_restart_required", self._config.install_dir),
+        )
 
     def _on_language_changed(self, index):
         lang = self._lang_combo.itemData(index)

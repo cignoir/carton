@@ -4,7 +4,9 @@ import json
 import os
 import tempfile
 
-from carton.core.config import Config, RegistryEntry
+import pytest
+
+from carton.core.config import Config, InstallDirChangeError, RegistryEntry
 
 
 class TestConfig:
@@ -44,6 +46,90 @@ class TestConfig:
         c.remove_registry("a")
         assert len(c.registries) == 1
         assert c.registries[0].name == "b"
+
+
+class TestChangeInstallDir:
+    def _seed(self, install_dir):
+        """Populate install_dir with the files change_install_dir should move."""
+        os.makedirs(os.path.join(install_dir, "packages", "ns", "pkg"))
+        with open(os.path.join(install_dir, "packages", "ns", "pkg", "marker.txt"), "w") as f:
+            f.write("hello")
+        with open(os.path.join(install_dir, "installed.json"), "w") as f:
+            f.write('{"schema_version": "3.0", "packages": {}}')
+        os.makedirs(os.path.join(install_dir, ".staging"))
+        os.makedirs(os.path.join(install_dir, ".icon_cache"))
+
+    def test_move_to_new_empty_dir(self, tmp_path, monkeypatch):
+        old = tmp_path / "old"
+        new = tmp_path / "new"
+        old.mkdir()
+        self._seed(str(old))
+
+        # Redirect config.json to a tmp location so save() doesn't touch
+        # the user's real home during tests.
+        config_path = tmp_path / "config.json"
+        monkeypatch.setattr(
+            "carton.core.config.default_config_path",
+            lambda: str(config_path),
+        )
+
+        c = Config(install_dir=str(old))
+        c.change_install_dir(str(new))
+
+        assert c.install_dir == os.path.abspath(str(new))
+        assert (new / "packages" / "ns" / "pkg" / "marker.txt").exists()
+        assert (new / "installed.json").exists()
+        assert not (old / "packages").exists()
+        assert not (old / "installed.json").exists()
+        # config.json was persisted to the canonical bootstrap path
+        assert config_path.exists()
+        with open(config_path) as f:
+            data = json.load(f)
+        assert data["install_dir"] == os.path.abspath(str(new))
+
+    def test_refuses_non_empty_destination(self, tmp_path, monkeypatch):
+        old = tmp_path / "old"
+        new = tmp_path / "new"
+        old.mkdir()
+        new.mkdir()
+        (new / "something.txt").write_text("existing content")
+        self._seed(str(old))
+
+        monkeypatch.setattr(
+            "carton.core.config.default_config_path",
+            lambda: str(tmp_path / "config.json"),
+        )
+        c = Config(install_dir=str(old))
+        with pytest.raises(InstallDirChangeError, match="not empty"):
+            c.change_install_dir(str(new))
+        # Old location is untouched
+        assert (old / "packages" / "ns" / "pkg" / "marker.txt").exists()
+
+    def test_refuses_nesting(self, tmp_path, monkeypatch):
+        old = tmp_path / "old"
+        old.mkdir()
+        self._seed(str(old))
+        nested = old / "inside"
+        monkeypatch.setattr(
+            "carton.core.config.default_config_path",
+            lambda: str(tmp_path / "config.json"),
+        )
+        c = Config(install_dir=str(old))
+        with pytest.raises(InstallDirChangeError, match="inside"):
+            c.change_install_dir(str(nested))
+
+    def test_same_dir_is_noop(self, tmp_path, monkeypatch):
+        old = tmp_path / "old"
+        old.mkdir()
+        self._seed(str(old))
+        monkeypatch.setattr(
+            "carton.core.config.default_config_path",
+            lambda: str(tmp_path / "config.json"),
+        )
+        c = Config(install_dir=str(old))
+        c.change_install_dir(str(old))  # Should silently return
+        assert c.install_dir == str(old)
+        assert (old / "installed.json").exists()
 
 
 class TestRegistryEntry:

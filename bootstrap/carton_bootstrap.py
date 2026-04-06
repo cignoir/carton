@@ -2,8 +2,12 @@
 
 Called from userSetup.py, performs the following:
 1. Apply pending_update.json if present (self-update)
-2. Add install_dir to sys.path
-3. Call carton.startup()
+2. Add the bootstrap dir (where the carton/ package lives) to sys.path
+3. Call carton.startup() — Config inside the package figures out install_dir
+
+The bootstrap dir is fixed to the default OS location. install_dir (a
+separate config value) controls only where DATA is stored (packages/,
+installed.json, caches), not where the Python package lives.
 """
 
 import json
@@ -13,39 +17,31 @@ import sys
 import traceback
 import zipfile
 
-def _find_default_install_dir():
-    """Detect install directory — must match carton.core.config._detect_install_dir."""
+def _find_bootstrap_dir():
+    """Location of the carton/ Python package. Never moves."""
     if sys.platform == "win32":
         return os.path.normpath(os.path.expanduser("~/Documents/maya/carton"))
     return os.path.normpath(os.path.expanduser("~/maya/carton"))
 
 
-def _get_install_dir():
-    """Read install_dir from config.json. Use default if not found."""
-    default = _find_default_install_dir()
-    config_path = os.path.join(default, "config.json")
-    if os.path.exists(config_path):
-        try:
-            with open(config_path, "r", encoding="utf-8") as f:
-                config = json.load(f)
-            return config.get("install_dir", default)
-        except (json.JSONDecodeError, OSError):
-            pass
-    return default
+def _apply_pending_update(bootstrap_dir):
+    """Apply Carton self-update if pending_update.json exists.
 
-
-def _apply_pending_update(install_dir):
-    """Apply Carton self-update if pending_update.json exists."""
-    pending_file = os.path.join(install_dir, "pending_update.json")
+    Both pending_update.json and the staged zip live next to the carton/
+    Python package in ``bootstrap_dir`` (not under install_dir), so that
+    self-update still works regardless of where the user pointed
+    install_dir.
+    """
+    pending_file = os.path.join(bootstrap_dir, "pending_update.json")
     if not os.path.exists(pending_file):
         return
 
     with open(pending_file, "r", encoding="utf-8") as f:
         pending = json.load(f)
 
-    carton_dir = os.path.join(install_dir, "carton")
-    backup_dir = os.path.join(install_dir, "carton.bak")
-    staged_zip = os.path.join(install_dir, pending["staged_zip"])
+    carton_dir = os.path.join(bootstrap_dir, "carton")
+    backup_dir = os.path.join(bootstrap_dir, "carton.bak")
+    staged_zip = os.path.join(bootstrap_dir, pending["staged_zip"])
 
     if not os.path.exists(staged_zip):
         print("[Carton] Staged zip not found: {}".format(staged_zip))
@@ -61,7 +57,7 @@ def _apply_pending_update(install_dir):
 
         # Extract
         with zipfile.ZipFile(staged_zip, "r") as zf:
-            zf.extractall(install_dir)
+            zf.extractall(bootstrap_dir)
 
         # Success -> cleanup
         os.remove(pending_file)
@@ -91,15 +87,16 @@ def _apply_pending_update(install_dir):
 
 def start():
     """Bootstrap Carton."""
-    install_dir = _get_install_dir()
+    bootstrap_dir = _find_bootstrap_dir()
 
-    # Apply self-update
-    _apply_pending_update(install_dir)
+    # Apply self-update (extracts carton/ into bootstrap_dir)
+    _apply_pending_update(bootstrap_dir)
 
-    # Add to sys.path
-    if install_dir not in sys.path:
-        sys.path.insert(0, install_dir)
+    # Make the carton/ package importable
+    if bootstrap_dir not in sys.path:
+        sys.path.insert(0, bootstrap_dir)
 
-    # Start Carton
+    # Start Carton — carton.startup() will load Config and honor whatever
+    # install_dir the user has configured for DATA storage.
     import carton
     carton.startup()
