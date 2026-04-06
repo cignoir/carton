@@ -192,6 +192,18 @@ class AddDialog(QtWidgets.QDialog):
 
         layout.addWidget(mode_group)
 
+        # Plugin command (only shown for .mll files)
+        self._plugin_cmd_label = QtWidgets.QLabel(t("label_plugin_command"))
+        self._plugin_cmd_label.setStyleSheet(theme.LABEL_DIM)
+        self._plugin_cmd_input = QtWidgets.QLineEdit()
+        self._plugin_cmd_input.setPlaceholderText(
+            "import maya.cmds as mc; mc.exAttrEditor(ui=True)"
+        )
+        self._plugin_cmd_label.setVisible(False)
+        self._plugin_cmd_input.setVisible(False)
+        layout.addWidget(self._plugin_cmd_label)
+        layout.addWidget(self._plugin_cmd_input)
+
         layout.addStretch()
 
         # Buttons
@@ -222,7 +234,7 @@ class AddDialog(QtWidgets.QDialog):
     def _browse_file(self):
         path, _ = QtWidgets.QFileDialog.getOpenFileName(
             self, t("add_browse_file"), "",
-            "Scripts (*.py *.mel);;Python (*.py);;MEL (*.mel)",
+            "Scripts (*.py *.mel *.mll);;Python (*.py);;MEL (*.mel);;Plugin (*.mll)",
         )
         if not path:
             return
@@ -238,6 +250,10 @@ class AddDialog(QtWidgets.QDialog):
         self._selected_path = path
         self._is_folder = is_folder
         self._path_input.setText(path)
+
+        # Hide plugin command by default; only shown for .mll files
+        self._plugin_cmd_label.setVisible(False)
+        self._plugin_cmd_input.setVisible(False)
 
         if is_folder:
             info = _detect_from_folder(path)
@@ -270,7 +286,13 @@ class AddDialog(QtWidgets.QDialog):
 
             # Populate function list in dropdown
             self._func_combo.clear()
-            if path.endswith(".py"):
+            is_plugin = path.endswith(".mll")
+            self._plugin_cmd_label.setVisible(is_plugin)
+            self._plugin_cmd_input.setVisible(is_plugin)
+            if is_plugin:
+                # Binary plugin — no functions to list, hide run mode options
+                self._mode_group.setVisible(False)
+            elif path.endswith(".py"):
                 funcs = list_functions(path)
                 if funcs:
                     self._func_combo.addItems(funcs)
@@ -325,8 +347,18 @@ class AddDialog(QtWidgets.QDialog):
     def _build_file_result(self, path, display_name, func, icon, description, is_exec_mode):
         basename = os.path.splitext(os.path.basename(path))[0]
         is_mel = path.endswith(".mel")
+        is_plugin = path.endswith(".mll")
 
-        if is_exec_mode:
+        if is_plugin:
+            entry_point = {
+                "type": "plugin",
+                "file": os.path.basename(path),
+            }
+            plugin_cmd = self._plugin_cmd_input.text().strip()
+            if plugin_cmd:
+                entry_point["command"] = plugin_cmd
+            pkg_type = "plugin"
+        elif is_exec_mode:
             entry_point = {
                 "type": "exec",
                 "file": os.path.basename(path),

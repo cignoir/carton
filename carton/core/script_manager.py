@@ -104,12 +104,35 @@ class ScriptManager:
         entry = pkg_data.get("entry_point", {})
         ep_type = entry.get("type", "")
 
-        if ep_type == "exec":
+        if ep_type == "plugin":
+            # Maya binary plugin (.mll)
+            import maya.cmds
+            local_path = pkg_data.get("local_path", "")
+            plugin_file = entry.get("file", "")
+            if local_path and os.path.isfile(local_path):
+                plugin_path = local_path
+            elif local_path and os.path.isdir(local_path):
+                plugin_path = os.path.join(local_path, plugin_file)
+            else:
+                plugin_path = plugin_file
+            if not maya.cmds.pluginInfo(plugin_path, q=True, loaded=True):
+                maya.cmds.loadPlugin(plugin_path)
+            # Optional: run a command after loading (e.g. to open the UI)
+            command = entry.get("command", "")
+            if command:
+                import __main__
+                exec(command, __main__.__dict__)
+        elif ep_type == "exec":
             # Top-level execution
             local_path = pkg_data.get("local_path", "")
             if not local_path or not os.path.exists(local_path):
                 raise RuntimeError("Script not found: {}".format(local_path))
-            if local_path.endswith(".mel"):
+            if local_path.endswith(".mll"):
+                # Legacy: .mll registered as exec before plugin type existed
+                import maya.cmds
+                if not maya.cmds.pluginInfo(local_path, q=True, loaded=True):
+                    maya.cmds.loadPlugin(local_path)
+            elif local_path.endswith(".mel"):
                 import maya.mel
                 maya.mel.eval('source "{}"'.format(local_path.replace("\\", "/")))
             else:
@@ -157,7 +180,9 @@ class ScriptManager:
         else:
             # File: add the file's directory
             script_dir = os.path.dirname(path)
-            if pkg_type == "python_package":
+            if pkg_type == "plugin":
+                self._env_mgr.add_env_path("MAYA_PLUG_IN_PATH", script_dir)
+            elif pkg_type == "python_package":
                 self._env_mgr.add_python_path(script_dir)
             elif pkg_type == "mel_script":
                 self._env_mgr.add_env_path("MAYA_SCRIPT_PATH", script_dir)
@@ -177,7 +202,9 @@ class ScriptManager:
                                               scripts_dir if os.path.isdir(scripts_dir) else path)
         else:
             script_dir = os.path.dirname(path)
-            if pkg_type == "python_package":
+            if pkg_type == "plugin":
+                self._env_mgr.remove_env_path("MAYA_PLUG_IN_PATH", script_dir)
+            elif pkg_type == "python_package":
                 if script_dir in sys.path:
                     sys.path.remove(script_dir)
             elif pkg_type == "mel_script":

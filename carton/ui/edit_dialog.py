@@ -139,6 +139,25 @@ class EditDialog(QtWidgets.QDialog):
             self._mode_func.setChecked(True)
 
         layout.addWidget(mode_group)
+
+        # Plugin command (only shown for .mll plugin entries)
+        self._is_plugin = (ep_type == "plugin"
+                           or (local_path and local_path.endswith(".mll")))
+        self._plugin_cmd_label = QtWidgets.QLabel(t("label_plugin_command"))
+        self._plugin_cmd_label.setStyleSheet(theme.LABEL_DIM)
+        self._plugin_cmd_input = QtWidgets.QLineEdit(entry.get("command", ""))
+        self._plugin_cmd_input.setPlaceholderText(
+            "import maya.cmds as mc; mc.exAttrEditor(ui=True)"
+        )
+        layout.addWidget(self._plugin_cmd_label)
+        layout.addWidget(self._plugin_cmd_input)
+
+        if self._is_plugin:
+            mode_group.setVisible(False)
+        else:
+            self._plugin_cmd_label.setVisible(False)
+            self._plugin_cmd_input.setVisible(False)
+
         layout.addStretch()
 
         # Buttons
@@ -186,12 +205,21 @@ class EditDialog(QtWidgets.QDialog):
             return
 
         name = self._pkg_data.get("name", "")
-        is_mel = self._pkg_data.get("local_path", "").endswith(".mel")
+        local_path = self._pkg_data.get("local_path", "")
+        is_mel = local_path.endswith(".mel")
 
-        if self._mode_exec.isChecked():
+        if self._is_plugin:
+            entry_point = {
+                "type": "plugin",
+                "file": os.path.basename(local_path),
+            }
+            cmd = self._plugin_cmd_input.text().strip()
+            if cmd:
+                entry_point["command"] = cmd
+        elif self._mode_exec.isChecked():
             entry_point = {
                 "type": "exec",
-                "file": os.path.basename(self._pkg_data.get("local_path", "")),
+                "file": os.path.basename(local_path),
             }
         elif is_mel:
             entry_point = {
