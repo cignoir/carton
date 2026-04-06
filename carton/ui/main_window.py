@@ -818,8 +818,7 @@ class CartonWindow(QtWidgets.QDialog):
         if home_name and home_name != target_registry.name:
             reply = QtWidgets.QMessageBox.question(
                 self, t("publish"),
-                "This package's home registry is '{}'. Publish to '{}' instead?".format(
-                    home_name, target_registry.name),
+                t("publish_home_registry_mismatch", home_name, target_registry.name),
                 QtWidgets.QMessageBox.Yes | QtWidgets.QMessageBox.No,
             )
             if reply != QtWidgets.QMessageBox.Yes:
@@ -831,8 +830,7 @@ class CartonWindow(QtWidgets.QDialog):
             from carton.core.identity import slugify_namespace
             ns, ok = QtWidgets.QInputDialog.getText(
                 self, t("publish"),
-                "Enter a namespace for this package "
-                "(spaces and capitals will be auto-converted):",
+                t("publish_namespace_prompt"),
             )
             if not ok or not ns.strip():
                 return
