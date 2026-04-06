@@ -6,6 +6,7 @@ from carton.ui.compat import QtWidgets, QtCore, Qt
 from carton.ui.i18n import t
 from carton.ui import theme
 from carton.ui.utils import list_functions
+from carton.core.identity import slugify_namespace
 
 
 class EditDialog(QtWidgets.QDialog):
@@ -48,8 +49,15 @@ class EditDialog(QtWidgets.QDialog):
         # would orphan the registry entry)
         ns_label = QtWidgets.QLabel("Namespace")
         ns_label.setStyleSheet(theme.LABEL_DIM)
+        ns_box = QtWidgets.QVBoxLayout()
+        ns_box.setSpacing(2)
         self._namespace_input = QtWidgets.QLineEdit(self._pkg_data.get("namespace", ""))
         self._namespace_input.setPlaceholderText("optional, required for publish")
+        self._namespace_preview = QtWidgets.QLabel("")
+        self._namespace_preview.setStyleSheet(
+            "color: {}; font-size: 11px;".format(theme.TEXT_MUTED)
+        )
+        self._namespace_input.textChanged.connect(self._update_namespace_preview)
         is_published = (self._pkg_data.get("source") == "published"
                         or bool(self._published_registries))
         if is_published:
@@ -61,7 +69,11 @@ class EditDialog(QtWidgets.QDialog):
             self._namespace_input.setStyleSheet(
                 self._namespace_input.styleSheet() + " color: {};".format(theme.TEXT_DIM)
             )
-        form.addRow(ns_label, self._namespace_input)
+        ns_box.addWidget(self._namespace_input)
+        ns_box.addWidget(self._namespace_preview)
+        ns_wrapper = QtWidgets.QWidget()
+        ns_wrapper.setLayout(ns_box)
+        form.addRow(ns_label, ns_wrapper)
 
         # Version
         ver_label = QtWidgets.QLabel(t("label_version"))
@@ -209,6 +221,13 @@ class EditDialog(QtWidgets.QDialog):
 
         layout.addLayout(btn_layout)
 
+    def _update_namespace_preview(self, text):
+        slug = slugify_namespace(text)
+        if slug and slug != text.strip().lower():
+            self._namespace_preview.setText("→ {}".format(slug))
+        else:
+            self._namespace_preview.setText("")
+
     def _browse_icon(self):
         path = QtWidgets.QFileDialog.getOpenFileName(
             self, t("label_icon"), "",
@@ -262,7 +281,7 @@ class EditDialog(QtWidgets.QDialog):
             "homepage": self._homepage_input.text().strip(),
             "description": self._desc_input.text().strip(),
             "entry_point": entry_point,
-            "namespace": self._namespace_input.text().strip().lower(),
+            "namespace": slugify_namespace(self._namespace_input.text()),
         }
         self.accept()
 

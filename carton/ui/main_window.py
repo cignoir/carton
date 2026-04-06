@@ -700,9 +700,13 @@ class CartonWindow(QtWidgets.QDialog):
             old_ns = pkg_data.get("namespace", "")
             installed_pkgs = self._install_manager._installed["packages"]
             if new_ns != old_ns and not published_regs:
-                # Validate the new namespace, then rekey the installed entry
+                # Slugify + validate; the dialog should already have shown a
+                # preview but be defensive in case it didn't.
                 if new_ns:
-                    from carton.core.identity import validate_namespace, InvalidIdentityError
+                    from carton.core.identity import (
+                        slugify_namespace, validate_namespace, InvalidIdentityError,
+                    )
+                    new_ns = slugify_namespace(new_ns)
                     try:
                         new_ns = validate_namespace(new_ns)
                     except InvalidIdentityError as e:
@@ -822,13 +826,17 @@ class CartonWindow(QtWidgets.QDialog):
         # Ensure namespace is set; prompt if not
         namespace = pkg_data.get("namespace", "")
         if not namespace:
+            from carton.core.identity import slugify_namespace
             ns, ok = QtWidgets.QInputDialog.getText(
                 self, t("publish"),
-                "Enter a namespace for this package (lowercase a-z 0-9 -, 2-32 chars):",
+                "Enter a namespace for this package "
+                "(spaces and capitals will be auto-converted):",
             )
             if not ok or not ns.strip():
                 return
-            namespace = ns.strip().lower()
+            namespace = slugify_namespace(ns)
+            if not namespace:
+                return
             # Persist immediately so subsequent publishes don't re-ask
             installed_pkgs = self._install_manager._installed["packages"]
             if pkg_id in installed_pkgs:

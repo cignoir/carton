@@ -15,6 +15,7 @@ from carton.ui.i18n import t
 from carton.ui import theme
 from carton.ui.utils import list_functions
 from carton.core.sidecar import read_sidecar
+from carton.core.identity import slugify_namespace, slugify_name
 
 
 def _detect_from_folder(folder_path):
@@ -156,9 +157,20 @@ class AddDialog(QtWidgets.QDialog):
 
         ns_label = QtWidgets.QLabel("Namespace")
         ns_label.setStyleSheet(theme.LABEL_DIM)
+        ns_box = QtWidgets.QVBoxLayout()
+        ns_box.setSpacing(2)
         self._namespace_input = QtWidgets.QLineEdit()
         self._namespace_input.setPlaceholderText("optional, required for publish")
-        form.addRow(ns_label, self._namespace_input)
+        self._namespace_preview = QtWidgets.QLabel("")
+        self._namespace_preview.setStyleSheet(
+            "color: {}; font-size: 11px;".format(theme.TEXT_MUTED)
+        )
+        self._namespace_input.textChanged.connect(self._update_namespace_preview)
+        ns_box.addWidget(self._namespace_input)
+        ns_box.addWidget(self._namespace_preview)
+        ns_wrapper = QtWidgets.QWidget()
+        ns_wrapper.setLayout(ns_box)
+        form.addRow(ns_label, ns_wrapper)
 
         icon_label = QtWidgets.QLabel(t("label_icon"))
         icon_label.setStyleSheet(theme.LABEL_DIM)
@@ -231,6 +243,13 @@ class AddDialog(QtWidgets.QDialog):
         btn_layout.addWidget(register_btn)
 
         layout.addLayout(btn_layout)
+
+    def _update_namespace_preview(self, text):
+        slug = slugify_namespace(text)
+        if slug and slug != text.strip().lower():
+            self._namespace_preview.setText("→ {}".format(slug))
+        else:
+            self._namespace_preview.setText("")
 
     def _browse_icon(self):
         path, _ = QtWidgets.QFileDialog.getOpenFileName(
@@ -338,7 +357,7 @@ class AddDialog(QtWidgets.QDialog):
         func = self._func_combo.currentText().strip()
         icon = self._icon_input.text().strip() or "🔧"
         description = self._desc_input.text().strip()
-        namespace = self._namespace_input.text().strip().lower()
+        namespace = slugify_namespace(self._namespace_input.text())
 
         if self._is_folder:
             # If package.json exists, use its entry_point directly
@@ -346,8 +365,8 @@ class AddDialog(QtWidgets.QDialog):
             if info and info.get("has_package_json"):
                 result = {
                     "file_path": path,
-                    "namespace": namespace or info.get("namespace", ""),
-                    "name": info.get("name", ""),
+                    "namespace": namespace or slugify_namespace(info.get("namespace", "")),
+                    "name": slugify_name(info.get("name", "")),
                     "display_name": display_name,
                     "version": info.get("version", "0.0.0"),
                     "author": info.get("author", ""),
@@ -375,7 +394,8 @@ class AddDialog(QtWidgets.QDialog):
         self.accept()
 
     def _build_file_result(self, path, display_name, func, icon, description, is_exec_mode):
-        basename = os.path.splitext(os.path.basename(path))[0]
+        raw_basename = os.path.splitext(os.path.basename(path))[0]
+        basename = slugify_name(raw_basename) or raw_basename.lower()
         is_mel = path.endswith(".mel")
         is_plugin = path.endswith(".mll")
 
@@ -422,7 +442,7 @@ class AddDialog(QtWidgets.QDialog):
 
     def _build_folder_result(self, path, display_name, func, icon, description):
         info = _detect_from_folder(path)
-        name = info["name"]
+        name = slugify_name(info["name"]) or info["name"].lower()
         pkg_type = info["type"]
 
         if pkg_type == "mel_script":
