@@ -5,6 +5,7 @@ import os
 from datetime import datetime, timezone
 
 from carton.core.identity import normalize
+from carton.core.path_utils import resolve_local_path, store_local_path
 
 
 class ScriptManager:
@@ -46,8 +47,13 @@ class ScriptManager:
         ns = normalize(namespace)
         pkg_id = "{}/{}".format(ns, name) if ns else name
 
-        # Add to environment variables (reference-based)
+        # Env wiring uses the absolute path that the UI handed us.
         self._add_to_env(file_path, pkg_type, is_folder)
+
+        # ...but the path we persist collapses the user's home to ``~`` so
+        # the entry survives a home-dir rename or being synced to another
+        # machine with the same tool layout.
+        stored_path = store_local_path(file_path)
 
         # Record in installed.json
         now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
@@ -62,7 +68,7 @@ class ScriptManager:
             "entry_point": entry_point,
             "path": "",
             "source": "local_script",
-            "local_path": file_path,
+            "local_path": stored_path,
             "is_folder": is_folder,
             "icon": icon,
             "description": description,
@@ -83,7 +89,7 @@ class ScriptManager:
         if not pkg_data:
             return
 
-        local_path = pkg_data.get("local_path", "")
+        local_path = resolve_local_path(pkg_data.get("local_path", ""))
         is_folder = pkg_data.get("is_folder", False)
         pkg_type = pkg_data.get("type", "")
 
@@ -99,7 +105,7 @@ class ScriptManager:
         if not pkg_data or pkg_data.get("source") != "local_script":
             return
 
-        local_path = pkg_data.get("local_path", "")
+        local_path = resolve_local_path(pkg_data.get("local_path", ""))
         if not local_path or not os.path.exists(local_path):
             print("[Carton] Local path not found: {}".format(local_path))
             return
@@ -112,6 +118,15 @@ class ScriptManager:
         """Launch a local script."""
         entry = pkg_data.get("entry_point", {}) or {}
         ep_type = entry.get("type", "")
+
+        # Resolve the portable stored path once, then pass the expanded
+        # version into pkg_data so downstream branches (and the delegated
+        # maya_module handler) work with an absolute path.
+        stored = pkg_data.get("local_path", "")
+        resolved = resolve_local_path(stored)
+        if stored and resolved != stored:
+            pkg_data = dict(pkg_data)
+            pkg_data["local_path"] = resolved
 
         # Maya modules: delegate to the dedicated handler so the same logic
         # (free-form command, structured python entry, or userSetup re-exec)

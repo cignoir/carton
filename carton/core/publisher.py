@@ -20,6 +20,7 @@ from carton.core.identity import (
     validate_namespace,
     validate_name,
 )
+from carton.core.path_utils import resolve_local_path
 from carton.core.sidecar import write_sidecar, read_sidecar
 
 
@@ -58,7 +59,9 @@ class Publisher:
         if registry_entry.is_remote:
             raise RuntimeError("Cannot publish to a remote registry: {}".format(registry_entry.name))
 
-        local_path = pkg_data.get("local_path", "")
+        # Stored local_path may be a portable form like ``~/tools/foo.py``;
+        # expand before touching the filesystem.
+        local_path = resolve_local_path(pkg_data.get("local_path", ""))
         if not local_path or not os.path.exists(local_path):
             raise RuntimeError("File not found: {}".format(local_path))
 
