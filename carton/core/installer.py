@@ -132,10 +132,17 @@ class InstallManager:
                     pass
 
             handler = get_handler(pkg_type)
+            # Snapshot env_manager state before the handler runs so we can
+            # record exactly which sys.path / MAYA_*_PATH entries this
+            # install introduced. On uninstall we replay the diff to guarantee
+            # every introduced path is removed, even if the handler's own
+            # uninstall logic misses one.
+            env_before = self._env_manager.snapshot()
             try:
                 handler.install(package_dir, meta, self._env_manager)
             except Exception as e:
                 raise InstallError("Handler install failed: {}".format(e))
+            activated_paths = self._env_manager.diff_since(env_before)
 
             info = PackageInfo(
                 pkg_id=pkg_id,
@@ -148,6 +155,7 @@ class InstallManager:
                 path=rel_path,
                 source="registry",
                 installed_at=datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+                activated_paths=activated_paths,
             )
             self._installed["packages"][pkg_id] = info.to_installed_dict()
             try:
@@ -191,6 +199,15 @@ class InstallManager:
         package_dir = os.path.join(self._config.install_dir, pkg_data.get("path", ""))
         handler = get_handler(pkg_type)
         handler.uninstall(package_dir, pkg_data, self._env_manager)
+
+        # Replay the env diff recorded at install time. The handler's own
+        # uninstall has usually already removed these, in which case the
+        # calls here are no-ops (remove_tracked is idempotent). This catches
+        # any paths the handler missed — legacy entries without recorded
+        # activated_paths just skip this step.
+        activated = pkg_data.get("activated_paths") or {}
+        if activated:
+            self._env_manager.remove_tracked(activated)
 
         del self._installed["packages"][pkg_id]
         self._save_installed()

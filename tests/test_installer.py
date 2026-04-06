@@ -1,6 +1,7 @@
 """Tests for InstallManager."""
 
 import os
+import sys
 import tempfile
 import zipfile
 
@@ -11,6 +12,14 @@ from carton.core.env_manager import MayaEnvManager
 from carton.core.installer import InstallManager, InstallError
 
 _PKG_ID = "mystudio/test_pkg"
+
+
+@pytest.fixture
+def clean_sys_path():
+    """Save and restore sys.path around a test."""
+    saved = list(sys.path)
+    yield
+    sys.path[:] = saved
 
 
 def _make_test_zip(tmpdir, pkg_name="test_pkg"):
@@ -133,6 +142,68 @@ class TestInstallManager:
             leftovers = [d for d in os.listdir(os.path.join(tmpdir, "packages", "mystudio"))
                          if "carton-bak" in d]
             assert leftovers == []
+
+    def test_install_records_activated_paths(self, clean_sys_path):
+        """Install must capture the handler's env diff into activated_paths."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            config = Config(install_dir=tmpdir)
+            mgr = InstallManager(config, MayaEnvManager())
+
+            zip_path = _make_test_zip(tmpdir)
+            meta = {
+                "id": _PKG_ID,
+                "namespace": "mystudio",
+                "name": "test_pkg",
+                "version": "1.0.0",
+                "type": "python_package",
+                "entry_point": {"type": "python", "module": "test_pkg", "function": "show"},
+            }
+            mgr.install_package(zip_path, meta)
+
+            entry = mgr.get_installed_packages()[_PKG_ID]
+            assert "activated_paths" in entry
+            # PythonPackageHandler adds package_dir to sys.path. Normalize
+            # because InstallManager builds rel_path with forward slashes
+            # (good for cross-platform registry.json) which mix with the
+            # tmpdir's native separator on Windows.
+            pkg_dir = entry["activated_paths"]["sys.path"][0]
+            assert pkg_dir in sys.path
+            assert pkg_dir.endswith(os.path.join("mystudio", "test_pkg").replace(os.sep, "/")) \
+                or pkg_dir.endswith(os.path.join("mystudio", "test_pkg"))
+
+    def test_uninstall_replays_activated_paths(self, clean_sys_path):
+        """Even if a handler forgets to clean env, uninstall should catch it."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            config = Config(install_dir=tmpdir)
+            env = MayaEnvManager()
+            mgr = InstallManager(config, env)
+
+            zip_path = _make_test_zip(tmpdir)
+            meta = {
+                "id": _PKG_ID,
+                "namespace": "mystudio",
+                "name": "test_pkg",
+                "version": "1.0.0",
+                "type": "python_package",
+                "entry_point": {"type": "python", "module": "test_pkg", "function": "show"},
+            }
+            mgr.install_package(zip_path, meta)
+            # Read back the exact path the installer used so our separator
+            # matches whatever Windows-flavored form it produced.
+            pkg_dir = mgr.get_installed_packages()[_PKG_ID]["activated_paths"]["sys.path"][0]
+            assert pkg_dir in sys.path
+
+            # Re-inject the path after install as if some other code path
+            # (or a buggy handler) had added it back. uninstall should
+            # still remove it via the recorded diff.
+            sys.path.insert(0, pkg_dir)
+            env._added_paths.setdefault("sys.path", []).append(pkg_dir)
+
+            mgr.uninstall_package(_PKG_ID)
+
+            # All entries gone, tracker is clean.
+            assert sys.path.count(pkg_dir) == 0
+            assert "sys.path" not in env._added_paths
 
     def test_rollback_on_handler_failure(self, monkeypatch):
         """If the handler raises, state must revert to the previous version."""

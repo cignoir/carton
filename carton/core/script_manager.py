@@ -235,7 +235,6 @@ class ScriptManager:
 
     def _remove_from_env(self, path, pkg_type, is_folder):
         """Remove a path from Maya environment variables."""
-        import sys
         if pkg_type == "maya_module" and is_folder:
             from carton.core.handlers.maya_module_handler import (
                 resolve_paths, _remove_paths, _ACTIVATED_DIRS,
@@ -247,8 +246,7 @@ class ScriptManager:
             init_py = os.path.join(path, "__init__.py")
             target = os.path.dirname(path) if os.path.exists(init_py) else path
             if pkg_type == "python_package":
-                if target in sys.path:
-                    sys.path.remove(target)
+                self._env_mgr.remove_python_path(target)
             elif pkg_type == "mel_script":
                 scripts_dir = os.path.join(path, "scripts")
                 self._env_mgr.remove_env_path("MAYA_SCRIPT_PATH",
@@ -258,7 +256,6 @@ class ScriptManager:
             if pkg_type == "plugin":
                 self._env_mgr.remove_env_path("MAYA_PLUG_IN_PATH", script_dir)
             elif pkg_type == "python_package":
-                if script_dir in sys.path:
-                    sys.path.remove(script_dir)
+                self._env_mgr.remove_python_path(script_dir)
             elif pkg_type == "mel_script":
                 self._env_mgr.remove_env_path("MAYA_SCRIPT_PATH", script_dir)

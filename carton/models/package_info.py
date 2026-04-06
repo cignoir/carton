@@ -30,6 +30,7 @@ class PackageInfo:
         installed_at="",
         local_path="",
         home_registry=None,
+        activated_paths=None,
     ):
         # Resolve identity. If pkg_id is given, prefer it; otherwise derive from ns/name.
         if pkg_id and "/" in pkg_id:
@@ -57,6 +58,10 @@ class PackageInfo:
         self.installed_at = installed_at
         self.local_path = local_path
         self.home_registry = home_registry or {}
+        # {env_var: [path, ...]} recorded at install time. Used on
+        # uninstall to restore the env to its pre-install state even if
+        # the handler's uninstall logic is incomplete.
+        self.activated_paths = activated_paths or {}
 
     @classmethod
     def from_registry_entry(cls, pkg_id, pkg_data, version_key=None):
@@ -93,6 +98,7 @@ class PackageInfo:
             installed_at=data.get("installed_at", ""),
             local_path=data.get("local_path", ""),
             home_registry=data.get("home_registry", {}),
+            activated_paths=data.get("activated_paths", {}),
         )
 
     def to_installed_dict(self):
@@ -113,4 +119,6 @@ class PackageInfo:
             d["local_path"] = self.local_path
         if self.home_registry:
             d["home_registry"] = self.home_registry
+        if self.activated_paths:
+            d["activated_paths"] = self.activated_paths
         return d

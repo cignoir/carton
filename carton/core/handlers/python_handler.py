@@ -14,8 +14,10 @@ class PythonPackageHandler(PackageHandler):
         env_manager.add_python_path(package_dir)
 
     def uninstall(self, package_dir, meta, env_manager):
-        if package_dir in sys.path:
-            sys.path.remove(package_dir)
+        # Route through env_manager so the bookkeeping dict stays in sync
+        # (direct sys.path.remove would leave a stale entry in the tracker
+        # and later confuse cleanup_all / remove_tracked).
+        env_manager.remove_python_path(package_dir)
         # Also remove from the module cache
         module_name = self._get_module(meta)
         to_remove = [k for k in sys.modules if k == module_name or k.startswith(module_name + ".")]
