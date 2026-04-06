@@ -72,6 +72,10 @@
             { "type": "string" }
           ]
         },
+        "entry_point": {
+          "type": "object",
+          "description": "起動時の挙動を決めるエントリポイント。カード UI が Launch/Activate を判定するためにレジストリレベルにも保持される。"
+        },
         "latest_version": {
           "type": "string",
           "pattern": "^\\d+\\.\\d+\\.\\d+$"

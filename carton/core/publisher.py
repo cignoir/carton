@@ -252,6 +252,12 @@ class Publisher:
         entry["author"] = author
         entry["tags"] = tags
         entry["latest_version"] = version
+        # Carry entry_point at the registry level so the card UI can decide
+        # between Launch / Activate without having to install the package
+        # first. The inner zip's package.json is still the source of truth at
+        # install time.
+        if entry_point:
+            entry["entry_point"] = entry_point
 
         if icon:
             entry["icon"] = icon
