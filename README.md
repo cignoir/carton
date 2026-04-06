@@ -88,13 +88,16 @@ My Tools > + Add > select file or folder
 Card > Publish > select target registry
 ```
 
+See the [Registering tools to My Tools](#registering-tools-to-my-tools) section
+below for per-type details.
+
 ## Registry Structure
 
 ```
 my-registry/
 ├── registry.json          # Package index
 ├── packages/
-│   └── {uuid}/{version}/
+│   └── {namespace}/{name}/{version}/
 │       └── {name}-{version}.zip
 ├── icons/
 │   └── {name}.png         # Per-package icon
@@ -102,6 +105,201 @@ my-registry/
 ```
 
 Manage it with Git, put it on a network drive, or host it as static files — whatever works for your team.
+
+## Registering tools to My Tools
+
+"My Tools" is the local working area where you register tools by reference —
+no copying. Edits to the original files take effect immediately. From My Tools
+you can also Publish a tool to a registry to share it.
+
+Carton supports several package types and auto-detects which one you're
+adding. Below is what you can register and what to expect for each.
+
+### 1. Single-file Python script (`.py`)
+
+```
+tools/
+└── quick_rename.py        # def show(): ...
+```
+
+**Add**: pick the file in `+ Add > File`. Carton inspects the file for
+`def show / run / main / execute` and prefills the function name. You can pick
+a different function from the dropdown.
+
+**Run modes**:
+- **Function call** (default for `.py` with detected functions): Carton imports
+  the module by basename and calls the chosen function — e.g.
+  `import quick_rename; quick_rename.show()`.
+- **Top-level execution**: the file is `exec()`'d as a script. Use this for
+  scripts that do their work at module load time.
+
+The file's parent directory is added to `sys.path` so the import works.
+
+### 2. Single-file MEL script (`.mel`)
+
+```
+tools/
+└── quickRename.mel        # global proc quickRename() { ... }
+```
+
+**Add**: pick the file. Carton enables MEL mode and uses the filename (without
+extension) as both the script and the procedure name by default.
+
+At launch Carton runs `source "quickRename.mel"; quickRename();` via
+`maya.mel.eval`. The file's directory is added to `MAYA_SCRIPT_PATH`.
+
+### 3. Maya plug-in (`.mll`)
+
+```
+plug-ins/
+└── exAttrEditor.mll
+```
+
+**Add**: pick the file. Carton detects the `.mll` extension, registers the
+plug-in's directory on `MAYA_PLUG_IN_PATH`, and shows an extra **Launch
+command** field where you can enter an optional Python expression to run after
+the plug-in loads (typically the command that opens the tool's UI). For
+example:
+
+```python
+import maya.cmds as mc; mc.exAttrEditor(ui=True)
+```
+
+Clicking Launch loads the plug-in (if not already loaded) and runs the
+command.
+
+### 4. Folder package — Python (`python_package`)
+
+A folder you intend to `import` as a Python package:
+
+```
+my_tool/
+├── __init__.py            # def show(): ...
+├── ui.py
+└── package.json           # optional metadata
+```
+
+**Add**: pick the folder in `+ Add > Folder`. Carton:
+
+- Reads `package.json` if present (preferred — see below).
+- Otherwise auto-detects: it scans `__init__.py` for a function and walks the
+  tree to guess the type.
+- Adds the **parent** of the folder to `sys.path` so `import my_tool` works.
+
+At launch: `import my_tool; my_tool.show()` (or the function you picked).
+
+If you bundle a `package.json` in the folder root, Carton skips the run-mode
+UI entirely and just trusts the metadata. This is the recommended way to make
+folder packages portable across teams. See [package.json](#packagejson)
+below.
+
+### 5. Folder package — MEL (`mel_script`)
+
+```
+my_mel_tool/
+├── scripts/
+│   └── myTool.mel         # global proc myTool() { ... }
+└── package.json           # optional, type: mel_script
+```
+
+**Add**: pick the folder. Carton finds the `scripts/` directory (or the folder
+itself if there's no `scripts/`), adds it to `MAYA_SCRIPT_PATH`, and uses the
+first `.mel` file as the script. At launch: `source "myTool.mel"; myTool();`.
+
+### 6. Maya module (`maya_module`) — Autodesk Application Package / `.mod`
+
+This is the format most third-party Maya tools ship in: a folder with
+`PackageContents.xml` (or a `*.mod` file) plus `Contents/scripts`,
+`Contents/plug-ins`, `Contents/icons`, and a `userSetup.py` that registers
+menus or shelves.
+
+```
+SIWeightEditor/
+├── PackageContents.xml
+└── Contents/
+    ├── scripts/
+    │   ├── userSetup.py
+    │   └── siweighteditor/
+    │       └── __init__.py
+    ├── plug-ins/
+    │   └── win64/2024/
+    │       └── bake_skin_weight.py
+    └── icons/
+```
+
+**Add**: pick the folder. Carton detects the module layout and:
+
+- Adds `Contents/scripts` to `sys.path` and `MAYA_SCRIPT_PATH`
+- Walks `Contents/plug-ins` one level deep (so `plug-ins/<plat>/<ver>/` is
+  picked up) and adds each plug-in directory to `MAYA_PLUG_IN_PATH`
+- Adds `Contents/icons` to `XBMLANGPATH`, `Contents/presets` to
+  `MAYA_PRESET_PATH`
+- Executes `userSetup.py` deferred via `maya.utils.executeDeferred` so the
+  module's own menu/shelf registration runs
+
+The card shows an **Activate** button by default (no single window to
+launch). Activation is idempotent within a session — clicking Activate twice
+won't double-register menus.
+
+#### Bind a Launch button to the module's main window
+
+If you'd rather click **Launch** to open the module's UI directly, edit the
+card and set the **Launch command** field to the Python expression that opens
+the window. For SI Weight Editor:
+
+```python
+from siweighteditor import siweighteditor; siweighteditor.Option()
+```
+
+After saving, the card's button switches from Activate to Launch.
+
+#### How to find the right launch command
+
+Different tools name their entry function differently. In order of effort:
+
+1. **Read the module's README / install guide** — easiest when it exists.
+2. **Right-click an existing shelf button** for the tool → Edit → copy the
+   command. Or in Maya: enable **Script Editor → History → Echo All
+   Commands**, click the tool's menu item, and read the echoed command from
+   the history.
+3. **Grep `userSetup.py` and `startup.py`** for `runTimeCommand`, `menuItem
+   -command`, or anything resembling `register*command`. The command string
+   inside is the canonical entry point. (For SI Weight Editor that's how we
+   found `siweighteditor.Option()`.)
+4. **Search the source for top-level `def show / main / Go / open / run`** —
+   common conventions for "open the main window" functions.
+5. **Last resort**: find the main `QMainWindow` / `QDialog` subclass and
+   instantiate it directly. Be aware some tools do important setup (loading
+   resources, paths, plug-ins) in their entry function — instantiating the
+   window class directly may give you a half-broken UI.
+
+### 7. Folder package — `.mll` plugin bundle (`plugin`)
+
+```
+my_plugin/
+├── plug-ins/
+│   └── myPlugin.mll
+├── scripts/
+│   └── helper.py
+└── package.json           # type: plugin
+```
+
+This is for plug-ins that ship alongside helper scripts as a unit. Carton
+adds `plug-ins/` to `MAYA_PLUG_IN_PATH` and `scripts/` to both `sys.path` and
+`MAYA_SCRIPT_PATH`. Auto-load can be enabled via `entry_point.auto_load: true`
+in `package.json`.
+
+### Namespace and the Internal Name
+
+Every package has an **internal name** (a slug like `quick_rename` or
+`ari-mirror`), shown read-only in the Add and Edit dialogs. It's derived
+from the file or folder name and is the package's stable identifier — it
+cannot be changed after registration without orphaning the registry entry.
+
+The **namespace** field is optional during Add (you can register tools for
+your own use without one) but **required to publish**. If you type
+`MyStudio` it gets auto-converted to `mystudio`; the canonical form is
+shown live below the input.
 
 ## package.json
 
@@ -126,7 +324,7 @@ Place this in your tool's root to define metadata:
 }
 ```
 
-Supported types: `python_package`, `mel_script`, `plugin`
+Supported types: `python_package`, `mel_script`, `plugin`, `maya_module`
 
 ### Identity model
 
