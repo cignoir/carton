@@ -1028,12 +1028,8 @@ class CartonWindow(QtWidgets.QDialog):
                 "entry_point": {},
             }
             self._install_manager.install_package(dest, meta)
-
-            entry_point = self._resolve_entry_point(pkg_name)
-            inst = self._install_manager._installed
-            if pkg_id in inst["packages"]:
-                inst["packages"][pkg_id]["entry_point"] = entry_point
-                self._install_manager._save_installed()
+            # install_package now reads entry_point from the inner package.json
+            # itself, so no post-install fixup is needed.
 
             if os.path.exists(dest):
                 os.remove(dest)
@@ -1104,16 +1100,6 @@ class CartonWindow(QtWidgets.QDialog):
                 handler.launch(pkg_data)
         except Exception as e:
             QtWidgets.QMessageBox.warning(self, t("launch_error"), str(e))
-
-    def _resolve_entry_point(self, pkg_name):
-        packages_dir = self._install_manager._config.packages_dir
-        pkg_json_path = os.path.join(packages_dir, pkg_name, "package.json")
-        if os.path.exists(pkg_json_path):
-            with open(pkg_json_path, "r", encoding="utf-8") as f:
-                return json.load(f).get("entry_point", {})
-        module_name = pkg_name.replace("-", "_")
-        return {"type": "python", "module": module_name, "function": "show"}
-
 
 def create_window(parent=None):
     if parent is None:

@@ -64,6 +64,23 @@ class InstallManager:
         with zipfile.ZipFile(zip_path, "r") as zf:
             zf.extractall(package_dir)
 
+        # Read the inner package.json for the canonical entry_point. The
+        # registry-side meta only carries identity + display fields; the inner
+        # package.json is the source of truth for type/entry_point details.
+        entry_point = meta.get("entry_point", {}) or {}
+        inner_pkg_json = os.path.join(package_dir, "package.json")
+        if os.path.exists(inner_pkg_json):
+            try:
+                with open(inner_pkg_json, "rb") as f:
+                    # Use latin-1 to round-trip any pre-UTF-8 mojibake bytes
+                    inner = json.loads(f.read().decode("latin-1"))
+                if inner.get("entry_point"):
+                    entry_point = inner["entry_point"]
+                if inner.get("type"):
+                    pkg_type = inner["type"]
+            except (OSError, ValueError):
+                pass
+
         handler = get_handler(pkg_type)
         handler.install(package_dir, meta, self._env_manager)
 
@@ -74,7 +91,7 @@ class InstallManager:
             display_name=meta.get("display_name", name),
             version=version,
             pkg_type=pkg_type,
-            entry_point=meta.get("entry_point", {}),
+            entry_point=entry_point,
             path=rel_path,
             source="registry",
             installed_at=datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
