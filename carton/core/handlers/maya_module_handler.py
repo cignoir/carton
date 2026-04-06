@@ -243,9 +243,16 @@ class MayaModuleHandler(PackageHandler):
             raise RuntimeError(
                 "Maya module directory not found for re-activation"
             )
+        # Already activated this session? Don't re-run userSetup.py — running
+        # it again would re-register Maya UI elements and trigger
+        # "name not unique" errors from the module's own startup code.
+        key = os.path.normpath(package_dir)
+        if key in _ACTIVATED_DIRS:
+            return
         paths = resolve_paths(package_dir)
         if "user_setup" in paths:
             _exec_user_setup(paths["user_setup"])
+            _ACTIVATED_DIRS.add(key)
         else:
             raise RuntimeError(
                 "This module has no userSetup.py and no entry_point — "

@@ -166,7 +166,7 @@ class PackageCard(QtWidgets.QFrame):
 
         is_local = self._pkg_data.get("_local_script", False)
 
-        if self._installed_version:
+        if self._installed_version or is_local:
             # Determine if an update is available
             has_update = False
             latest = self._pkg_data.get("latest_version", "")
