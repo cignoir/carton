@@ -80,6 +80,9 @@ _STRINGS = {
         "unpublish_success": "{} has been unpublished from '{}'.",
         "unpublish_select_registry": "Unpublish from which registry?",
         "unpublish_error": "Unpublish Error",
+        "published_to_badge": "Published: {}  \u25be",
+        "published_to_badge_multi": "Published ({})  \u25be",
+        "unpublish_from": "Unpublish \u2014 {}",
         "register_error": "Register Error",
         "update_error": "Update Error",
 
@@ -213,6 +216,9 @@ _STRINGS = {
         "unpublish_success": "{} を '{}' から取り下げました。",
         "unpublish_select_registry": "どのレジストリから取り下げますか？",
         "unpublish_error": "取消エラー",
+        "published_to_badge": "公開中: {}  \u25be",
+        "published_to_badge_multi": "公開中 ({})  \u25be",
+        "unpublish_from": "公開取消 \u2014 {}",
         "register_error": "登録エラー",
         "update_error": "更新エラー",
 

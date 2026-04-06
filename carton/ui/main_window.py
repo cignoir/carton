@@ -580,6 +580,11 @@ class CartonWindow(QtWidgets.QDialog):
         installed = self._install_manager.get_installed_packages() if self._install_manager else {}
         selection = self._sidebar_selection
 
+        # Build a reverse index: pkg_id -> [writable local registry names]
+        # so each card can show its Published-to badge without re-reading
+        # every registry.json per card.
+        published_map = self._build_published_map()
+
         visible_items = []
 
         if selection == self._MYTOOLS_KEY:
@@ -621,11 +626,17 @@ class CartonWindow(QtWidgets.QDialog):
                 if icon_filename and is_remote and base_dir:
                     icon_fetch_tasks.append((pkg_id, base_dir, icon_filename))
 
-            card = PackageCard(pkg_id, pkg_data, installed_version=installed_ver, icon_path=icon_path)
+            card = PackageCard(
+                pkg_id, pkg_data,
+                installed_version=installed_ver,
+                icon_path=icon_path,
+                published_registries=published_map.get(pkg_id, []),
+            )
             card.launch_requested.connect(self._on_launch)
             card.install_requested.connect(self._on_install)
             card.publish_requested.connect(self._on_publish)
             card.update_requested.connect(self._on_update)
+            card.unpublish_requested.connect(self._on_card_unpublish)
             card.setCursor(Qt.PointingHandCursor)
             self._card_map[pkg_id] = card
 
@@ -885,6 +896,68 @@ class CartonWindow(QtWidgets.QDialog):
             else:
                 msg = str(e)
             QtWidgets.QMessageBox.warning(self, t("publish_error"), msg)
+
+    def _build_published_map(self):
+        """Return ``{pkg_id: [registry_name, ...]}`` for all writable local
+        registries, built from a single pass over each registry.json.
+
+        Remote registries are excluded: the user cannot unpublish from them,
+        so there's no reason to surface the badge for those.
+        """
+        result = {}
+        if not self._config:
+            return result
+        for entry in self._config.registries:
+            if entry.is_remote:
+                continue
+            reg_path = os.path.normpath(entry.path)
+            if not os.path.exists(reg_path):
+                continue
+            try:
+                with open(reg_path, "r", encoding="utf-8") as f:
+                    registry = json.load(f)
+            except (json.JSONDecodeError, OSError):
+                continue
+            for pkg_id in registry.get("packages", {}).keys():
+                result.setdefault(pkg_id, []).append(entry.name)
+        return result
+
+    def _on_card_unpublish(self, pkg_id, registry_name):
+        """Handle the unpublish action triggered from a card badge menu."""
+        if not self._publisher or not self._config:
+            return
+
+        target = None
+        for entry in self._config.registries:
+            if entry.is_remote:
+                continue
+            if entry.name == registry_name:
+                target = entry
+                break
+        if target is None:
+            QtWidgets.QMessageBox.warning(
+                self, t("unpublish_error"),
+                "Registry '{}' not found.".format(registry_name),
+            )
+            return
+
+        # Prefer the installed display_name when we have it; otherwise fall
+        # back to whatever the registry knows.
+        installed = self._install_manager.get_installed_packages() if self._install_manager else {}
+        display = installed.get(pkg_id, {}).get("display_name")
+        if not display:
+            packages = self._registry_client.get_packages() if self._registry_client else {}
+            display = packages.get(pkg_id, {}).get("display_name", pkg_id)
+
+        reply = QtWidgets.QMessageBox.question(
+            self, t("unpublish"),
+            t("confirm_unpublish", display, registry_name),
+            QtWidgets.QMessageBox.Yes | QtWidgets.QMessageBox.No,
+        )
+        if reply != QtWidgets.QMessageBox.Yes:
+            return
+
+        self._on_unpublish(pkg_id, target)
 
     def _on_unpublish(self, pkg_id, registry_entry):
         if not self._publisher:

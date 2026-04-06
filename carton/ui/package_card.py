@@ -57,13 +57,16 @@ class PackageCard(QtWidgets.QFrame):
     uninstall_requested = QtCore.Signal(str)
     publish_requested = QtCore.Signal(str)
     update_requested = QtCore.Signal(str)
+    unpublish_requested = QtCore.Signal(str, str)  # (pkg_id, registry_name)
 
-    def __init__(self, pkg_id, pkg_data, installed_version=None, icon_path=None, parent=None):
+    def __init__(self, pkg_id, pkg_data, installed_version=None, icon_path=None,
+                 published_registries=None, parent=None):
         super().__init__(parent)
         self._pkg_id = pkg_id
         self._pkg_data = pkg_data
         self._installed_version = installed_version
         self._icon_path = icon_path
+        self._published_registries = list(published_registries or [])
         self._setup_ui()
 
     def _setup_ui(self):
@@ -137,6 +140,68 @@ class PackageCard(QtWidgets.QFrame):
             "font-size: 11px; color: {}; background: transparent;".format(theme.TEXT_DIM)
         )
         title_layout.addWidget(ver_label)
+
+        # Published-to badge: clickable menu for unpublish, shown when this
+        # package currently lives in one or more writable local registries.
+        if self._published_registries:
+            pub_btn = QtWidgets.QToolButton()
+            if len(self._published_registries) == 1:
+                pub_btn.setText(t("published_to_badge", self._published_registries[0]))
+            else:
+                pub_btn.setText(t("published_to_badge_multi", len(self._published_registries)))
+            pub_btn.setToolTip(t("unpublish_select_registry"))
+            pub_btn.setCursor(Qt.PointingHandCursor)
+            pub_btn.setPopupMode(QtWidgets.QToolButton.InstantPopup)
+            pub_btn.setStyleSheet(
+                "QToolButton {{"
+                "  background: transparent;"
+                "  color: {color};"
+                "  border: 1px solid {color};"
+                "  border-radius: 3px;"
+                "  padding: 1px 6px;"
+                "  font-size: 10px;"
+                "  font-weight: 600;"
+                "}}"
+                "QToolButton:hover {{ background: {hover}; }}"
+                "QToolButton::menu-indicator {{ image: none; width: 0; }}".format(
+                    color=theme.ACCENT_GREEN, hover=theme.BG_HOVER)
+            )
+            menu = QtWidgets.QMenu(pub_btn)
+            # QMenu inherits the dialog palette by default and gives no hover
+            # feedback on items — style it explicitly so the unpublish action
+            # highlights on mouseover.
+            menu.setStyleSheet(
+                "QMenu {{"
+                "  background: {bg};"
+                "  color: {text};"
+                "  border: 1px solid {border};"
+                "  padding: 4px 0;"
+                "}}"
+                "QMenu::item {{"
+                "  background: transparent;"
+                "  padding: 6px 16px;"
+                "}}"
+                "QMenu::item:selected {{"
+                "  background: {hover};"
+                "  color: {accent};"
+                "}}".format(
+                    bg=theme.BG_SECONDARY,
+                    text=theme.TEXT_SECONDARY,
+                    border=theme.BORDER_HOVER,
+                    hover=theme.BG_HOVER,
+                    accent=theme.ACCENT_GREEN,
+                )
+            )
+            for reg_name in self._published_registries:
+                act = menu.addAction(t("unpublish_from", reg_name))
+                # Default-arg binding to freeze reg_name per iteration.
+                act.triggered.connect(
+                    lambda checked=False, r=reg_name: self.unpublish_requested.emit(
+                        self._pkg_id, r)
+                )
+            pub_btn.setMenu(menu)
+            title_layout.addWidget(pub_btn)
+
         title_layout.addStretch()
 
         author = self._pkg_data.get("author", "")
