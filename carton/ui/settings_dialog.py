@@ -43,7 +43,7 @@ class SettingsDialog(QtWidgets.QDialog):
         self._config = config
         self._self_updater = self_updater
         self.setWindowTitle(t("settings_title"))
-        self.setFixedSize(640, 500)
+        self.setFixedSize(640, 640)
         self.setStyleSheet(
             theme.dialog_style() + theme.listwidget_style()
         )
@@ -165,8 +165,46 @@ class SettingsDialog(QtWidgets.QDialog):
         self._check_update_btn.setVisible(self._self_updater is not None)
         layout.addWidget(self._check_update_btn, alignment=Qt.AlignLeft)
 
+        # HTTP proxy
+        proxy_label = QtWidgets.QLabel(t("settings_proxy"))
+        proxy_label.setStyleSheet(theme.LABEL_DIM_BOLD)
+        layout.addWidget(proxy_label)
+
+        self._proxy_edit = QtWidgets.QLineEdit(self._config.proxy or "")
+        self._proxy_edit.setPlaceholderText(t("settings_proxy_placeholder"))
+        self._proxy_edit.setStyleSheet(
+            "QLineEdit {{ background: {bg}; color: {text};"
+            "  border: 1px solid {border}; border-radius: 4px; padding: 4px 6px; }}".format(
+                bg=theme.BG_SECONDARY, text=theme.TEXT_PRIMARY, border=theme.BORDER)
+        )
+        self._proxy_edit.editingFinished.connect(self._on_proxy_changed)
+        layout.addWidget(self._proxy_edit)
+
+        proxy_hint = QtWidgets.QLabel(t("settings_proxy_hint"))
+        proxy_hint.setWordWrap(True)
+        proxy_hint.setStyleSheet(
+            "color: {}; font-size: 11px;".format(theme.TEXT_MUTED)
+        )
+        layout.addWidget(proxy_hint)
+
         layout.addStretch()
         return page
+
+    def _on_proxy_changed(self):
+        """Persist the proxy URL and apply it to the current process env."""
+        new_value = self._proxy_edit.text().strip()
+        if new_value == (self._config.proxy or ""):
+            return
+        self._config.proxy = new_value
+        self._config.save()
+        # If the user just cleared the field, we also want urllib to stop
+        # using the old value in this session. Drop the env vars we set.
+        if not new_value:
+            import os
+            for key in ("HTTP_PROXY", "HTTPS_PROXY", "http_proxy", "https_proxy"):
+                os.environ.pop(key, None)
+        else:
+            self._config.apply_proxy_to_env()
 
     def _on_auto_update_toggled(self, checked):
         self._config.auto_check_updates = bool(checked)

@@ -132,6 +132,31 @@ class TestChangeInstallDir:
         assert (old / "installed.json").exists()
 
 
+class TestProxy:
+    def test_apply_proxy_sets_env_vars(self, monkeypatch):
+        # Clear any ambient proxy values so the assertion is deterministic.
+        for k in ("HTTP_PROXY", "HTTPS_PROXY", "http_proxy", "https_proxy"):
+            monkeypatch.delenv(k, raising=False)
+        c = Config(proxy="http://proxy.example.com:8080")
+        c.apply_proxy_to_env()
+        assert os.environ["HTTP_PROXY"] == "http://proxy.example.com:8080"
+        assert os.environ["HTTPS_PROXY"] == "http://proxy.example.com:8080"
+        assert os.environ["http_proxy"] == "http://proxy.example.com:8080"
+
+    def test_empty_proxy_leaves_env_untouched(self, monkeypatch):
+        monkeypatch.setenv("HTTP_PROXY", "http://ambient:3128")
+        c = Config(proxy="")
+        c.apply_proxy_to_env()
+        assert os.environ["HTTP_PROXY"] == "http://ambient:3128"
+
+    def test_proxy_round_trips_through_save_load(self, tmp_path):
+        path = tmp_path / "config.json"
+        c = Config(proxy="http://p:1234")
+        c.save(str(path))
+        loaded = Config.load(str(path))
+        assert loaded.proxy == "http://p:1234"
+
+
 class TestRegistryEntry:
     def test_base_dir(self):
         e = RegistryEntry("test", "/some/dir/registry.json")

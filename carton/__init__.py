@@ -37,6 +37,8 @@ def startup():
     from carton.core.publisher import Publisher
 
     _config = Config.load()
+    # Respect a user-configured HTTP proxy before any network call fires.
+    _config.apply_proxy_to_env()
 
     # Initialize i18n
     from carton.ui.i18n import set_language, detect_language

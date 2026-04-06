@@ -93,12 +93,18 @@ class Config:
         auto_check_updates=True,
         github_repo="cignoir/carton",
         language="auto",
+        proxy="",
     ):
         self.registries = registries or []
         self.install_dir = install_dir
         self.auto_check_updates = auto_check_updates
         self.github_repo = github_repo
         self.language = language
+        # HTTP(S) proxy URL, e.g. ``http://proxy.studio.internal:8080`` or
+        # ``http://user:pass@host:8080``. Empty string means "don't override
+        # whatever urllib picks up from the environment" — so users who
+        # already have HTTP_PROXY / HTTPS_PROXY set keep working untouched.
+        self.proxy = proxy
 
     @classmethod
     def load(cls, path=None):
@@ -115,6 +121,7 @@ class Config:
                 auto_check_updates=data.get("auto_check_updates", True),
                 github_repo=data.get("github_repo", "cignoir/carton"),
                 language=data.get("language", "auto"),
+                proxy=data.get("proxy", ""),
             )
         return cls()
 
@@ -221,7 +228,25 @@ class Config:
             "auto_check_updates": self.auto_check_updates,
             "github_repo": self.github_repo,
             "language": self.language,
+            "proxy": self.proxy,
         }
+
+    def apply_proxy_to_env(self):
+        """Push ``self.proxy`` into HTTP_PROXY / HTTPS_PROXY for urllib.
+
+        ``urllib`` picks proxy settings off these environment variables at
+        request time, which is far simpler than installing a custom opener
+        into every call site. An empty ``self.proxy`` leaves the
+        environment alone so users with a pre-configured shell keep
+        working. Call this at startup and whenever the setting changes.
+        """
+        if not self.proxy:
+            return
+        os.environ["HTTP_PROXY"] = self.proxy
+        os.environ["HTTPS_PROXY"] = self.proxy
+        # Lowercase variants for cross-platform tools that only check those.
+        os.environ["http_proxy"] = self.proxy
+        os.environ["https_proxy"] = self.proxy
 
     def add_registry(self, name, path):
         """Add a registry."""
