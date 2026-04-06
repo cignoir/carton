@@ -181,6 +181,11 @@ class EditDialog(QtWidgets.QDialog):
 
         layout.addWidget(mode_group)
 
+        # Maya modules don't have a launchable entry point by default — hide
+        # the run mode group entirely.
+        if self._pkg_data.get("type") == "maya_module" and not entry:
+            mode_group.setVisible(False)
+
         # Plugin command (only shown for .mll plugin entries)
         self._is_plugin = (ep_type == "plugin"
                            or (local_path and local_path.endswith(".mll")))

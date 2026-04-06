@@ -21,6 +21,7 @@ _BADGE_CONFIG = {
     "python_package": ("PY", theme.ACCENT_BLUE),
     "mel_script": ("MEL", theme.ACCENT_GREEN),
     "plugin": ("PLG", theme.ACCENT_ORANGE),
+    "maya_module": ("MOD", theme.ACCENT_LINK),
     "local": ("LOCAL", theme.TEXT_DIM),
 }
 
@@ -186,7 +187,14 @@ class PackageCard(QtWidgets.QFrame):
                 update_btn.clicked.connect(lambda: self.update_requested.emit(self._pkg_id))
                 btn_layout.addWidget(update_btn)
 
-            launch_btn = QtWidgets.QPushButton(t("launch"))
+            # Maya modules without an explicit entry point use "Activate"
+            # since there's no single window to launch — clicking just
+            # re-runs userSetup.py.
+            is_module = (self._pkg_data.get("type") == "maya_module"
+                         and not self._pkg_data.get("entry_point"))
+            launch_btn = QtWidgets.QPushButton(
+                t("activate") if is_module else t("launch")
+            )
             launch_btn.setFixedWidth(80)
             launch_btn.setStyleSheet(
                 theme.btn_card_action(theme.ACCENT_BLUE, theme.ACCENT_BLUE_HOVER)

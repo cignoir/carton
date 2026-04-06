@@ -168,6 +168,20 @@ class ScriptManager:
 
     def _add_to_env(self, path, pkg_type, is_folder):
         """Add a path to Maya environment variables."""
+        if pkg_type == "maya_module" and is_folder:
+            # Delegate to the maya_module handler so locally-registered modules
+            # use the exact same env wiring as installed-from-registry ones.
+            from carton.core.handlers.maya_module_handler import (
+                resolve_paths, _apply_paths, _exec_user_setup,
+                _ACTIVATED_DIRS,
+            )
+            paths = resolve_paths(path)
+            _apply_paths(self._env_mgr, paths)
+            key = os.path.normpath(path)
+            if "user_setup" in paths and key not in _ACTIVATED_DIRS:
+                _exec_user_setup(paths["user_setup"])
+                _ACTIVATED_DIRS.add(key)
+            return
         if is_folder:
             # Folder: add parent directory to sys.path (to enable import folder_name)
             parent = os.path.dirname(path) if os.path.basename(path) != "" else path
@@ -199,6 +213,13 @@ class ScriptManager:
     def _remove_from_env(self, path, pkg_type, is_folder):
         """Remove a path from Maya environment variables."""
         import sys
+        if pkg_type == "maya_module" and is_folder:
+            from carton.core.handlers.maya_module_handler import (
+                resolve_paths, _remove_paths, _ACTIVATED_DIRS,
+            )
+            _remove_paths(self._env_mgr, resolve_paths(path))
+            _ACTIVATED_DIRS.discard(os.path.normpath(path))
+            return
         if is_folder:
             init_py = os.path.join(path, "__init__.py")
             target = os.path.dirname(path) if os.path.exists(init_py) else path

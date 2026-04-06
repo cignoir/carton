@@ -4,11 +4,13 @@ from carton.core.handlers.python_handler import PythonPackageHandler
 from carton.core.handlers.mel_handler import MelScriptHandler
 from carton.core.handlers.plugin_handler import PluginHandler
 from carton.core.handlers.local_handler import LocalHandler
+from carton.core.handlers.maya_module_handler import MayaModuleHandler
 
 _HANDLERS = {
     "python_package": PythonPackageHandler,
     "mel_script": MelScriptHandler,
     "plugin": PluginHandler,
+    "maya_module": MayaModuleHandler,
     "local": LocalHandler,
 }
 

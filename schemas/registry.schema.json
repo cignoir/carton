@@ -42,7 +42,7 @@
         "display_name": { "type": "string" },
         "type": {
           "type": "string",
-          "enum": ["python_package", "mel_script", "plugin"]
+          "enum": ["python_package", "mel_script", "plugin", "maya_module"]
         },
         "description": { "type": "string" },
         "author": { "type": "string" },

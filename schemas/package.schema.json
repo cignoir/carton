@@ -28,7 +28,7 @@
     },
     "type": {
       "type": "string",
-      "enum": ["python_package", "mel_script", "plugin", "local"],
+      "enum": ["python_package", "mel_script", "plugin", "maya_module", "local"],
       "default": "python_package",
       "description": "パッケージタイプ。省略時は python_package"
     },

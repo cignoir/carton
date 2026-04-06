@@ -16,6 +16,7 @@ from carton.ui import theme
 from carton.ui.utils import list_functions
 from carton.core.sidecar import read_sidecar
 from carton.core.identity import slugify_namespace, slugify_name
+from carton.core.maya_module_detect import detect as detect_maya_module
 
 
 def _detect_from_folder(folder_path):
@@ -53,6 +54,17 @@ def _detect_from_folder(folder_path):
             return info
         except (json.JSONDecodeError, OSError):
             pass
+
+    # Detect Maya module (Application Package or .mod) before falling back
+    # to the extension scan. Carton package.json above already short-circuited.
+    mod_info = detect_maya_module(folder_path)
+    if mod_info.get("is_module"):
+        info["type"] = "maya_module"
+        info["is_maya_module"] = True
+        info["name"] = mod_info.get("name") or info["name"]
+        info["display_name"] = mod_info.get("name") or info["display_name"]
+        info["entry_point"] = {}
+        return info
 
     # Detect functions from __init__.py
     init_py = os.path.join(folder_path, info["name"], "__init__.py")
@@ -310,8 +322,8 @@ class AddDialog(QtWidgets.QDialog):
             if info.get("description"):
                 self._desc_input.setText(info["description"])
 
-            if info.get("has_package_json"):
-                # package.json exists: hide Run mode (auto-resolved)
+            if info.get("has_package_json") or info.get("is_maya_module"):
+                # package.json or Maya module: hide Run mode (auto-resolved)
                 self._mode_group.setVisible(False)
             else:
                 # No package.json: show Run mode, function call only
@@ -374,8 +386,25 @@ class AddDialog(QtWidgets.QDialog):
         namespace = slugify_namespace(self._namespace_input.text())
 
         if self._is_folder:
-            # If package.json exists, use its entry_point directly
             info = getattr(self, "_detected_info", None)
+            # Maya module: type already determined, no entry_point
+            if info and info.get("is_maya_module"):
+                self._result = {
+                    "file_path": path,
+                    "namespace": namespace,
+                    "name": slugify_name(info.get("name", "")),
+                    "display_name": display_name,
+                    "version": "0.0.0",
+                    "author": "",
+                    "icon": icon,
+                    "description": description,
+                    "type": "maya_module",
+                    "entry_point": {},
+                    "is_folder": True,
+                }
+                self.accept()
+                return
+            # If package.json exists, use its entry_point directly
             if info and info.get("has_package_json"):
                 result = {
                     "file_path": path,
