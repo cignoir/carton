@@ -758,7 +758,7 @@ class CartonWindow(QtWidgets.QDialog):
     def _open_settings(self):
         if not self._config:
             return
-        dialog = SettingsDialog(self._config, self)
+        dialog = SettingsDialog(self._config, self, self_updater=self._self_updater)
         dialog.exec_()
         # Refresh since registries may have changed
         self.refresh()
@@ -1017,8 +1017,26 @@ class CartonWindow(QtWidgets.QDialog):
         # version stays intact rather than leaving the user with nothing.
         self._on_install(pkg_id)
 
-    def _check_self_update(self):
+    def _check_self_update(self, force=False):
+        """Poll GitHub for a newer Carton release and update the banner.
+
+        Respects ``config.auto_check_updates``. Pass ``force=True`` to
+        bypass the setting (used by the manual "Check now" button in
+        Settings).
+        """
         if not self._self_updater:
+            return
+        if not force and self._config and not self._config.auto_check_updates:
+            # Still surface a pending (already-downloaded) update even when
+            # automatic checks are disabled, so the user knows a staged
+            # update is waiting for a restart.
+            if self._self_updater.has_pending_update():
+                ver = self._self_updater.get_pending_version()
+                self._update_banner_label.setText(t("update_pending", ver))
+                self._update_banner_btn.setVisible(False)
+                self._update_banner.setVisible(True)
+            else:
+                self._update_banner.setVisible(False)
             return
         if self._self_updater.has_pending_update():
             ver = self._self_updater.get_pending_version()

@@ -38,9 +38,10 @@ def _wide_input(parent, title, label, text="", width=480):
 class SettingsDialog(QtWidgets.QDialog):
     """Settings dialog with sidebar navigation."""
 
-    def __init__(self, config, parent=None):
+    def __init__(self, config, parent=None, self_updater=None):
         super().__init__(parent)
         self._config = config
+        self._self_updater = self_updater
         self.setWindowTitle(t("settings_title"))
         self.setFixedSize(640, 500)
         self.setStyleSheet(
@@ -141,8 +142,61 @@ class SettingsDialog(QtWidgets.QDialog):
         )
         layout.addWidget(hint)
 
+        # Auto-update check
+        self._auto_update_checkbox = QtWidgets.QCheckBox(
+            t("settings_auto_update_check")
+        )
+        self._auto_update_checkbox.setChecked(bool(self._config.auto_check_updates))
+        self._auto_update_checkbox.toggled.connect(self._on_auto_update_toggled)
+        layout.addWidget(self._auto_update_checkbox)
+
+        auto_hint = QtWidgets.QLabel(t("settings_auto_update_hint"))
+        auto_hint.setWordWrap(True)
+        auto_hint.setStyleSheet(
+            "color: {}; font-size: 11px;".format(theme.TEXT_MUTED)
+        )
+        layout.addWidget(auto_hint)
+
+        check_btn = QtWidgets.QPushButton(t("settings_check_update_now"))
+        check_btn.setStyleSheet(theme.btn_ghost_text())
+        check_btn.clicked.connect(self._on_check_update_now)
+        # Without a self_updater reference we can't perform the check, so
+        # hide the button rather than show a dead control.
+        check_btn.setVisible(self._self_updater is not None)
+        layout.addWidget(check_btn, alignment=Qt.AlignLeft)
+
         layout.addStretch()
         return page
+
+    def _on_auto_update_toggled(self, checked):
+        self._config.auto_check_updates = bool(checked)
+        self._config.save()
+
+    def _on_check_update_now(self):
+        """Manual update probe — works even when auto-check is disabled."""
+        if not self._self_updater:
+            return
+        try:
+            result = self._self_updater.check_update()
+        except Exception as e:
+            QtWidgets.QMessageBox.warning(
+                self, t("settings_auto_update_check"),
+                t("settings_check_update_failed", str(e)),
+            )
+            return
+
+        if result:
+            version = result[0]
+            QtWidgets.QMessageBox.information(
+                self, t("settings_auto_update_check"),
+                t("settings_check_update_available", version),
+            )
+        else:
+            import carton
+            QtWidgets.QMessageBox.information(
+                self, t("settings_auto_update_check"),
+                t("settings_check_update_uptodate", carton.__version__),
+            )
 
     def _on_change_install_dir(self):
         """Prompt for a new install_dir and migrate Carton's data there."""

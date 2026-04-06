@@ -98,5 +98,5 @@ def open_settings():
     if not _initialized:
         startup()
     from carton.ui.settings_dialog import SettingsDialog
-    dialog = SettingsDialog(_config)
+    dialog = SettingsDialog(_config, self_updater=_self_updater)
     dialog.exec_()
