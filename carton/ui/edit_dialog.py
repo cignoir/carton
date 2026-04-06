@@ -20,7 +20,7 @@ class EditDialog(QtWidgets.QDialog):
         self._result = None
 
         self.setWindowTitle(t("edit_title"))
-        self.setFixedSize(440, 520)
+        self.setFixedSize(440, 560)
         self.setStyleSheet(
             theme.dialog_style(
                 theme.combobox_style()
@@ -44,6 +44,20 @@ class EditDialog(QtWidgets.QDialog):
         name_label.setStyleSheet(theme.LABEL_DIM)
         self._name_input = QtWidgets.QLineEdit(self._pkg_data.get("display_name", ""))
         form.addRow(name_label, self._name_input)
+
+        # Name (slug) — read-only. Changing this would orphan the registry
+        # entry, so it can only be set during Add.
+        slug_label = QtWidgets.QLabel(t("label_name"))
+        slug_label.setStyleSheet(theme.LABEL_DIM)
+        self._slug_display = QtWidgets.QLineEdit(self._pkg_data.get("name", ""))
+        self._slug_display.setReadOnly(True)
+        self._slug_display.setToolTip(
+            "The package's identifier. Cannot be changed after registration."
+        )
+        self._slug_display.setStyleSheet(
+            self._slug_display.styleSheet() + " color: {};".format(theme.TEXT_DIM)
+        )
+        form.addRow(slug_label, self._slug_display)
 
         # Namespace (locked once the package has been published, since renaming
         # would orphan the registry entry)

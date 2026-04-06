@@ -111,7 +111,7 @@ class AddDialog(QtWidgets.QDialog):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setWindowTitle(t("add_title"))
-        self.setFixedSize(440, 400)
+        self.setFixedSize(440, 440)
         self.setStyleSheet(
             theme.dialog_style(
                 "QRadioButton {{ color: {text}; font-size: 13px; }}".format(
@@ -154,6 +154,16 @@ class AddDialog(QtWidgets.QDialog):
         name_label.setStyleSheet(theme.LABEL_DIM)
         self._name_input = QtWidgets.QLineEdit()
         form.addRow(name_label, self._name_input)
+
+        slug_label = QtWidgets.QLabel(t("label_name"))
+        slug_label.setStyleSheet(theme.LABEL_DIM)
+        self._slug_display = QtWidgets.QLineEdit()
+        self._slug_display.setReadOnly(True)
+        self._slug_display.setPlaceholderText("(select a file or folder)")
+        self._slug_display.setStyleSheet(
+            self._slug_display.styleSheet() + " color: {};".format(theme.TEXT_DIM)
+        )
+        form.addRow(slug_label, self._slug_display)
 
         ns_label = QtWidgets.QLabel(t("label_namespace"))
         ns_label.setStyleSheet(theme.LABEL_DIM)
@@ -290,6 +300,7 @@ class AddDialog(QtWidgets.QDialog):
             info = _detect_from_folder(path)
             self._detected_info = info
             self._name_input.setText(info.get("display_name", ""))
+            self._slug_display.setText(slugify_name(info.get("name", "")))
             if info.get("namespace"):
                 self._namespace_input.setText(info["namespace"])
             self._func_combo.clear()
@@ -316,6 +327,7 @@ class AddDialog(QtWidgets.QDialog):
             self._mode_exec.setEnabled(True)
             basename = os.path.splitext(os.path.basename(path))[0]
             display = basename.replace("_", " ").replace("-", " ").title()
+            self._slug_display.setText(slugify_name(basename))
             if sidecar:
                 self._name_input.setText(sidecar.get("display_name", display))
                 if sidecar.get("namespace"):
