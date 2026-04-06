@@ -1,15 +1,23 @@
 """Package information model."""
 
+from carton.core.identity import make_pkg_id, split_pkg_id
+
 
 class PackageInfo:
-    """Package information constructed from registry.json / installed.json."""
+    """Package information constructed from registry.json / installed.json.
+
+    Identity model: ``id == "<namespace>/<name>"``. Both are required for any
+    package that participates in a registry; locally-registered tools that the
+    user has not yet decided to publish may have an empty namespace.
+    """
 
     def __init__(
         self,
-        pkg_id,
-        name,
-        display_name,
-        version,
+        pkg_id=None,
+        namespace="",
+        name="",
+        display_name="",
+        version="0.0.0",
         pkg_type="python_package",
         description="",
         author="",
@@ -21,9 +29,20 @@ class PackageInfo:
         path="",
         installed_at="",
         local_path="",
+        home_registry=None,
     ):
-        self.id = pkg_id
-        self.name = name
+        # Resolve identity. If pkg_id is given, prefer it; otherwise derive from ns/name.
+        if pkg_id and "/" in pkg_id:
+            ns_from_id, name_from_id = split_pkg_id(pkg_id)
+            namespace = namespace or ns_from_id or ""
+            name = name or name_from_id or ""
+        self.namespace = (namespace or "").strip().lower()
+        self.name = (name or "").strip().lower()
+        if self.namespace and self.name:
+            self.id = "{}/{}".format(self.namespace, self.name)
+        else:
+            # Personal-only package: no namespace yet, identify by bare name.
+            self.id = self.name
         self.display_name = display_name
         self.version = version
         self.type = pkg_type
@@ -37,14 +56,16 @@ class PackageInfo:
         self.path = path
         self.installed_at = installed_at
         self.local_path = local_path
+        self.home_registry = home_registry or {}
 
     @classmethod
     def from_registry_entry(cls, pkg_id, pkg_data, version_key=None):
-        """Create from a registry.json entry. Key is UUID."""
+        """Create from a registry.json entry. Key is '<namespace>/<name>'."""
         version_key = version_key or pkg_data.get("latest_version", "0.0.0")
         version_info = pkg_data.get("versions", {}).get(version_key, {})
         return cls(
             pkg_id=pkg_id,
+            namespace=pkg_data.get("namespace", ""),
             name=pkg_data.get("name", ""),
             display_name=pkg_data.get("display_name", ""),
             version=version_key,
@@ -58,9 +79,10 @@ class PackageInfo:
 
     @classmethod
     def from_installed_entry(cls, pkg_id, data):
-        """Create from an installed.json entry. Key is UUID."""
+        """Create from an installed.json entry."""
         return cls(
             pkg_id=pkg_id,
+            namespace=data.get("namespace", ""),
             name=data.get("name", ""),
             display_name=data.get("display_name", ""),
             version=data.get("version", "0.0.0"),
@@ -70,11 +92,13 @@ class PackageInfo:
             source=data.get("source", "registry"),
             installed_at=data.get("installed_at", ""),
             local_path=data.get("local_path", ""),
+            home_registry=data.get("home_registry", {}),
         )
 
     def to_installed_dict(self):
         """Dictionary for writing to installed.json."""
         d = {
+            "namespace": self.namespace,
             "name": self.name,
             "version": self.version,
             "type": self.type,
@@ -87,4 +111,6 @@ class PackageInfo:
             d["display_name"] = self.display_name
         if self.local_path:
             d["local_path"] = self.local_path
+        if self.home_registry:
+            d["home_registry"] = self.home_registry
         return d

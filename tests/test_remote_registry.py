@@ -65,7 +65,7 @@ class TestPublisherRemoteGuard:
         publisher = self._make_publisher()
         remote_entry = RegistryEntry("remote", "https://example.com/registry.json")
         try:
-            publisher.publish({}, "fake-id", remote_entry)
+            publisher.publish({}, remote_entry)
             assert False, "Should have raised RuntimeError"
         except RuntimeError as e:
             assert "remote" in str(e).lower()

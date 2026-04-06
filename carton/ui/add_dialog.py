@@ -14,6 +14,7 @@ from carton.ui.compat import QtWidgets, QtCore, Qt
 from carton.ui.i18n import t
 from carton.ui import theme
 from carton.ui.utils import list_functions
+from carton.core.sidecar import read_sidecar
 
 
 def _detect_from_folder(folder_path):
@@ -38,8 +39,10 @@ def _detect_from_folder(folder_path):
             ep = data.get("entry_point", {})
             if isinstance(ep, dict):
                 info["function"] = ep.get("function", ep.get("procedure", "show"))
-            if data.get("id"):
-                info["id"] = data["id"]
+            if data.get("namespace"):
+                info["namespace"] = data["namespace"]
+            if data.get("home_registry"):
+                info["home_registry"] = data["home_registry"]
             info["icon"] = data.get("icon", "")
             info["description"] = data.get("description", "")
             info["version"] = data.get("version", "0.0.0")
@@ -151,6 +154,12 @@ class AddDialog(QtWidgets.QDialog):
         self._name_input = QtWidgets.QLineEdit()
         form.addRow(name_label, self._name_input)
 
+        ns_label = QtWidgets.QLabel("Namespace")
+        ns_label.setStyleSheet(theme.LABEL_DIM)
+        self._namespace_input = QtWidgets.QLineEdit()
+        self._namespace_input.setPlaceholderText("optional, required for publish")
+        form.addRow(ns_label, self._namespace_input)
+
         icon_label = QtWidgets.QLabel(t("label_icon"))
         icon_label.setStyleSheet(theme.LABEL_DIM)
         icon_row = QtWidgets.QHBoxLayout()
@@ -259,6 +268,8 @@ class AddDialog(QtWidgets.QDialog):
             info = _detect_from_folder(path)
             self._detected_info = info
             self._name_input.setText(info.get("display_name", ""))
+            if info.get("namespace"):
+                self._namespace_input.setText(info["namespace"])
             self._func_combo.clear()
             self._func_combo.addItem(info.get("function", "show"))
             self._func_combo.setCurrentIndex(0)
@@ -276,12 +287,23 @@ class AddDialog(QtWidgets.QDialog):
                 self._mode_func.setChecked(True)
                 self._mode_exec.setEnabled(False)
         else:
-            self._detected_info = None
+            # Single file: prefill from sidecar if present
+            sidecar = read_sidecar(path)
+            self._detected_info = {"sidecar": sidecar} if sidecar else None
             self._mode_group.setVisible(True)
             self._mode_exec.setEnabled(True)
             basename = os.path.splitext(os.path.basename(path))[0]
             display = basename.replace("_", " ").replace("-", " ").title()
-            self._name_input.setText(display)
+            if sidecar:
+                self._name_input.setText(sidecar.get("display_name", display))
+                if sidecar.get("namespace"):
+                    self._namespace_input.setText(sidecar["namespace"])
+                if sidecar.get("icon"):
+                    self._icon_input.setText(sidecar["icon"])
+                if sidecar.get("description"):
+                    self._desc_input.setText(sidecar["description"])
+            else:
+                self._name_input.setText(display)
             self._mode_exec.setChecked(True)
 
             # Populate function list in dropdown
@@ -316,6 +338,7 @@ class AddDialog(QtWidgets.QDialog):
         func = self._func_combo.currentText().strip()
         icon = self._icon_input.text().strip() or "🔧"
         description = self._desc_input.text().strip()
+        namespace = self._namespace_input.text().strip().lower()
 
         if self._is_folder:
             # If package.json exists, use its entry_point directly
@@ -323,6 +346,7 @@ class AddDialog(QtWidgets.QDialog):
             if info and info.get("has_package_json"):
                 result = {
                     "file_path": path,
+                    "namespace": namespace or info.get("namespace", ""),
                     "name": info.get("name", ""),
                     "display_name": display_name,
                     "version": info.get("version", "0.0.0"),
@@ -333,14 +357,20 @@ class AddDialog(QtWidgets.QDialog):
                     "entry_point": info.get("entry_point", {}),
                     "is_folder": True,
                 }
-                if info.get("id"):
-                    result["id"] = info["id"]
+                if info.get("home_registry"):
+                    result["home_registry"] = info["home_registry"]
                 self._result = result
                 self.accept()
                 return
             self._result = self._build_folder_result(path, display_name, func, icon, description)
+            self._result["namespace"] = namespace
         else:
             self._result = self._build_file_result(path, display_name, func, icon, description, is_exec_mode)
+            self._result["namespace"] = namespace
+            # Carry sidecar's home_registry forward if present
+            sidecar = (getattr(self, "_detected_info", None) or {}).get("sidecar")
+            if sidecar and sidecar.get("home_registry"):
+                self._result["home_registry"] = sidecar["home_registry"]
 
         self.accept()
 

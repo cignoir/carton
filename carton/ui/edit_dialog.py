@@ -44,6 +44,25 @@ class EditDialog(QtWidgets.QDialog):
         self._name_input = QtWidgets.QLineEdit(self._pkg_data.get("display_name", ""))
         form.addRow(name_label, self._name_input)
 
+        # Namespace (locked once the package has been published, since renaming
+        # would orphan the registry entry)
+        ns_label = QtWidgets.QLabel("Namespace")
+        ns_label.setStyleSheet(theme.LABEL_DIM)
+        self._namespace_input = QtWidgets.QLineEdit(self._pkg_data.get("namespace", ""))
+        self._namespace_input.setPlaceholderText("optional, required for publish")
+        is_published = (self._pkg_data.get("source") == "published"
+                        or bool(self._published_registries))
+        if is_published:
+            self._namespace_input.setReadOnly(True)
+            self._namespace_input.setToolTip(
+                "Locked: this package is already published. "
+                "Unpublish first to change the namespace."
+            )
+            self._namespace_input.setStyleSheet(
+                self._namespace_input.styleSheet() + " color: {};".format(theme.TEXT_DIM)
+            )
+        form.addRow(ns_label, self._namespace_input)
+
         # Version
         ver_label = QtWidgets.QLabel(t("label_version"))
         ver_label.setStyleSheet(theme.LABEL_DIM)
@@ -243,6 +262,7 @@ class EditDialog(QtWidgets.QDialog):
             "homepage": self._homepage_input.text().strip(),
             "description": self._desc_input.text().strip(),
             "entry_point": entry_point,
+            "namespace": self._namespace_input.text().strip().lower(),
         }
         self.accept()
 

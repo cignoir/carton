@@ -109,6 +109,7 @@ Place this in your tool's root to define metadata:
 
 ```json
 {
+  "namespace": "mystudio",
   "name": "my_tool",
   "display_name": "My Tool",
   "version": "1.0.0",
@@ -120,18 +121,50 @@ Place this in your tool's root to define metadata:
     "module": "my_tool",
     "function": "show"
   },
-  "icon": "🔧"
+  "icon": "🔧",
+  "home_registry": { "name": "studio-main" }
 }
 ```
 
 Supported types: `python_package`, `mel_script`, `plugin`
 
+### Identity model
+
+Packages are identified by **`namespace/name`** (npm-style, e.g. `mystudio/rigger`).
+Both fields are lowercase (`a-z 0-9 - _`). The `namespace` is **required to publish**;
+locally-registered tools that you don't intend to share can omit it.
+
+Once `namespace`/`name` live in `package.json`, **commit the file** so that other
+people who clone your source converge on the same identity automatically — Add /
+Publish on their side will update the same registry entry instead of creating a
+duplicate.
+
+### Single-file scripts (sidecar)
+
+A single `.py` / `.mel` / `.mll` script has nowhere to put `package.json`, so
+Carton uses a **sidecar** named `<filename>.carton.json` placed next to it:
+
+```
+tools/
+├── quickRename.mel
+└── quickRename.mel.carton.json   ← commit this alongside the script
+```
+
+The sidecar carries the same fields as `package.json`. Carton creates it
+automatically the first time you publish.
+
 ## CLI
 
 ```bash
 python -m carton list path/to/registry.json
-python -m carton unpublish --registry path/to/registry.json --id <uuid>
+python -m carton unpublish --registry path/to/registry.json --id mystudio/rigger
+python -m carton migrate-registry --registry path/to/registry.json --namespace mystudio [--dry-run]
 ```
+
+`migrate-registry` upgrades a legacy UUID-keyed registry to the namespace/name
+model: rewrites `registry.json` keys, repacks every stored zip's inner
+`package.json`, restructures `packages/<uuid>/...` into `packages/<ns>/<name>/...`,
+and rebuilds `icons.zip`.
 
 ## Development
 

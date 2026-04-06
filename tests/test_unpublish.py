@@ -18,6 +18,7 @@ def _make_tool_folder(tmpdir, version="1.0.0"):
     with open(os.path.join(tool_dir, "__init__.py"), "w") as f:
         f.write("def show(): pass\n")
     pkg = {
+        "namespace": "mystudio",
         "name": "my_tool",
         "display_name": "My Tool",
         "version": version,
@@ -60,10 +61,11 @@ def _register_and_publish(tmpdir, version="1.0.0"):
         entry_point={"type": "python", "module": "my_tool", "function": "show"},
         is_folder=True,
         version=version,
+        namespace="mystudio",
     )
 
     pkg_data = install_mgr.get_installed_packages()[pkg_id]
-    publisher.publish(pkg_data, pkg_id, reg_entry)
+    publisher.publish(pkg_data, reg_entry)
 
     return pkg_id, tool_dir, config, install_mgr, script_mgr, publisher, reg_entry
 
@@ -87,7 +89,7 @@ class TestUnpublish:
         with tempfile.TemporaryDirectory() as tmpdir:
             pkg_id, _, _, _, _, publisher, reg_entry = _register_and_publish(tmpdir)
 
-            pkg_dir = os.path.join(reg_entry.base_dir, "packages", pkg_id)
+            pkg_dir = os.path.join(reg_entry.base_dir, "packages", "mystudio", "my_tool")
             assert os.path.isdir(pkg_dir)
 
             publisher.unpublish(pkg_id, reg_entry)
@@ -110,7 +112,7 @@ class TestUnpublish:
             _, _, config, _, _, publisher, reg_entry = _register_and_publish(tmpdir)
 
             try:
-                publisher.unpublish("nonexistent-uuid", reg_entry)
+                publisher.unpublish("mystudio/nonexistent", reg_entry)
                 assert False, "Should have raised RuntimeError"
             except RuntimeError as e:
                 assert "not found" in str(e)
@@ -130,6 +132,7 @@ class TestUnpublish:
                 f.write("def show(): pass\n")
             with open(os.path.join(tool_dir_2, "package.json"), "w") as f:
                 json.dump({
+                    "namespace": "mystudio",
                     "name": "other_tool",
                     "display_name": "Other Tool",
                     "version": "1.0.0",
@@ -147,9 +150,10 @@ class TestUnpublish:
                 entry_point={"type": "python", "module": "other_tool", "function": "show"},
                 is_folder=True,
                 version="1.0.0",
+                namespace="mystudio",
             )
             pkg_data_2 = install_mgr.get_installed_packages()[pkg_id_2]
-            publisher.publish(pkg_data_2, pkg_id_2, reg_entry)
+            publisher.publish(pkg_data_2, reg_entry)
 
             # Unpublish the first
             publisher.unpublish(pkg_id_1, reg_entry)
@@ -177,7 +181,7 @@ class TestFindPublishedRegistries:
         with tempfile.TemporaryDirectory() as tmpdir:
             _, _, _, _, _, publisher, _ = _register_and_publish(tmpdir)
 
-            results = publisher.find_published_registries("nonexistent-uuid")
+            results = publisher.find_published_registries("mystudio/nonexistent")
 
             assert results == []
 

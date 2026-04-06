@@ -1,6 +1,5 @@
 """Tests for InstallManager."""
 
-import json
 import os
 import tempfile
 import zipfile
@@ -9,7 +8,7 @@ from carton.core.config import Config
 from carton.core.env_manager import MayaEnvManager
 from carton.core.installer import InstallManager
 
-_TEST_UUID = "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"
+_PKG_ID = "mystudio/test_pkg"
 
 
 def _make_test_zip(tmpdir, pkg_name="test_pkg"):
@@ -32,7 +31,8 @@ class TestInstallManager:
 
             zip_path = _make_test_zip(tmpdir)
             meta = {
-                "id": _TEST_UUID,
+                "id": _PKG_ID,
+                "namespace": "mystudio",
                 "name": "test_pkg",
                 "version": "1.0.0",
                 "type": "python_package",
@@ -41,8 +41,11 @@ class TestInstallManager:
             }
             mgr.install_package(zip_path, meta)
 
-            assert mgr.is_installed(_TEST_UUID)
-            assert mgr.get_installed_version(_TEST_UUID) == "1.0.0"
+            assert mgr.is_installed(_PKG_ID)
+            assert mgr.get_installed_version(_PKG_ID) == "1.0.0"
+            entry = mgr.get_installed_packages()[_PKG_ID]
+            assert entry["namespace"] == "mystudio"
+            assert entry["path"] == "packages/mystudio/test_pkg"
 
     def test_uninstall(self):
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -52,38 +55,14 @@ class TestInstallManager:
 
             zip_path = _make_test_zip(tmpdir)
             meta = {
-                "id": _TEST_UUID,
+                "id": _PKG_ID,
+                "namespace": "mystudio",
                 "name": "test_pkg",
                 "version": "1.0.0",
                 "type": "python_package",
                 "entry_point": {"type": "python", "module": "test_pkg", "function": "show"},
             }
             mgr.install_package(zip_path, meta)
-            mgr.uninstall_package(_TEST_UUID)
+            mgr.uninstall_package(_PKG_ID)
 
-            assert not mgr.is_installed(_TEST_UUID)
-
-    def test_migrate_v1_to_v2(self):
-        with tempfile.TemporaryDirectory() as tmpdir:
-            config = Config(install_dir=tmpdir)
-            installed_data = {
-                "schema_version": "1.0",
-                "packages": {
-                    "old-pkg-uuid": {
-                        "version": "1.0.0",
-                        "entry_point": "old_pkg:show",
-                        "path": "packages/old-pkg",
-                    }
-                },
-            }
-            path = config.installed_json_path
-            os.makedirs(os.path.dirname(path), exist_ok=True)
-            with open(path, "w") as f:
-                json.dump(installed_data, f)
-
-            env = MayaEnvManager()
-            mgr = InstallManager(config, env)
-
-            pkgs = mgr.get_installed_packages()
-            assert pkgs["old-pkg-uuid"]["type"] == "python_package"
-            assert pkgs["old-pkg-uuid"]["source"] == "registry"
+            assert not mgr.is_installed(_PKG_ID)

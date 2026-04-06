@@ -2,19 +2,19 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://carton.dev/schemas/package.schema.json",
   "title": "Carton Package Metadata",
-  "description": "Carton パッケージの package.json スキーマ (v2.0)",
+  "description": "Carton パッケージの package.json スキーマ (v3.0 — namespace/name identity)",
   "type": "object",
   "required": ["name", "display_name", "version", "description", "author", "maya_versions", "entry_point"],
   "properties": {
-    "id": {
+    "namespace": {
       "type": "string",
-      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
-      "description": "パッケージ固有ID（UUID v4）。省略時は CI/CD で自動生成"
+      "pattern": "^[a-z0-9][a-z0-9-]{1,31}$",
+      "description": "パッケージの名前空間。publish 時に必須。小文字英数字+ハイフン、2〜32文字"
     },
     "name": {
       "type": "string",
-      "pattern": "^[a-z][a-z0-9_]*$",
-      "description": "import 名 / フォルダ名（小文字英数字+アンダースコア）"
+      "pattern": "^[a-z0-9][a-z0-9_-]{1,31}$",
+      "description": "import 名 / フォルダ名（小文字英数字+アンダースコア/ハイフン）"
     },
     "display_name": {
       "type": "string",
@@ -73,6 +73,21 @@
     "icon": {
       "type": "string",
       "description": "アイコン。画像ファイルの相対パス (例: resources/icon.png) または絵文字 (例: 📷)"
+    },
+    "home_registry": {
+      "type": "object",
+      "description": "このパッケージの本籍レジストリ。別レジストリに publish しようとすると警告される",
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Carton 内で登録されているレジストリ名"
+        },
+        "hint": {
+          "type": "string",
+          "description": "レジストリの場所ヒント（パス または URL）。Add 時のレジストリ追加誘導に使う"
+        }
+      },
+      "additionalProperties": false
     },
     "dependencies": {
       "type": "array",

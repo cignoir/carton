@@ -2,8 +2,9 @@
 
 import json
 import os
-import uuid as _uuid
 from datetime import datetime, timezone
+
+from carton.core.identity import normalize
 
 
 class ScriptManager:
@@ -20,25 +21,30 @@ class ScriptManager:
 
     def register(self, file_path, name, display_name, icon, description,
                  pkg_type, entry_point, is_folder=False, version="0.0.0",
-                 author="", pkg_id=None):
+                 author="", namespace="", home_registry=None):
         """Register locally.
 
         Args:
             file_path: File path or folder path (held as a reference)
-            name: Module name / script name
+            name: Module name / script name (required)
             display_name: Display name in the UI
             icon: Emoji or image path
             description: Description
             pkg_type: "python_package" or "mel_script"
             entry_point: Entry point dict
             is_folder: Whether this is a folder registration
-            pkg_id: Reuse an existing UUID (from package.json) if provided
+            namespace: Optional namespace. Required to publish; may be empty
+                for personal-only registration.
+            home_registry: Optional dict with at least {"name": ...}.
 
         Returns:
-            pkg_id (UUID)
+            pkg_id: ``"<namespace>/<name>"`` if namespace is set, else ``name``.
         """
-        if not pkg_id:
-            pkg_id = str(_uuid.uuid4())
+        name = normalize(name)
+        if not name:
+            raise ValueError("name is required to register a script")
+        ns = normalize(namespace)
+        pkg_id = "{}/{}".format(ns, name) if ns else name
 
         # Add to environment variables (reference-based)
         self._add_to_env(file_path, pkg_type, is_folder)
@@ -46,6 +52,7 @@ class ScriptManager:
         # Record in installed.json
         now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
         installed_data = {
+            "namespace": ns,
             "name": name,
             "display_name": display_name,
             "version": version,
@@ -60,6 +67,8 @@ class ScriptManager:
             "icon": icon,
             "description": description,
         }
+        if home_registry:
+            installed_data["home_registry"] = home_registry
 
         installed = self._install_mgr._installed
         installed["packages"][pkg_id] = installed_data

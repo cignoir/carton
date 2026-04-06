@@ -671,7 +671,29 @@ class CartonWindow(QtWidgets.QDialog):
             pkg_data["homepage"] = result["homepage"]
             pkg_data["description"] = result["description"]
             pkg_data["entry_point"] = result["entry_point"]
-            self._install_manager._installed["packages"][pkg_id] = pkg_data
+
+            new_ns = result.get("namespace", "")
+            old_ns = pkg_data.get("namespace", "")
+            installed_pkgs = self._install_manager._installed["packages"]
+            if new_ns != old_ns and not published_regs:
+                # Validate the new namespace, then rekey the installed entry
+                if new_ns:
+                    from carton.core.identity import validate_namespace, InvalidIdentityError
+                    try:
+                        new_ns = validate_namespace(new_ns)
+                    except InvalidIdentityError as e:
+                        QtWidgets.QMessageBox.warning(self, t("register_error"), str(e))
+                        return
+                pkg_data["namespace"] = new_ns
+                name = pkg_data.get("name", "")
+                new_pkg_id = "{}/{}".format(new_ns, name) if new_ns else name
+                if new_pkg_id != pkg_id:
+                    installed_pkgs.pop(pkg_id, None)
+                    installed_pkgs[new_pkg_id] = pkg_data
+                else:
+                    installed_pkgs[pkg_id] = pkg_data
+            else:
+                installed_pkgs[pkg_id] = pkg_data
             self._install_manager._save_installed()
             self._rebuild_cards()
 
@@ -719,7 +741,8 @@ class CartonWindow(QtWidgets.QDialog):
                 is_folder=result.get("is_folder", False),
                 version=result.get("version", "0.0.0"),
                 author=result.get("author", ""),
-                pkg_id=result.get("id"),
+                namespace=result.get("namespace", ""),
+                home_registry=result.get("home_registry"),
             )
             self._rebuild_cards()
         except Exception as e:
@@ -759,6 +782,35 @@ class CartonWindow(QtWidgets.QDialog):
         else:
             return
 
+        # Home registry mismatch warning
+        home_reg = pkg_data.get("home_registry") or {}
+        home_name = home_reg.get("name", "")
+        if home_name and home_name != target_registry.name:
+            reply = QtWidgets.QMessageBox.question(
+                self, t("publish"),
+                "This package's home registry is '{}'. Publish to '{}' instead?".format(
+                    home_name, target_registry.name),
+                QtWidgets.QMessageBox.Yes | QtWidgets.QMessageBox.No,
+            )
+            if reply != QtWidgets.QMessageBox.Yes:
+                return
+
+        # Ensure namespace is set; prompt if not
+        namespace = pkg_data.get("namespace", "")
+        if not namespace:
+            ns, ok = QtWidgets.QInputDialog.getText(
+                self, t("publish"),
+                "Enter a namespace for this package (lowercase a-z 0-9 -, 2-32 chars):",
+            )
+            if not ok or not ns.strip():
+                return
+            namespace = ns.strip().lower()
+            # Persist immediately so subsequent publishes don't re-ask
+            installed_pkgs = self._install_manager._installed["packages"]
+            if pkg_id in installed_pkgs:
+                installed_pkgs[pkg_id]["namespace"] = namespace
+                self._install_manager._save_installed()
+
         reply = QtWidgets.QMessageBox.question(
             self, t("publish"),
             t("confirm_publish", display, local_version, target_registry.name),
@@ -771,22 +823,33 @@ class CartonWindow(QtWidgets.QDialog):
         QtWidgets.QApplication.processEvents()
 
         try:
-            self._publisher.publish(pkg_data, pkg_id, target_registry)
+            result = self._publisher.publish(pkg_data, target_registry, namespace=namespace)
 
+            new_pkg_id = result["id"]
             installed_pkgs = self._install_manager._installed["packages"]
+            # Re-key the installed entry under the canonical namespace/name
             if pkg_id in installed_pkgs:
-                installed_pkgs[pkg_id]["source"] = "published"
+                entry = installed_pkgs.pop(pkg_id)
+                entry["namespace"] = result["namespace"]
+                entry["name"] = result["name"]
+                entry["source"] = "published"
+                entry.setdefault("home_registry", {"name": target_registry.name})
+                installed_pkgs[new_pkg_id] = entry
                 self._install_manager._save_installed()
 
-            QtWidgets.QMessageBox.information(
-                self, t("publish"), t("publish_success", display),
-            )
+            warnings = result.get("warnings") or []
+            msg = t("publish_success", display)
+            if warnings:
+                msg += "\n\nWarnings:\n  - " + "\n  - ".join(warnings)
+            QtWidgets.QMessageBox.information(self, t("publish"), msg)
             self.refresh()
         except Exception as e:
             self._set_publish_button_state(pkg_id, busy=False)
-            from carton.core.publisher import VersionConflictError
+            from carton.core.publisher import VersionConflictError, MissingNamespaceError
             if isinstance(e, VersionConflictError):
                 msg = t("publish_already_published", e.version)
+            elif isinstance(e, MissingNamespaceError):
+                msg = str(e)
             else:
                 msg = str(e)
             QtWidgets.QMessageBox.warning(self, t("publish_error"), msg)
@@ -925,6 +988,7 @@ class CartonWindow(QtWidgets.QDialog):
 
             meta = {
                 "id": pkg_id,
+                "namespace": pkg_data.get("namespace", ""),
                 "name": pkg_name,
                 "version": latest,
                 "type": pkg_data.get("type", "python_package"),
