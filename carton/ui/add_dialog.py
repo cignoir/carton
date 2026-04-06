@@ -160,6 +160,8 @@ class AddDialog(QtWidgets.QDialog):
         self._slug_display = QtWidgets.QLineEdit()
         self._slug_display.setReadOnly(True)
         self._slug_display.setPlaceholderText("(select a file or folder)")
+        self._slug_display.setToolTip(t("name_tooltip"))
+        slug_label.setToolTip(t("name_tooltip"))
         self._slug_display.setStyleSheet(
             self._slug_display.styleSheet() + " color: {};".format(theme.TEXT_DIM)
         )

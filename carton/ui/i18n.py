@@ -25,6 +25,7 @@ _STRINGS = {
         # Form labels
         "label_display_name": "Display Name",
         "label_name": "Internal Name",
+        "name_tooltip": "Derived from the file or folder name. Used as the package identifier and cannot be changed after registration.",
         "label_namespace": "Namespace",
         "namespace_placeholder": "e.g. mystudio (required to publish)",
         "label_version": "Version",
@@ -135,6 +136,7 @@ _STRINGS = {
         # Form labels
         "label_display_name": "表示名",
         "label_name": "内部名",
+        "name_tooltip": "ファイル名またはフォルダ名から自動生成されます。パッケージの識別子として使われ、登録後は変更できません。",
         "label_namespace": "ネームスペース",
         "namespace_placeholder": "例: mystudio（公開時に必須）",
         "label_version": "バージョン",

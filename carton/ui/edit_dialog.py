@@ -51,9 +51,8 @@ class EditDialog(QtWidgets.QDialog):
         slug_label.setStyleSheet(theme.LABEL_DIM)
         self._slug_display = QtWidgets.QLineEdit(self._pkg_data.get("name", ""))
         self._slug_display.setReadOnly(True)
-        self._slug_display.setToolTip(
-            "The package's identifier. Cannot be changed after registration."
-        )
+        self._slug_display.setToolTip(t("name_tooltip"))
+        slug_label.setToolTip(t("name_tooltip"))
         self._slug_display.setStyleSheet(
             self._slug_display.styleSheet() + " color: {};".format(theme.TEXT_DIM)
         )
