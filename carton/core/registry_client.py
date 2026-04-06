@@ -91,7 +91,7 @@ class RegistryClient:
 
     def _fetch_icons_archive(self, entry):
         """Download icons.zip from a remote registry and extract to icon cache."""
-        cache_dir = os.path.join(self._config.install_dir, ".icon_cache")
+        cache_dir = self._config.icon_cache_dir
         icons_url = urljoin(entry.base_dir, "icons.zip")
         try:
             req = Request(icons_url)
@@ -103,6 +103,9 @@ class RegistryClient:
         except Exception:
             # Fall back to per-icon download handled by UI layer
             pass
+        # Keep the cache bounded regardless of whether this pull succeeded.
+        from carton.core.icon_cache import enforce_size_limit
+        enforce_size_limit(cache_dir)
 
     def get_packages(self):
         """Return the merged package dictionary. Fetches if not yet loaded."""

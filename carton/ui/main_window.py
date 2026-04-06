@@ -53,11 +53,16 @@ class _IconFetcher(QtCore.QThread):
     def run(self):
         if not self._config:
             return
-        cache_dir = os.path.join(self._config.install_dir, ".icon_cache")
+        cache_dir = self._config.icon_cache_dir
         os.makedirs(cache_dir, exist_ok=True)
         for pkg_id, base_url, icon_filename in self._tasks:
             cached = os.path.join(cache_dir, icon_filename)
             if os.path.exists(cached):
+                # Touch atime so the LRU eviction sees this file as "used".
+                try:
+                    os.utime(cached, None)
+                except OSError:
+                    pass
                 self.icon_ready.emit(pkg_id, cached)
                 continue
             icon_url = urljoin(base_url, "icons/{}".format(icon_filename))
@@ -70,6 +75,9 @@ class _IconFetcher(QtCore.QThread):
                 self.icon_ready.emit(pkg_id, cached)
             except Exception:
                 pass
+        # Keep the cache from growing unboundedly across sessions.
+        from carton.core.icon_cache import enforce_size_limit
+        enforce_size_limit(cache_dir)
 
 
 class _SelfUpdateCheckWorker(QtCore.QThread):
@@ -555,7 +563,7 @@ class CartonWindow(QtWidgets.QDialog):
         if is_remote:
             if self._config:
                 cached = os.path.join(
-                    self._config.install_dir, ".icon_cache", icon_filename,
+                    self._config.icon_cache_dir, icon_filename,
                 )
                 if os.path.exists(cached):
                     return cached
@@ -569,7 +577,7 @@ class CartonWindow(QtWidgets.QDialog):
         """Download a remote icon and cache locally. Returns local path or None."""
         if not self._config or not icon_filename:
             return None
-        cache_dir = os.path.join(self._config.install_dir, ".icon_cache")
+        cache_dir = self._config.icon_cache_dir
         cached = os.path.join(cache_dir, icon_filename)
         if os.path.exists(cached):
             return cached
