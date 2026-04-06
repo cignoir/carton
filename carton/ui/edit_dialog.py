@@ -62,18 +62,9 @@ class EditDialog(QtWidgets.QDialog):
         # would orphan the registry entry)
         ns_label = QtWidgets.QLabel(t("label_namespace"))
         ns_label.setStyleSheet(theme.LABEL_DIM)
-        ns_wrapper = QtWidgets.QWidget()
-        ns_box = QtWidgets.QVBoxLayout(ns_wrapper)
-        ns_box.setContentsMargins(0, 0, 0, 0)
-        ns_box.setSpacing(2)
         self._namespace_input = QtWidgets.QLineEdit(self._pkg_data.get("namespace", ""))
         self._namespace_input.setPlaceholderText(t("namespace_placeholder"))
         self._namespace_input.textChanged.connect(self._update_namespace_preview)
-        self._namespace_preview = QtWidgets.QLabel("")
-        self._namespace_preview.setStyleSheet(
-            "color: {}; font-size: 11px;".format(theme.TEXT_MUTED)
-        )
-        self._namespace_preview.setVisible(False)
         is_published = (self._pkg_data.get("source") == "published"
                         or bool(self._published_registries))
         if is_published:
@@ -85,9 +76,14 @@ class EditDialog(QtWidgets.QDialog):
             self._namespace_input.setStyleSheet(
                 self._namespace_input.styleSheet() + " color: {};".format(theme.TEXT_DIM)
             )
-        ns_box.addWidget(self._namespace_input)
-        ns_box.addWidget(self._namespace_preview)
-        form.addRow(ns_label, ns_wrapper)
+        form.addRow(ns_label, self._namespace_input)
+        # Slug preview on its own row to keep the input from being squished
+        self._namespace_preview = QtWidgets.QLabel("")
+        self._namespace_preview.setStyleSheet(
+            "color: {}; font-size: 11px;".format(theme.TEXT_MUTED)
+        )
+        self._namespace_preview.setVisible(False)
+        form.addRow("", self._namespace_preview)
 
         # Version
         ver_label = QtWidgets.QLabel(t("label_version"))

@@ -169,21 +169,18 @@ class AddDialog(QtWidgets.QDialog):
 
         ns_label = QtWidgets.QLabel(t("label_namespace"))
         ns_label.setStyleSheet(theme.LABEL_DIM)
-        ns_wrapper = QtWidgets.QWidget()
-        ns_box = QtWidgets.QVBoxLayout(ns_wrapper)
-        ns_box.setContentsMargins(0, 0, 0, 0)
-        ns_box.setSpacing(2)
         self._namespace_input = QtWidgets.QLineEdit()
         self._namespace_input.setPlaceholderText(t("namespace_placeholder"))
         self._namespace_input.textChanged.connect(self._update_namespace_preview)
+        form.addRow(ns_label, self._namespace_input)
+        # Slug preview lives on its own row so the input doesn't get squished
+        # when the wrapper widget tries to share vertical space.
         self._namespace_preview = QtWidgets.QLabel("")
         self._namespace_preview.setStyleSheet(
             "color: {}; font-size: 11px;".format(theme.TEXT_MUTED)
         )
         self._namespace_preview.setVisible(False)
-        ns_box.addWidget(self._namespace_input)
-        ns_box.addWidget(self._namespace_preview)
-        form.addRow(ns_label, ns_wrapper)
+        form.addRow("", self._namespace_preview)
 
         icon_label = QtWidgets.QLabel(t("label_icon"))
         icon_label.setStyleSheet(theme.LABEL_DIM)
