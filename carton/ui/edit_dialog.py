@@ -20,7 +20,7 @@ class EditDialog(QtWidgets.QDialog):
         self._result = None
 
         self.setWindowTitle(t("edit_title"))
-        self.setFixedSize(440, 540)
+        self.setFixedSize(440, 520)
         self.setStyleSheet(
             theme.dialog_style(
                 theme.combobox_style()
@@ -47,17 +47,20 @@ class EditDialog(QtWidgets.QDialog):
 
         # Namespace (locked once the package has been published, since renaming
         # would orphan the registry entry)
-        ns_label = QtWidgets.QLabel("Namespace")
+        ns_label = QtWidgets.QLabel(t("label_namespace"))
         ns_label.setStyleSheet(theme.LABEL_DIM)
-        ns_box = QtWidgets.QVBoxLayout()
+        ns_wrapper = QtWidgets.QWidget()
+        ns_box = QtWidgets.QVBoxLayout(ns_wrapper)
+        ns_box.setContentsMargins(0, 0, 0, 0)
         ns_box.setSpacing(2)
         self._namespace_input = QtWidgets.QLineEdit(self._pkg_data.get("namespace", ""))
-        self._namespace_input.setPlaceholderText("optional, required for publish")
+        self._namespace_input.setPlaceholderText(t("namespace_placeholder"))
+        self._namespace_input.textChanged.connect(self._update_namespace_preview)
         self._namespace_preview = QtWidgets.QLabel("")
         self._namespace_preview.setStyleSheet(
             "color: {}; font-size: 11px;".format(theme.TEXT_MUTED)
         )
-        self._namespace_input.textChanged.connect(self._update_namespace_preview)
+        self._namespace_preview.setVisible(False)
         is_published = (self._pkg_data.get("source") == "published"
                         or bool(self._published_registries))
         if is_published:
@@ -71,8 +74,6 @@ class EditDialog(QtWidgets.QDialog):
             )
         ns_box.addWidget(self._namespace_input)
         ns_box.addWidget(self._namespace_preview)
-        ns_wrapper = QtWidgets.QWidget()
-        ns_wrapper.setLayout(ns_box)
         form.addRow(ns_label, ns_wrapper)
 
         # Version
@@ -225,8 +226,10 @@ class EditDialog(QtWidgets.QDialog):
         slug = slugify_namespace(text)
         if slug and slug != text.strip().lower():
             self._namespace_preview.setText("→ {}".format(slug))
+            self._namespace_preview.setVisible(True)
         else:
             self._namespace_preview.setText("")
+            self._namespace_preview.setVisible(False)
 
     def _browse_icon(self):
         path = QtWidgets.QFileDialog.getOpenFileName(

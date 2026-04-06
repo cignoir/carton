@@ -111,7 +111,7 @@ class AddDialog(QtWidgets.QDialog):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setWindowTitle(t("add_title"))
-        self.setFixedSize(440, 420)
+        self.setFixedSize(440, 400)
         self.setStyleSheet(
             theme.dialog_style(
                 "QRadioButton {{ color: {text}; font-size: 13px; }}".format(
@@ -155,21 +155,22 @@ class AddDialog(QtWidgets.QDialog):
         self._name_input = QtWidgets.QLineEdit()
         form.addRow(name_label, self._name_input)
 
-        ns_label = QtWidgets.QLabel("Namespace")
+        ns_label = QtWidgets.QLabel(t("label_namespace"))
         ns_label.setStyleSheet(theme.LABEL_DIM)
-        ns_box = QtWidgets.QVBoxLayout()
+        ns_wrapper = QtWidgets.QWidget()
+        ns_box = QtWidgets.QVBoxLayout(ns_wrapper)
+        ns_box.setContentsMargins(0, 0, 0, 0)
         ns_box.setSpacing(2)
         self._namespace_input = QtWidgets.QLineEdit()
-        self._namespace_input.setPlaceholderText("e.g. mystudio (required to publish)")
+        self._namespace_input.setPlaceholderText(t("namespace_placeholder"))
+        self._namespace_input.textChanged.connect(self._update_namespace_preview)
         self._namespace_preview = QtWidgets.QLabel("")
         self._namespace_preview.setStyleSheet(
             "color: {}; font-size: 11px;".format(theme.TEXT_MUTED)
         )
-        self._namespace_input.textChanged.connect(self._update_namespace_preview)
+        self._namespace_preview.setVisible(False)
         ns_box.addWidget(self._namespace_input)
         ns_box.addWidget(self._namespace_preview)
-        ns_wrapper = QtWidgets.QWidget()
-        ns_wrapper.setLayout(ns_box)
         form.addRow(ns_label, ns_wrapper)
 
         icon_label = QtWidgets.QLabel(t("label_icon"))
@@ -248,8 +249,10 @@ class AddDialog(QtWidgets.QDialog):
         slug = slugify_namespace(text)
         if slug and slug != text.strip().lower():
             self._namespace_preview.setText("→ {}".format(slug))
+            self._namespace_preview.setVisible(True)
         else:
             self._namespace_preview.setText("")
+            self._namespace_preview.setVisible(False)
 
     def _browse_icon(self):
         path, _ = QtWidgets.QFileDialog.getOpenFileName(

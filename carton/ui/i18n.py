@@ -24,6 +24,8 @@ _STRINGS = {
 
         # Form labels
         "label_display_name": "Display Name",
+        "label_namespace": "Namespace",
+        "namespace_placeholder": "e.g. mystudio (required to publish)",
         "label_version": "Version",
         "label_icon": "Icon",
         "label_homepage": "Homepage",
@@ -131,6 +133,8 @@ _STRINGS = {
 
         # Form labels
         "label_display_name": "表示名",
+        "label_namespace": "ネームスペース",
+        "namespace_placeholder": "例: mystudio（公開時に必須）",
         "label_version": "バージョン",
         "label_icon": "アイコン",
         "label_homepage": "ホームページ",
