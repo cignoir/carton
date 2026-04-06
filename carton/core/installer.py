@@ -2,11 +2,22 @@
 
 import json
 import os
+import shutil
+import time
 import zipfile
 from datetime import datetime, timezone
 
 from carton.core.handlers import get_handler
 from carton.models.package_info import PackageInfo
+
+
+class InstallError(RuntimeError):
+    """Raised when a package install fails.
+
+    On failure, InstallManager.install_package restores the previous version
+    if there was one, so catching this exception means the on-disk state is
+    back to what it was before the install attempt.
+    """
 
 
 class InstallManager:
@@ -43,8 +54,13 @@ class InstallManager:
     def install_package(self, zip_path, meta):
         """Install a package from a zip file.
 
+        The operation is transactional: if any step fails (bad zip, handler
+        error, disk error), the on-disk state and installed.json are rolled
+        back to the previous version (or to "not installed" for a fresh
+        install). Raises :class:`InstallError` on failure.
+
         Args:
-            zip_path: Path to the downloaded zip
+            zip_path: Path to the downloaded zip.
             meta: Package information (dict) containing id, name, version, etc.
         """
         pkg_id = meta["id"]
@@ -59,45 +75,111 @@ class InstallManager:
         else:
             rel_path = "packages/{}".format(name)
         package_dir = os.path.join(self._config.install_dir, rel_path)
-        os.makedirs(package_dir, exist_ok=True)
 
-        with zipfile.ZipFile(zip_path, "r") as zf:
-            zf.extractall(package_dir)
-
-        # Read the inner package.json for the canonical entry_point. The
-        # registry-side meta only carries identity + display fields; the inner
-        # package.json is the source of truth for type/entry_point details.
-        entry_point = meta.get("entry_point", {}) or {}
-        inner_pkg_json = os.path.join(package_dir, "package.json")
-        if os.path.exists(inner_pkg_json):
+        # --- Snapshot previous state for rollback ---------------------------
+        # If a previous version is installed, move it aside as a backup. This
+        # is a rename (fast, atomic on the same filesystem) so the live tree
+        # is gone in one step and we have a pristine destination for the new
+        # contents. If anything goes wrong below, we rename the backup back.
+        backup_dir = None
+        if os.path.isdir(package_dir):
+            backup_dir = "{}.carton-bak-{}".format(package_dir, int(time.time() * 1000))
             try:
-                with open(inner_pkg_json, "rb") as f:
-                    # Use latin-1 to round-trip any pre-UTF-8 mojibake bytes
-                    inner = json.loads(f.read().decode("latin-1"))
-                if inner.get("entry_point"):
-                    entry_point = inner["entry_point"]
-                if inner.get("type"):
-                    pkg_type = inner["type"]
-            except (OSError, ValueError):
-                pass
+                os.rename(package_dir, backup_dir)
+            except OSError as e:
+                raise InstallError(
+                    "Failed to prepare install (cannot snapshot previous version): {}".format(e)
+                )
 
-        handler = get_handler(pkg_type)
-        handler.install(package_dir, meta, self._env_manager)
+        prev_entry = self._installed.get("packages", {}).get(pkg_id)
 
-        info = PackageInfo(
-            pkg_id=pkg_id,
-            namespace=namespace,
-            name=name,
-            display_name=meta.get("display_name", name),
-            version=version,
-            pkg_type=pkg_type,
-            entry_point=entry_point,
-            path=rel_path,
-            source="registry",
-            installed_at=datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
-        )
-        self._installed["packages"][pkg_id] = info.to_installed_dict()
-        self._save_installed()
+        try:
+            os.makedirs(package_dir, exist_ok=True)
+
+            # Validate the zip up front so BadZipFile surfaces before we've
+            # written anything into package_dir.
+            try:
+                with zipfile.ZipFile(zip_path, "r") as zf:
+                    bad = zf.testzip()
+                    if bad is not None:
+                        raise InstallError(
+                            "Corrupt zip — bad entry: {}".format(bad)
+                        )
+                    zf.extractall(package_dir)
+            except zipfile.BadZipFile as e:
+                raise InstallError("Invalid or corrupt package zip: {}".format(e))
+            except InstallError:
+                raise
+            except OSError as e:
+                raise InstallError("Failed to extract package: {}".format(e))
+
+            # Read the inner package.json for the canonical entry_point. The
+            # registry-side meta only carries identity + display fields; the
+            # inner package.json is the source of truth for type/entry_point
+            # details.
+            entry_point = meta.get("entry_point", {}) or {}
+            inner_pkg_json = os.path.join(package_dir, "package.json")
+            if os.path.exists(inner_pkg_json):
+                try:
+                    with open(inner_pkg_json, "rb") as f:
+                        # Use latin-1 to round-trip any pre-UTF-8 mojibake bytes
+                        inner = json.loads(f.read().decode("latin-1"))
+                    if inner.get("entry_point"):
+                        entry_point = inner["entry_point"]
+                    if inner.get("type"):
+                        pkg_type = inner["type"]
+                except (OSError, ValueError):
+                    pass
+
+            handler = get_handler(pkg_type)
+            try:
+                handler.install(package_dir, meta, self._env_manager)
+            except Exception as e:
+                raise InstallError("Handler install failed: {}".format(e))
+
+            info = PackageInfo(
+                pkg_id=pkg_id,
+                namespace=namespace,
+                name=name,
+                display_name=meta.get("display_name", name),
+                version=version,
+                pkg_type=pkg_type,
+                entry_point=entry_point,
+                path=rel_path,
+                source="registry",
+                installed_at=datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+            )
+            self._installed["packages"][pkg_id] = info.to_installed_dict()
+            try:
+                self._save_installed()
+            except OSError as e:
+                # Revert the in-memory registry change before rolling back
+                # the filesystem in the outer except.
+                if prev_entry is not None:
+                    self._installed["packages"][pkg_id] = prev_entry
+                else:
+                    self._installed["packages"].pop(pkg_id, None)
+                raise InstallError("Failed to persist installed.json: {}".format(e))
+
+        except Exception:
+            # --- Roll back: restore the previous version (or clean up) -----
+            # Best-effort: we swallow rollback errors so the original cause
+            # still reaches the caller, but we log them for debugging.
+            try:
+                if os.path.isdir(package_dir):
+                    shutil.rmtree(package_dir, ignore_errors=True)
+            except Exception as ce:
+                print("[Carton] rollback cleanup failed: {}".format(ce))
+            if backup_dir and os.path.isdir(backup_dir):
+                try:
+                    os.rename(backup_dir, package_dir)
+                except OSError as ce:
+                    print("[Carton] rollback restore failed: {}".format(ce))
+            raise
+
+        # --- Success: drop the backup --------------------------------------
+        if backup_dir and os.path.isdir(backup_dir):
+            shutil.rmtree(backup_dir, ignore_errors=True)
 
     def uninstall_package(self, pkg_id):
         """Uninstall a package."""

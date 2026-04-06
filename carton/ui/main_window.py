@@ -1011,10 +1011,10 @@ class CartonWindow(QtWidgets.QDialog):
         )
         if reply != QtWidgets.QMessageBox.Yes:
             return
-        try:
-            self._install_manager.uninstall_package(pkg_id)
-        except Exception:
-            pass
+        # Note: we intentionally do NOT uninstall the old version first.
+        # install_package() performs a transactional replace with rollback,
+        # so if the new version fails to download/extract/install, the old
+        # version stays intact rather than leaving the user with nothing.
         self._on_install(pkg_id)
 
     def _check_self_update(self):
