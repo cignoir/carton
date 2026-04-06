@@ -72,6 +72,30 @@ class _IconFetcher(QtCore.QThread):
                 pass
 
 
+class _SelfUpdateCheckWorker(QtCore.QThread):
+    """Background worker that probes GitHub for a new Carton release.
+
+    Emits ``finished_signal(result, error)`` where ``result`` is either
+    ``None`` (no update) or ``(version, download_url)``, and ``error`` is
+    a string (or ``""`` on success). Running the probe off-thread keeps
+    the UI responsive when the network is slow or unreachable.
+    """
+
+    finished_signal = QtCore.Signal(object, str)
+
+    def __init__(self, self_updater, parent=None):
+        super().__init__(parent)
+        self._self_updater = self_updater
+
+    def run(self):
+        try:
+            result = self._self_updater.check_update()
+        except Exception as e:
+            self.finished_signal.emit(None, str(e))
+            return
+        self.finished_signal.emit(result, "")
+
+
 class _PublishTargetDialog(QtWidgets.QDialog):
     """Dialog to choose a publish target registry."""
 
@@ -157,6 +181,7 @@ class CartonWindow(QtWidgets.QDialog):
         self._config = None
         self._icon_fetcher = None
         self._card_map = {}  # pkg_id -> PackageCard (for deferred icon updates)
+        self._update_check_worker = None
 
         self._setup_ui()
 
@@ -1021,44 +1046,54 @@ class CartonWindow(QtWidgets.QDialog):
         """Poll GitHub for a newer Carton release and update the banner.
 
         Respects ``config.auto_check_updates``. Pass ``force=True`` to
-        bypass the setting (used by the manual "Check now" button in
-        Settings).
+        bypass the setting (used by the manual "Check now" button).
+
+        The GitHub probe runs on a background thread so a slow or
+        unreachable network never blocks the UI. The banner is updated
+        from the worker's finished signal.
         """
         if not self._self_updater:
             return
-        if not force and self._config and not self._config.auto_check_updates:
-            # Still surface a pending (already-downloaded) update even when
-            # automatic checks are disabled, so the user knows a staged
-            # update is waiting for a restart.
-            if self._self_updater.has_pending_update():
-                ver = self._self_updater.get_pending_version()
-                self._update_banner_label.setText(t("update_pending", ver))
-                self._update_banner_btn.setVisible(False)
-                self._update_banner.setVisible(True)
-            else:
-                self._update_banner.setVisible(False)
-            return
+
+        # Pending staged updates are a pure local file check — do this
+        # synchronously so the banner appears immediately on startup.
         if self._self_updater.has_pending_update():
             ver = self._self_updater.get_pending_version()
-            self._update_banner_label.setText(
-                t("update_pending", ver)
-            )
+            self._update_banner_label.setText(t("update_pending", ver))
             self._update_banner_btn.setVisible(False)
             self._update_banner.setVisible(True)
             return
-        try:
-            result = self._self_updater.check_update()
-        except Exception:
-            result = None
-        if result:
-            self._pending_self_update = result  # (version, download_url)
-            self._update_banner_label.setText(
-                t("update_available", result[0])
-            )
-            self._update_banner_btn.setVisible(True)
-            self._update_banner.setVisible(True)
-        else:
+
+        if not force and self._config and not self._config.auto_check_updates:
+            # Auto-check disabled and nothing staged — keep the banner
+            # hidden and skip the network entirely.
             self._update_banner.setVisible(False)
+            return
+
+        # Don't stack multiple in-flight checks if the user mashes refresh.
+        if self._update_check_worker and self._update_check_worker.isRunning():
+            return
+
+        self._update_banner.setVisible(False)
+        self._update_check_worker = _SelfUpdateCheckWorker(
+            self._self_updater, parent=self,
+        )
+        self._update_check_worker.finished_signal.connect(
+            self._on_self_update_check_done
+        )
+        self._update_check_worker.start()
+
+    def _on_self_update_check_done(self, result, error):
+        """Slot for _SelfUpdateCheckWorker. Runs on the UI thread."""
+        if error or not result:
+            # Silent on failure: the banner just stays hidden. The user
+            # can still click "Check for updates now" in Settings to get
+            # an explicit error message.
+            return
+        self._pending_self_update = result  # (version, download_url)
+        self._update_banner_label.setText(t("update_available", result[0]))
+        self._update_banner_btn.setVisible(True)
+        self._update_banner.setVisible(True)
 
     def _on_self_update(self):
         if not hasattr(self, "_pending_self_update") or not self._pending_self_update:

@@ -157,13 +157,13 @@ class SettingsDialog(QtWidgets.QDialog):
         )
         layout.addWidget(auto_hint)
 
-        check_btn = QtWidgets.QPushButton(t("settings_check_update_now"))
-        check_btn.setStyleSheet(theme.btn_ghost_text())
-        check_btn.clicked.connect(self._on_check_update_now)
+        self._check_update_btn = QtWidgets.QPushButton(t("settings_check_update_now"))
+        self._check_update_btn.setStyleSheet(theme.btn_ghost_text())
+        self._check_update_btn.clicked.connect(self._on_check_update_now)
         # Without a self_updater reference we can't perform the check, so
         # hide the button rather than show a dead control.
-        check_btn.setVisible(self._self_updater is not None)
-        layout.addWidget(check_btn, alignment=Qt.AlignLeft)
+        self._check_update_btn.setVisible(self._self_updater is not None)
+        layout.addWidget(self._check_update_btn, alignment=Qt.AlignLeft)
 
         layout.addStretch()
         return page
@@ -173,15 +173,37 @@ class SettingsDialog(QtWidgets.QDialog):
         self._config.save()
 
     def _on_check_update_now(self):
-        """Manual update probe — works even when auto-check is disabled."""
+        """Manual update probe — works even when auto-check is disabled.
+
+        Runs the GitHub probe on a background thread so the settings
+        dialog stays responsive. The button is disabled for the duration
+        and re-enabled when the worker finishes.
+        """
         if not self._self_updater:
             return
-        try:
-            result = self._self_updater.check_update()
-        except Exception as e:
+        # Guard against double-clicks while a probe is in flight.
+        if getattr(self, "_update_worker", None) and self._update_worker.isRunning():
+            return
+
+        self._check_update_btn.setEnabled(False)
+        self._original_check_label = self._check_update_btn.text()
+        self._check_update_btn.setText(t("checking"))
+
+        from carton.ui.main_window import _SelfUpdateCheckWorker
+        self._update_worker = _SelfUpdateCheckWorker(self._self_updater, parent=self)
+        self._update_worker.finished_signal.connect(self._on_check_update_done)
+        self._update_worker.start()
+
+    def _on_check_update_done(self, result, error):
+        """UI-thread slot for the manual update probe."""
+        self._check_update_btn.setEnabled(True)
+        if getattr(self, "_original_check_label", None):
+            self._check_update_btn.setText(self._original_check_label)
+
+        if error:
             QtWidgets.QMessageBox.warning(
                 self, t("settings_auto_update_check"),
-                t("settings_check_update_failed", str(e)),
+                t("settings_check_update_failed", error),
             )
             return
 
