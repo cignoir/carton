@@ -112,11 +112,13 @@ class Publisher:
         except OSError:
             pass
 
-        # 3. Copy icon file to registry icons/ directory (keyed by name)
+        # 3. Copy icon file to registry icons/ directory.
+        # Preserve the original filename so consumers can fetch it verbatim.
         registry_icon = icon
         if self._is_icon_file(icon):
-            self._copy_icon_to_registry(icon, name, registry_base)
-            registry_icon = True
+            icon_basename = os.path.basename(icon)
+            self._copy_icon_to_registry(icon, icon_basename, registry_base)
+            registry_icon = icon_basename
 
         # 4. Update registry.json + rebuild icons.zip
         warnings = self._update_registry(
@@ -176,7 +178,7 @@ class Publisher:
             "author": author,
             "maya_versions": ["2024", "2025", "2026", "2027"],
             "entry_point": entry_point,
-            "icon": True if self._is_icon_file(icon) else icon,
+            "icon": os.path.basename(icon) if self._is_icon_file(icon) else icon,
         }
         if home_registry:
             pkg_json["home_registry"] = home_registry
@@ -378,11 +380,16 @@ class Publisher:
                 and os.path.exists(icon))
 
     @staticmethod
-    def _copy_icon_to_registry(icon_path, pkg_name, registry_base):
-        """Copy an icon file to the registry's icons/ directory as {pkg_name}.png."""
+    def _copy_icon_to_registry(icon_path, dest_filename, registry_base):
+        """Copy an icon file to the registry's ``icons/`` directory verbatim.
+
+        ``dest_filename`` is the basename to use in the registry; passing the
+        original basename keeps the author's filename instead of forcing
+        ``<name>.png``.
+        """
         icons_dir = os.path.join(registry_base, "icons")
         os.makedirs(icons_dir, exist_ok=True)
-        dest = os.path.join(icons_dir, "{}.png".format(pkg_name))
+        dest = os.path.join(icons_dir, dest_filename)
         shutil.copy2(icon_path, dest)
 
     def _rebuild_icons_archive(self, registry_base):

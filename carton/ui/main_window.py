@@ -19,13 +19,33 @@ _WINDOW_WIDTH = 780
 _WINDOW_HEIGHT = 600
 
 
+def _icon_filename(pkg_data):
+    """Return the bare icon filename (e.g. ``"AriMirror.png"``) for a package.
+
+    Resolution order:
+      1. If ``icon`` is a string ending in an image extension, treat it as the
+         filename and return its basename verbatim — this preserves whatever
+         the package author chose, including PascalCase / non-ASCII names.
+      2. If ``icon`` is ``True`` (legacy), fall back to ``<name>.png``.
+      3. Otherwise return None.
+    """
+    icon_value = pkg_data.get("icon", "")
+    if isinstance(icon_value, str) and icon_value.endswith((".png", ".jpg", ".svg")):
+        return os.path.basename(icon_value)
+    if isinstance(icon_value, bool) and icon_value:
+        name = pkg_data.get("name", "")
+        if name:
+            return "{}.png".format(name)
+    return None
+
+
 class _IconFetcher(QtCore.QThread):
     """Background thread that downloads remote icons in bulk."""
 
     icon_ready = QtCore.Signal(str, str)  # (pkg_id, local_path)
 
     def __init__(self, tasks, config, parent=None):
-        """tasks: list of (pkg_id, base_url, pkg_name)"""
+        """tasks: list of (pkg_id, base_url, icon_filename)"""
         super().__init__(parent)
         self._tasks = tasks
         self._config = config
@@ -35,12 +55,12 @@ class _IconFetcher(QtCore.QThread):
             return
         cache_dir = os.path.join(self._config.install_dir, ".icon_cache")
         os.makedirs(cache_dir, exist_ok=True)
-        for pkg_id, base_url, pkg_name in self._tasks:
-            cached = os.path.join(cache_dir, "{}.png".format(pkg_name))
+        for pkg_id, base_url, icon_filename in self._tasks:
+            cached = os.path.join(cache_dir, icon_filename)
             if os.path.exists(cached):
                 self.icon_ready.emit(pkg_id, cached)
                 continue
-            icon_url = urljoin(base_url, "icons/{}.png".format(pkg_name))
+            icon_url = urljoin(base_url, "icons/{}".format(icon_filename))
             try:
                 req = Request(icon_url)
                 resp = urlopen(req, timeout=5)
@@ -492,40 +512,44 @@ class CartonWindow(QtWidgets.QDialog):
     def _resolve_icon_path(self, pkg_data):
         """Resolve an icon file path from package data. Returns path or None."""
         icon_value = pkg_data.get("icon", "")
-        pkg_name = pkg_data.get("name", "")
-        if isinstance(icon_value, bool) and icon_value:
-            base_dir = pkg_data.get("_registry_base_dir", "")
-            is_remote = pkg_data.get("_registry_remote", False)
-            if base_dir:
-                if is_remote:
-                    if self._config:
-                        cached = os.path.join(
-                            self._config.install_dir, ".icon_cache",
-                            "{}.png".format(pkg_name),
-                        )
-                        if os.path.exists(cached):
-                            return cached
-                else:
-                    candidate = os.path.join(base_dir, "icons", "{}.png".format(pkg_name))
-                    if os.path.exists(candidate):
-                        return candidate
-        elif (isinstance(icon_value, str)
-              and icon_value.endswith((".png", ".jpg", ".svg"))
-              and os.path.isabs(icon_value)
-              and os.path.exists(icon_value)):
+        # Absolute file path on disk (locally registered scripts)
+        if (isinstance(icon_value, str)
+                and icon_value.endswith((".png", ".jpg", ".svg"))
+                and os.path.isabs(icon_value)
+                and os.path.exists(icon_value)):
             return icon_value
+
+        icon_filename = _icon_filename(pkg_data)
+        if not icon_filename:
+            return None
+
+        base_dir = pkg_data.get("_registry_base_dir", "")
+        is_remote = pkg_data.get("_registry_remote", False)
+        if not base_dir:
+            return None
+        if is_remote:
+            if self._config:
+                cached = os.path.join(
+                    self._config.install_dir, ".icon_cache", icon_filename,
+                )
+                if os.path.exists(cached):
+                    return cached
+        else:
+            candidate = os.path.join(base_dir, "icons", icon_filename)
+            if os.path.exists(candidate):
+                return candidate
         return None
 
-    def _fetch_remote_icon(self, base_url, pkg_name):
+    def _fetch_remote_icon(self, base_url, icon_filename):
         """Download a remote icon and cache locally. Returns local path or None."""
-        if not self._config:
+        if not self._config or not icon_filename:
             return None
         cache_dir = os.path.join(self._config.install_dir, ".icon_cache")
-        cached = os.path.join(cache_dir, "{}.png".format(pkg_name))
+        cached = os.path.join(cache_dir, icon_filename)
         if os.path.exists(cached):
             return cached
 
-        icon_url = urljoin(base_url, "icons/{}.png".format(pkg_name))
+        icon_url = urljoin(base_url, "icons/{}".format(icon_filename))
         try:
             req = Request(icon_url)
             resp = urlopen(req, timeout=5)
@@ -590,12 +614,12 @@ class CartonWindow(QtWidgets.QDialog):
 
             # Icon resolution
             icon_path = self._resolve_icon_path(pkg_data)
-            icon_value = pkg_data.get("icon", "")
-            if not icon_path and isinstance(icon_value, bool) and icon_value:
+            if not icon_path:
+                icon_filename = _icon_filename(pkg_data)
                 base_dir = pkg_data.get("_registry_base_dir", "")
                 is_remote = pkg_data.get("_registry_remote", False)
-                if is_remote and base_dir:
-                    icon_fetch_tasks.append((pkg_id, base_dir, pkg_name))
+                if icon_filename and is_remote and base_dir:
+                    icon_fetch_tasks.append((pkg_id, base_dir, icon_filename))
 
             card = PackageCard(pkg_id, pkg_data, installed_version=installed_ver, icon_path=icon_path)
             card.launch_requested.connect(self._on_launch)
