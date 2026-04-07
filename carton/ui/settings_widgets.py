@@ -330,6 +330,7 @@ class RegistriesSection(QtWidgets.QWidget):
             t("settings_add_local"),
             t("settings_add_github"),
             t("settings_add_url"),
+            t("settings_add_create_new"),
         ]
         chosen, ok = QtWidgets.QInputDialog.getItem(
             self, t("add"), t("settings_add_method"), choices, 0, False,
@@ -340,8 +341,28 @@ class RegistriesSection(QtWidgets.QWidget):
             self._add_github()
         elif chosen == choices[2]:
             self._add_remote()
+        elif chosen == choices[3]:
+            self._create_new_local()
         else:
             self._add_local()
+
+    def _create_new_local(self):
+        folder = QtWidgets.QFileDialog.getExistingDirectory(
+            self, t("setup_select_folder"),
+        )
+        if not folder:
+            return
+        reg_path = os.path.join(folder, "registry.json")
+        if not os.path.exists(reg_path):
+            try:
+                os.makedirs(folder, exist_ok=True)
+                with open(reg_path, "w", encoding="utf-8") as f:
+                    json.dump({"schema_version": "2.0", "packages": {}}, f, indent=2)
+                os.makedirs(os.path.join(folder, "packages"), exist_ok=True)
+            except Exception as e:
+                QtWidgets.QMessageBox.warning(self, "Carton", str(e))
+                return
+        self._finish_add(reg_path, os.path.basename(folder))
 
     def _add_local(self):
         path = QtWidgets.QFileDialog.getOpenFileName(
