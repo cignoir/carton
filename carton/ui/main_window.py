@@ -1591,11 +1591,22 @@ class CartonWindow(QtWidgets.QDialog):
             if entry_point.get("type") == "exec" and self._script_manager:
                 exec_data = dict(pkg_data)
                 if not exec_data.get("local_path"):
-                    pkg_name = pkg_data.get("name", "")
+                    # Use the relative path the installer recorded — it
+                    # already accounts for the namespace ("packages/<ns>/
+                    # <name>") so we don't accidentally drop it here and
+                    # look for the file under "packages/<name>".
+                    rel = pkg_data.get("path", "")
                     exec_file = entry_point.get("file", "")
-                    exec_data["local_path"] = os.path.join(
-                        self._install_manager._config.packages_dir, pkg_name, exec_file
-                    )
+                    if rel:
+                        exec_data["local_path"] = os.path.join(
+                            self._install_manager._config.install_dir,
+                            rel, exec_file,
+                        )
+                    else:
+                        exec_data["local_path"] = os.path.join(
+                            self._install_manager._config.packages_dir,
+                            pkg_data.get("name", ""), exec_file,
+                        )
                 self._script_manager.launch(exec_data)
             else:
                 from carton.core.handlers import get_handler
