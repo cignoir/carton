@@ -25,7 +25,7 @@ import zipfile
 
 ROOT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 CARTON_DIR = os.path.join(ROOT_DIR, "carton")
-TEMPLATE_PATH = os.path.join(ROOT_DIR, "installer", "install_carton.template.py")
+TEMPLATE_PATH = os.path.join(CARTON_DIR, "data", "install_carton.template.py")
 DIST_DIR = os.path.join(ROOT_DIR, "dist")
 
 # Make `import carton.core.profile` work when this script is run directly

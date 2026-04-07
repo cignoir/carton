@@ -279,8 +279,6 @@ class ProfileManagerDialog(QtWidgets.QDialog):
         name = self._selected_name()
         if not name:
             return
-        # The profile file on disk is exactly the format the build script
-        # consumes — feed it directly so we don't have to round-trip.
         from carton.core.profile_store import _path_for
         profile_path = _path_for(name)
         if not os.path.exists(profile_path):
@@ -296,27 +294,8 @@ class ProfileManagerDialog(QtWidgets.QDialog):
         if not out_path:
             return
         try:
-            from scripts.build_installer import build
-        except ImportError:
-            try:
-                import sys, importlib.util
-                here = os.path.dirname(os.path.dirname(os.path.dirname(
-                    os.path.abspath(__file__)
-                )))
-                script_path = os.path.join(here, "scripts", "build_installer.py")
-                spec = importlib.util.spec_from_file_location(
-                    "carton_build_installer", script_path,
-                )
-                mod = importlib.util.module_from_spec(spec)
-                spec.loader.exec_module(mod)
-                build = mod.build
-            except Exception as e:
-                QtWidgets.QMessageBox.warning(
-                    self, "Carton", t("profile_build_failed", str(e)),
-                )
-                return
-        try:
-            build(profile_path=profile_path, output=out_path)
+            from carton.core.installer_builder import build_from_profile
+            build_from_profile(profile_path, out_path)
         except Exception as e:
             QtWidgets.QMessageBox.warning(
                 self, "Carton", t("profile_build_failed", str(e)),

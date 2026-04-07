@@ -13,7 +13,7 @@ import pytest
 
 
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-TEMPLATE_PATH = os.path.join(REPO_ROOT, "installer", "install_carton.template.py")
+TEMPLATE_PATH = os.path.join(REPO_ROOT, "carton", "data", "install_carton.template.py")
 BUILDER_PATH = os.path.join(REPO_ROOT, "scripts", "build_installer.py")
 
 
