@@ -196,13 +196,18 @@ class Publisher:
             if is_folder:
                 for root, dirs, files in os.walk(local_path):
                     dirs[:] = [d for d in dirs if d not in _EXCLUDE_DIRS]
+                    file_set = set(files)
                     for f in files:
-                        # .pyc are stripped by default — they're build
-                        # output and bloat the zip — but the user can
-                        # opt in via include_compiled=True for tools
-                        # that ship without source.
-                        if not include_compiled and f.endswith(".pyc"):
-                            continue
+                        # Strip .pyc that have a .py sibling — those are
+                        # redundant build artifacts. Keep .pyc that ship
+                        # standalone (legacy in-house tools without
+                        # source). The ``include_compiled`` flag is now
+                        # only an override that forces ALL .pyc to be
+                        # kept regardless.
+                        if f.endswith(".pyc"):
+                            sibling_py = f[:-1]  # foo.pyc -> foo.py
+                            if sibling_py in file_set and not include_compiled:
+                                continue
                         if f in _EXCLUDE_FILES:
                             continue
                         # Skip stale package.json — we'll inject the canonical one

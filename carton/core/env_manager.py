@@ -21,6 +21,9 @@ class MayaEnvManager:
 
     def add_python_path(self, path):
         """Add a path to sys.path."""
+        # Normalise so the dedup check survives mixed-separator entries
+        # (Windows ``\\`` vs ``/``) coming from os.path.join shenanigans.
+        path = os.path.normpath(path)
         if path not in sys.path:
             sys.path.insert(0, path)
             self._added_paths.setdefault("sys.path", []).append(path)
