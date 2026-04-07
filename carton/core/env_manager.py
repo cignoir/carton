@@ -24,6 +24,12 @@ class MayaEnvManager:
         if path not in sys.path:
             sys.path.insert(0, path)
             self._added_paths.setdefault("sys.path", []).append(path)
+            # Drop the path importer cache so finders pick up the new
+            # directory's contents on the next import attempt. Without
+            # this, ``importlib.import_module`` returns "No module named"
+            # for files that exist on disk in the freshly added path.
+            import importlib
+            importlib.invalidate_caches()
 
     def remove_python_path(self, path):
         """Remove a path from sys.path and drop it from the tracking book."""
