@@ -285,11 +285,15 @@ class CartonWindow(QtWidgets.QDialog):
         manage_btn.setToolTip(t("profile_manage"))
         manage_btn.setCursor(Qt.PointingHandCursor)
         manage_btn.setFixedSize(26, 26)
+        manage_btn.setFocusPolicy(Qt.NoFocus)
         manage_btn.setStyleSheet(
             "QToolButton {{ background: {bg2}; border: 1px solid {border};"
-            "  border-radius: 4px; color: {muted}; font-size: 14px; }}"
+            "  border-radius: 4px; color: {muted}; font-size: 14px;"
+            "  outline: none; }}"
             "QToolButton:hover {{ color: {text}; border-color: {border_h};"
-            "  background: {hover}; }}".format(
+            "  background: {hover}; }}"
+            "QToolButton:focus {{ border: 1px solid {border}; outline: none; }}"
+            .format(
                 bg2=theme.BG_SECONDARY, border=theme.BORDER,
                 border_h=theme.BORDER_HOVER, muted=theme.TEXT_MUTED,
                 text=theme.TEXT_PRIMARY, hover=theme.BG_HOVER)
