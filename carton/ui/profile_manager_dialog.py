@@ -140,6 +140,12 @@ class ProfileManagerDialog(QtWidgets.QDialog):
         del_btn.setStyleSheet(theme.btn_danger())
         del_btn.clicked.connect(self._on_delete)
         btn_row.addWidget(del_btn)
+
+        build_btn = QtWidgets.QPushButton(t("profile_build_installer"))
+        build_btn.setStyleSheet(theme.btn_ghost_text())
+        build_btn.clicked.connect(self._on_build_installer)
+        btn_row.addWidget(build_btn)
+
         btn_row.addStretch()
 
         arrow_style = (
@@ -256,6 +262,57 @@ class ProfileManagerDialog(QtWidgets.QDialog):
                 except Exception:
                     pass
             self._refresh()
+
+    def _on_build_installer(self):
+        name = self._selected_name()
+        if not name:
+            return
+        # The profile file on disk is exactly the format the build script
+        # consumes — feed it directly so we don't have to round-trip.
+        from carton.core.profile_store import _path_for
+        profile_path = _path_for(name)
+        if not os.path.exists(profile_path):
+            QtWidgets.QMessageBox.warning(
+                self, "Carton", t("profile_build_missing", name),
+            )
+            return
+        default_filename = "install_carton_{}.py".format(name)
+        out_path, _ = QtWidgets.QFileDialog.getSaveFileName(
+            self, t("profile_build_installer"), default_filename,
+            "Python (*.py)",
+        )
+        if not out_path:
+            return
+        try:
+            from scripts.build_installer import build
+        except ImportError:
+            try:
+                import sys, importlib.util
+                here = os.path.dirname(os.path.dirname(os.path.dirname(
+                    os.path.abspath(__file__)
+                )))
+                script_path = os.path.join(here, "scripts", "build_installer.py")
+                spec = importlib.util.spec_from_file_location(
+                    "carton_build_installer", script_path,
+                )
+                mod = importlib.util.module_from_spec(spec)
+                spec.loader.exec_module(mod)
+                build = mod.build
+            except Exception as e:
+                QtWidgets.QMessageBox.warning(
+                    self, "Carton", t("profile_build_failed", str(e)),
+                )
+                return
+        try:
+            build(profile_path=profile_path, output=out_path)
+        except Exception as e:
+            QtWidgets.QMessageBox.warning(
+                self, "Carton", t("profile_build_failed", str(e)),
+            )
+            return
+        QtWidgets.QMessageBox.information(
+            self, "Carton", t("profile_build_success", out_path),
+        )
 
     def _on_move_up(self):
         self._move_selected(-1)
