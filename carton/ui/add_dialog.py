@@ -286,7 +286,7 @@ class AddDialog(QtWidgets.QDialog):
     def _browse_file(self):
         path, _ = QtWidgets.QFileDialog.getOpenFileName(
             self, t("add_browse_file"), "",
-            "Scripts (*.py *.mel *.mll);;Python (*.py);;MEL (*.mel);;Plugin (*.mll)",
+            "Scripts (*.py *.pyc *.mel *.mll);;Python (*.py *.pyc);;MEL (*.mel);;Plugin (*.mll)",
         )
         if not path:
             return
@@ -334,8 +334,11 @@ class AddDialog(QtWidgets.QDialog):
             # Single file: prefill from sidecar if present
             sidecar = read_sidecar(path)
             self._detected_info = {"sidecar": sidecar} if sidecar else None
+            is_pyc = path.endswith(".pyc")
             self._mode_group.setVisible(True)
-            self._mode_exec.setEnabled(True)
+            self._mode_exec.setEnabled(not is_pyc)
+            if is_pyc:
+                self._mode_func.setChecked(True)
             basename = os.path.splitext(os.path.basename(path))[0]
             display = basename.replace("_", " ").replace("-", " ").title()
             self._slug_display.setText(slugify_name(basename))
@@ -364,6 +367,9 @@ class AddDialog(QtWidgets.QDialog):
                 if funcs:
                     self._func_combo.addItems(funcs)
                     self._func_combo.setCurrentIndex(0)
+            elif path.endswith(".pyc"):
+                # Bytecode — can't introspect; user types the function name.
+                self._func_combo.setEditText("show")
             elif path.endswith(".mel"):
                 self._func_combo.addItem(basename)
                 self._func_combo.setCurrentIndex(0)

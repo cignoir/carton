@@ -189,6 +189,8 @@ class CartonWindow(QtWidgets.QDialog):
         self._config = None
         self._icon_fetcher = None
         self._card_map = {}  # pkg_id -> PackageCard (for deferred icon updates)
+        self._mytools_collapsed = set()  # ns keys collapsed in My Tools view
+        self._mytools_groups = {}  # ns key -> (header_btn, [cards])
         self._update_check_worker = None
 
         self._setup_ui()
@@ -621,14 +623,17 @@ class CartonWindow(QtWidgets.QDialog):
         visible_items = []
 
         if selection == self._MYTOOLS_KEY:
-            # My Tools: show locally registered scripts
+            # My Tools: show locally registered scripts, grouped by namespace
             for pkg_id, pkg_data in installed.items():
                 if pkg_data.get("source") in ("local_script", "published"):
                     item = dict(pkg_data)
                     item["_installed_ver"] = pkg_data.get("version")
                     item["_local_script"] = True
                     visible_items.append((pkg_id, item))
-            visible_items.sort(key=lambda x: x[1].get("display_name", ""))
+            visible_items.sort(key=lambda x: (
+                (x[1].get("namespace") or "~").lower(),
+                x[1].get("display_name", ""),
+            ))
         else:
             # Registry view: show packages from selected registry
             for pkg_id, pkg_data in packages.items():
@@ -646,7 +651,34 @@ class CartonWindow(QtWidgets.QDialog):
                 visible_items.append((pkg_id, item))
             visible_items.sort(key=lambda x: x[1].get("display_name", ""))
 
+        is_my_tools_view = (selection == self._MYTOOLS_KEY)
+        current_ns = None
+        ns_groups = {}  # ns_key -> (header_btn, [card widgets])
         for pkg_id, pkg_data in visible_items:
+            if is_my_tools_view:
+                ns = (pkg_data.get("namespace") or "").lower()
+                if ns != current_ns:
+                    current_ns = ns
+                    label_text = ns if ns else t("my_tools_no_namespace")
+                    collapsed = ns in self._mytools_collapsed
+                    arrow = "\u25b6" if collapsed else "\u25bc"
+                    header = QtWidgets.QPushButton("{}  {}".format(arrow, label_text))
+                    header.setCursor(Qt.PointingHandCursor)
+                    header.setStyleSheet(
+                        "QPushButton {{ color: {dim}; background: transparent;"
+                        " font-size: 11px; font-weight: bold; text-align: left;"
+                        " padding: 8px 4px 4px 4px; border: none;"
+                        " border-bottom: 1px solid {border}; }}"
+                        "QPushButton:hover {{ color: {text}; }}"
+                        .format(dim=theme.TEXT_DIM, border=theme.BORDER,
+                                text=theme.TEXT_PRIMARY)
+                    )
+                    ns_groups[ns] = (header, [])
+                    header.clicked.connect(
+                        lambda _checked=False, k=ns: self._toggle_mytools_group(k)
+                    )
+                    idx = self._card_layout.count() - 1
+                    self._card_layout.insertWidget(idx, header)
             installed_ver = pkg_data.get("_installed_ver")
             pkg_name = pkg_data.get("name", "")
 
@@ -683,12 +715,40 @@ class CartonWindow(QtWidgets.QDialog):
 
             idx = self._card_layout.count() - 1
             self._card_layout.insertWidget(idx, card)
+            if is_my_tools_view and current_ns in ns_groups:
+                ns_groups[current_ns][1].append(card)
+
+        # Apply initial collapsed state for My Tools groups
+        self._mytools_groups = ns_groups
+        for ns_key, (_hdr, cards) in ns_groups.items():
+            if ns_key in self._mytools_collapsed:
+                for c in cards:
+                    c.setVisible(False)
 
         # Start background icon download for uncached remote icons
         if icon_fetch_tasks:
             self._icon_fetcher = _IconFetcher(icon_fetch_tasks, self._config, parent=self)
             self._icon_fetcher.icon_ready.connect(self._on_icon_ready)
             self._icon_fetcher.start()
+
+    def _toggle_mytools_group(self, ns_key):
+        group = self._mytools_groups.get(ns_key)
+        if not group:
+            return
+        header, cards = group
+        if ns_key in self._mytools_collapsed:
+            self._mytools_collapsed.discard(ns_key)
+            visible = True
+        else:
+            self._mytools_collapsed.add(ns_key)
+            visible = False
+        for c in cards:
+            c.setVisible(visible)
+        # Update arrow in header text (first 1 char + 2 spaces + label)
+        text = header.text()
+        if len(text) >= 3:
+            new_arrow = "\u25bc" if visible else "\u25b6"
+            header.setText(new_arrow + text[1:])
 
     def _on_icon_ready(self, pkg_id, icon_path):
         """Slot called from background thread when an icon is downloaded."""
