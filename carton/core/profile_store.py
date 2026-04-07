@@ -86,11 +86,27 @@ def load_profile(name):
 
 
 def save_profile(name, profile):
-    """Persist a profile under the given name. Creates the dir if needed."""
+    """Persist a profile under the given name. Creates the dir if needed.
+
+    Before overwriting an existing profile that contains data, the prior
+    file is moved aside as ``<name>.json.bak`` so the user can recover
+    from accidental empty writes.
+    """
     if not is_valid_name(name):
         raise InvalidProfileError("Invalid profile name: {!r}".format(name))
     os.makedirs(profiles_dir(), exist_ok=True)
-    profile.save(_path_for(name))
+    target = _path_for(name)
+    if os.path.exists(target):
+        try:
+            with open(target, "r", encoding="utf-8") as f:
+                prior = f.read()
+            if prior.strip():
+                bak = target + ".bak"
+                with open(bak, "w", encoding="utf-8") as f:
+                    f.write(prior)
+        except Exception:
+            pass
+    profile.save(target)
 
 
 def delete_profile(name):

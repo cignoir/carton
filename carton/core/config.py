@@ -205,6 +205,18 @@ class Config:
         is_canonical = path is None
         if path is None:
             path = default_config_path()
+        # Diagnostic: log every canonical save with caller info so we can
+        # track down phantom writes that clobber the user's registries.
+        if is_canonical:
+            try:
+                import traceback
+                stack = traceback.format_stack()[-4:-1]
+                print("[Carton.save] registries={} active_profile={!r}".format(
+                    len(self.registries), self.active_profile))
+                for line in stack:
+                    print("  " + line.rstrip())
+            except Exception:
+                pass
         os.makedirs(os.path.dirname(path), exist_ok=True)
         with open(path, "w", encoding="utf-8") as f:
             json.dump(self.to_dict(), f, indent=2, ensure_ascii=False)
