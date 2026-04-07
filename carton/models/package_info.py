@@ -31,6 +31,7 @@ class PackageInfo:
         local_path="",
         home_registry=None,
         activated_paths=None,
+        sha256="",
     ):
         # Resolve identity. If pkg_id is given, prefer it; otherwise derive from ns/name.
         if pkg_id and "/" in pkg_id:
@@ -62,6 +63,11 @@ class PackageInfo:
         # uninstall to restore the env to its pre-install state even if
         # the handler's uninstall logic is incomplete.
         self.activated_paths = activated_paths or {}
+        # SHA256 of the source zip recorded at install time. Empty string
+        # for legacy installs and locally-registered scripts (no zip).
+        # Stored so the package can be re-verified later and so the UI
+        # can show a "verified" badge for registry-sourced installs.
+        self.sha256 = sha256 or ""
 
     @classmethod
     def from_registry_entry(cls, pkg_id, pkg_data, version_key=None):
@@ -99,6 +105,7 @@ class PackageInfo:
             local_path=data.get("local_path", ""),
             home_registry=data.get("home_registry", {}),
             activated_paths=data.get("activated_paths", {}),
+            sha256=data.get("sha256", ""),
         )
 
     def to_installed_dict(self):
@@ -121,4 +128,6 @@ class PackageInfo:
             d["home_registry"] = self.home_registry
         if self.activated_paths:
             d["activated_paths"] = self.activated_paths
+        if self.sha256:
+            d["sha256"] = self.sha256
         return d

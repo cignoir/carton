@@ -100,6 +100,11 @@ _STRINGS = {
         "add_invalid_path": "Please select a valid file or folder.",
         "add_no_display_name": "Please enter a Display Name.",
         "add_invalid_module_name": "'{}' is not a valid Python module name. Rename the file/folder to use only letters, digits and underscores (no spaces or hyphens), then try again.",
+        "settings_strict_verify": "Strict integrity verification",
+        "settings_strict_verify_hint": "Refuse to install packages whose registry entry has no SHA256, and treat hash mismatches as fatal. Recommended for shared/remote registries.",
+        "verified_badge": "Verified",
+        "verified_badge_tooltip": "SHA256 was checked against the registry entry at install time.",
+        "install_strict_no_sha256": "Strict verification is enabled, but this package has no SHA256 in the registry. Install refused.",
 
         # Edit dialog
         "edit_title": "Carton — Edit",
@@ -285,6 +290,11 @@ _STRINGS = {
         "add_invalid_path": "有効なファイルまたはフォルダを選択してください。",
         "add_no_display_name": "表示名を入力してください。",
         "add_invalid_module_name": "'{}' は Python のモジュール名として無効です。ファイル／フォルダ名を英数字とアンダースコアのみ（スペース・ハイフン不可）にリネームしてから再度お試しください。",
+        "settings_strict_verify": "厳密な整合性検証",
+        "settings_strict_verify_hint": "SHA256 が登録されていないパッケージのインストールを拒否し、ハッシュ不一致を致命エラーとして扱います。共有／リモートレジストリ利用時に推奨。",
+        "verified_badge": "検証済",
+        "verified_badge_tooltip": "インストール時にレジストリの SHA256 と照合されました。",
+        "install_strict_no_sha256": "厳密検証が有効ですが、このパッケージにはレジストリ上の SHA256 がありません。インストールを拒否しました。",
 
         # Edit dialog
         "edit_title": "Carton — 編集",

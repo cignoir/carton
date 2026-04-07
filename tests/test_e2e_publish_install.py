@@ -173,6 +173,7 @@ class TestPublishInstallRoundtrip:
                 "type": pkg_entry.get("type", "python_package"),
                 "display_name": pkg_entry.get("display_name", pkg_entry["name"]),
                 "entry_point": {},
+                "sha256": version_info.get("sha256", ""),
             }
             install_mgr.install_package(staged_zip, meta)
 
@@ -183,6 +184,9 @@ class TestPublishInstallRoundtrip:
             installed_entry = install_mgr.get_installed_packages()[pkg_id]
             assert installed_entry["namespace"] == "e2e"
             assert installed_entry["name"] == "hello_tool"
+            # SHA256 from the registry should be persisted into installed.json
+            assert installed_entry.get("sha256") == version_info["sha256"]
+            assert len(installed_entry["sha256"]) == 64
             # entry_point should have been sourced from the inner package.json
             # (we deliberately passed an empty dict in meta to prove it).
             assert installed_entry["entry_point"]["module"] == "hello_tool"

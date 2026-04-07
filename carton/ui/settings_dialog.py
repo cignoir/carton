@@ -14,6 +14,7 @@ from carton.ui.i18n import t
 from carton.ui import theme
 from carton.ui.settings_widgets import (
     AutoUpdateSection,
+    StrictVerifySection,
     LanguageSection,
     ProxySection,
     RegistriesSection,
@@ -94,6 +95,11 @@ class SettingsDialog(QtWidgets.QDialog):
         # HTTP proxy — push to env on change
         layout.addWidget(ProxySection(
             self._config, self._config.save, apply_to_env=True,
+        ))
+
+        # Strict integrity verification
+        layout.addWidget(StrictVerifySection(
+            self._config, self._config.save,
         ))
 
         # Profile Builder entry point

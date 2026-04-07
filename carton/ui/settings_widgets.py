@@ -241,6 +241,41 @@ class AutoUpdateSection(QtWidgets.QWidget):
             )
 
 
+# ---------- StrictVerifySection -------------------------------------------
+
+
+class StrictVerifySection(QtWidgets.QWidget):
+    """Checkbox bound to ``target.strict_verify``.
+
+    Refuses installs whose registry entry has no sha256, closing the
+    "remove the field to disable verification" hole. Off by default so
+    legacy registries keep working until the user opts in.
+    """
+
+    def __init__(self, target, persist, parent=None):
+        super().__init__(parent)
+        self._target = target
+        self._persist = persist
+
+        layout = QtWidgets.QVBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(6)
+
+        self._checkbox = QtWidgets.QCheckBox(t("settings_strict_verify"))
+        self._checkbox.setChecked(bool(getattr(self._target, "strict_verify", False)))
+        self._checkbox.toggled.connect(self._on_toggled)
+        layout.addWidget(self._checkbox)
+
+        hint = QtWidgets.QLabel(t("settings_strict_verify_hint"))
+        hint.setWordWrap(True)
+        hint.setStyleSheet("color: {}; font-size: 11px;".format(theme.TEXT_MUTED))
+        layout.addWidget(hint)
+
+    def _on_toggled(self, checked):
+        self._target.strict_verify = bool(checked)
+        self._persist()
+
+
 # ---------- RegistriesSection ---------------------------------------------
 
 

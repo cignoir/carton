@@ -156,6 +156,7 @@ class InstallManager:
                 source="registry",
                 installed_at=datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
                 activated_paths=activated_paths,
+                sha256=meta.get("sha256", ""),
             )
             self._installed["packages"][pkg_id] = info.to_installed_dict()
             try:

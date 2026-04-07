@@ -864,8 +864,13 @@ class CartonWindow(QtWidgets.QDialog):
                 item = dict(pkg_data)
                 is_installed = pkg_id in installed
                 if is_installed:
-                    item["_installed_ver"] = installed[pkg_id].get("version")
                     inst = installed[pkg_id]
+                    item["_installed_ver"] = inst.get("version")
+                    # Surface the recorded sha256 so the card can render
+                    # the verified badge — registry view shows it from the
+                    # installed.json snapshot, not from the live registry.
+                    if inst.get("sha256"):
+                        item["sha256"] = inst.get("sha256")
                     if inst.get("source") in ("local_script", "published") and inst.get("local_path"):
                         item["_local_script"] = True
                 if self._current_tab == "installed" and not is_installed:
@@ -1424,6 +1429,12 @@ class CartonWindow(QtWidgets.QDialog):
             if not url:
                 raise RuntimeError(t("no_download_url"))
 
+            # Strict verify: refuse to install anything from a registry
+            # entry that doesn't carry a sha256.
+            if self._config and self._config.strict_verify:
+                if not version_info.get("sha256"):
+                    raise RuntimeError(t("install_strict_no_sha256"))
+
             dest = os.path.join(
                 self._install_manager._config.staging_dir,
                 "{}-{}.zip".format(pkg_name, latest),
@@ -1442,6 +1453,7 @@ class CartonWindow(QtWidgets.QDialog):
                 "type": pkg_data.get("type", "python_package"),
                 "display_name": pkg_data.get("display_name", pkg_name),
                 "entry_point": {},
+                "sha256": version_info.get("sha256", ""),
             }
             self._install_manager.install_package(dest, meta)
             # install_package now reads entry_point from the inner package.json

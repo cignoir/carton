@@ -95,6 +95,7 @@ class Config:
         language="auto",
         proxy="",
         active_profile="",
+        strict_verify=False,
     ):
         self.registries = registries or []
         self.install_dir = install_dir
@@ -107,6 +108,11 @@ class Config:
         # auto_check_updates) are persisted to the profile file too, so
         # switching profiles restores those values.
         self.active_profile = active_profile
+        # When True, refuse to install any package whose registry entry
+        # lacks a sha256, and treat hash mismatches as fatal (default
+        # downloader already raises on mismatch). Off by default so
+        # legacy registries keep working; users opt in via Settings.
+        self.strict_verify = bool(strict_verify)
         # HTTP(S) proxy URL, e.g. ``http://proxy.studio.internal:8080`` or
         # ``http://user:pass@host:8080``. Empty string means "don't override
         # whatever urllib picks up from the environment" — so users who
@@ -130,6 +136,7 @@ class Config:
                 language=data.get("language", "auto"),
                 proxy=data.get("proxy", ""),
                 active_profile=data.get("active_profile", ""),
+                strict_verify=data.get("strict_verify", False),
             )
             # If a profile is active, overlay its values on top of the
             # snapshot stored in config.json. The snapshot is kept in sync
@@ -261,6 +268,7 @@ class Config:
             "language": self.language,
             "proxy": self.proxy,
             "active_profile": self.active_profile,
+            "strict_verify": self.strict_verify,
         }
 
     def apply_profile(self, profile):

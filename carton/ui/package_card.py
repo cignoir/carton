@@ -141,6 +141,19 @@ class PackageCard(QtWidgets.QFrame):
         )
         title_layout.addWidget(ver_label)
 
+        # Verified badge — installed packages whose registry entry carried a
+        # sha256 (and therefore had it checked at download time).
+        if self._installed_version and self._pkg_data.get("sha256"):
+            verified = QtWidgets.QLabel("\u2713 " + t("verified_badge"))
+            verified.setToolTip(t("verified_badge_tooltip"))
+            verified.setStyleSheet(
+                "font-size: 10px; font-weight: 600; color: {color};"
+                " background: transparent; padding: 1px 6px;"
+                " border: 1px solid {color}; border-radius: 3px;".format(
+                    color=theme.ACCENT_GREEN)
+            )
+            title_layout.addWidget(verified)
+
         # Published-to badge: clickable menu for unpublish, shown when this
         # package currently lives in one or more writable local registries.
         if self._published_registries:
