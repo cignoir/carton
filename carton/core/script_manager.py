@@ -221,19 +221,23 @@ class ScriptManager:
                 _ACTIVATED_DIRS.add(key)
             return
         if is_folder:
-            # Folder: add parent directory to sys.path (to enable import folder_name)
-            parent = os.path.dirname(path) if os.path.basename(path) != "" else path
-            # Check if the folder itself (with package.json) is an import target
+            # Folder: add the right directory(ies) to sys.path so the
+            # user can either ``import folder_name`` (treat folder as a
+            # package) or ``import some_module`` for a standalone .py
+            # sitting inside it. When ``__init__.py`` exists we add BOTH
+            # the parent (enables ``import folder_name``) and the folder
+            # itself (enables ``import sibling_module``); without one we
+            # only need the folder itself.
             init_py = os.path.join(path, "__init__.py")
+            targets = []
             if os.path.exists(init_py):
-                # path is my_tool/ and my_tool/__init__.py exists
-                # -> Add parent directory to enable import my_tool
-                target = os.path.dirname(path)
+                targets.append(os.path.dirname(path))
+                targets.append(path)
             else:
-                # Module folder exists inside path
-                target = path
+                targets.append(path)
             if pkg_type == "python_package":
-                self._env_mgr.add_python_path(target)
+                for target in targets:
+                    self._env_mgr.add_python_path(target)
             elif pkg_type == "mel_script":
                 scripts_dir = os.path.join(path, "scripts")
                 self._env_mgr.add_env_path("MAYA_SCRIPT_PATH",
