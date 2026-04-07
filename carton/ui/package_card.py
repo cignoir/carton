@@ -158,16 +158,16 @@ class PackageCard(QtWidgets.QFrame):
         # tiny checkbox glyph rather than a pill so the SHA verification
         # state stays out of the way of the tool name.
         if self._installed_version and self._pkg_data.get("sha256"):
-            verified = QtWidgets.QLabel("\u2714")
+            verified = QtWidgets.QLabel("\u2713")
             verified.setToolTip(
                 "{}\n{}".format(
                     t("verified_badge"), t("verified_badge_tooltip")
                 )
             )
             verified.setStyleSheet(
-                "font-size: 14px; color: {color};"
+                "font-size: 10px; color: {color};"
                 " background: transparent; padding: 0 2px;".format(
-                    color=theme.ACCENT_GREEN)
+                    color=theme.TEXT_DIM)
             )
             title_layout.addWidget(verified)
 
