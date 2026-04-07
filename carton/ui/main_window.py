@@ -1654,7 +1654,27 @@ class CartonWindow(QtWidgets.QDialog):
                 handler = get_handler(pkg_data.get("type", "python_package"))
                 handler.launch(pkg_data)
         except Exception as e:
-            QtWidgets.QMessageBox.warning(self, t("launch_error"), str(e))
+            self._show_launch_error(e)
+
+    def _show_launch_error(self, exc):
+        """Show a launch failure with the full traceback in Show Details.
+
+        Many "Carton launch errors" are actually exceptions from inside
+        the tool the user just ran (e.g. ``NoneType object is not
+        subscriptable`` from ``cmds.ls(sl=True)[0]`` with no selection).
+        Surfacing the traceback makes it obvious whether to investigate
+        Carton or the tool itself.
+        """
+        import traceback
+        tb_text = traceback.format_exc()
+        box = QtWidgets.QMessageBox(self)
+        box.setIcon(QtWidgets.QMessageBox.Warning)
+        box.setWindowTitle(t("launch_error"))
+        box.setText(str(exc))
+        box.setInformativeText(t("launch_error_hint"))
+        box.setDetailedText(tb_text)
+        box.setStandardButtons(QtWidgets.QMessageBox.Ok)
+        box.exec_()
 
 def create_window(parent=None):
     if parent is None:
