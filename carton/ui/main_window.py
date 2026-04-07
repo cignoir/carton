@@ -1113,6 +1113,10 @@ class CartonWindow(QtWidgets.QDialog):
             else:
                 installed_pkgs[pkg_id] = pkg_data
             self._install_manager._save_installed()
+            # Sidebar counts and namespace children depend on the current
+            # installed.json snapshot — refresh both views so renames /
+            # namespace changes show up immediately.
+            self._rebuild_sidebar()
             self._rebuild_cards()
 
     def _filter_cards(self, text):
