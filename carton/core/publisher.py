@@ -42,7 +42,8 @@ class Publisher:
     def __init__(self, config):
         self._config = config
 
-    def publish(self, pkg_data, registry_entry, namespace=None, release_notes=""):
+    def publish(self, pkg_data, registry_entry, namespace=None,
+                release_notes="", embed_source_path=True):
         include_compiled = bool(pkg_data.get("include_compiled", False))
         """Publish to a registry.
 
@@ -98,6 +99,7 @@ class Publisher:
             entry_point, display_name, icon, description, pkg_type, author,
             home_registry=pkg_data.get("home_registry"),
             include_compiled=include_compiled,
+            embed_source_path=embed_source_path,
         )
 
         sha256 = self._compute_sha256(zip_path)
@@ -168,7 +170,8 @@ class Publisher:
 
     def _create_zip(self, local_path, namespace, name, version, is_folder,
                     entry_point, display_name, icon, description, pkg_type, author,
-                    home_registry=None, include_compiled=False):
+                    home_registry=None, include_compiled=False,
+                    embed_source_path=True):
         """Create a zip file in the staging directory."""
         staging = self._config.staging_dir
         os.makedirs(staging, exist_ok=True)
@@ -185,14 +188,15 @@ class Publisher:
             "maya_versions": ["2024", "2025", "2026", "2027"],
             "entry_point": entry_point,
             "icon": os.path.basename(icon) if self._is_icon_file(icon) else icon,
+        }
+        if embed_source_path:
             # Absolute path of the source files at publish time. The
             # installer uses this to auto-relink My Tools entries when
             # the same user reinstalls Carton on a machine that still
-            # has the original sources at this path. Privacy: this
-            # leaks the publisher's directory layout, so use private /
-            # in-house registries only when that matters.
-            "source_path": os.path.abspath(local_path),
-        }
+            # has the original sources at this path. Opt-out for public
+            # registries where leaking the publisher's directory layout
+            # is undesirable.
+            pkg_json["source_path"] = os.path.abspath(local_path)
         if home_registry:
             pkg_json["home_registry"] = home_registry
 

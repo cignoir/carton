@@ -1246,6 +1246,7 @@ class CartonWindow(QtWidgets.QDialog):
         if confirm.exec_() != QtWidgets.QDialog.Accepted:
             return
         release_notes = confirm.release_notes()
+        embed_source_path = confirm.embed_source_path()
 
         self._set_publish_button_state(pkg_id, busy=True)
         QtWidgets.QApplication.processEvents()
@@ -1254,6 +1255,7 @@ class CartonWindow(QtWidgets.QDialog):
             result = self._publisher.publish(
                 pkg_data, target_registry, namespace=namespace,
                 release_notes=release_notes,
+                embed_source_path=embed_source_path,
             )
 
             new_pkg_id = result["id"]

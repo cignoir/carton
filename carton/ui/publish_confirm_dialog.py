@@ -37,6 +37,11 @@ class PublishConfirmDialog(QtWidgets.QDialog):
         self._notes.setFixedHeight(120)
         layout.addWidget(self._notes)
 
+        self._embed_source_cb = QtWidgets.QCheckBox(t("publish_embed_source_path"))
+        self._embed_source_cb.setChecked(True)
+        self._embed_source_cb.setToolTip(t("publish_embed_source_path_tooltip"))
+        layout.addWidget(self._embed_source_cb)
+
         btn_row = QtWidgets.QHBoxLayout()
         btn_row.addStretch()
         cancel = QtWidgets.QPushButton(t("cancel"))
@@ -52,3 +57,6 @@ class PublishConfirmDialog(QtWidgets.QDialog):
 
     def release_notes(self):
         return self._notes.toPlainText().strip()
+
+    def embed_source_path(self):
+        return self._embed_source_cb.isChecked()
