@@ -211,24 +211,141 @@ class CartonWindow(QtWidgets.QDialog):
 
         # -- Sidebar --
         sidebar = QtWidgets.QWidget()
-        sidebar.setFixedWidth(160)
+        sidebar.setFixedWidth(180)
         sidebar.setStyleSheet("QWidget {{ background: {}; }}".format(theme.BG_SIDEBAR))
         sidebar_layout = QtWidgets.QVBoxLayout(sidebar)
-        sidebar_layout.setContentsMargins(8, 12, 8, 12)
-        sidebar_layout.setSpacing(4)
+        sidebar_layout.setContentsMargins(10, 14, 10, 10)
+        sidebar_layout.setSpacing(0)
 
-        self._sidebar_list = QtWidgets.QListWidget()
-        self._sidebar_list.setStyleSheet(theme.sidebar_list_style_extended())
-        self._sidebar_list.currentRowChanged.connect(self._on_sidebar_changed)
-        sidebar_layout.addWidget(self._sidebar_list)
+        # Section caption style — small uppercase tracking, used by every
+        # sidebar section so the visual rhythm comes from typography +
+        # whitespace, not from hairlines.
+        caption_css = (
+            "color: {c}; font-size: 10px; font-weight: 800;"
+            " letter-spacing: 2px; padding: 4px 8px 4px 8px;"
+            " background: transparent;"
+        ).format(c=theme.TEXT_PRIMARY)
+        self._sidebar_caption_css = caption_css
 
-        # Settings button at bottom of sidebar
+        def make_caption_row(text, collapsible_target=None):
+            """Caption label + dashed rule on its right.
+
+            If ``collapsible_target`` is given, the caption becomes a
+            clickable button that toggles the target widget's visibility
+            and shows a chevron next to the text.
+            """
+            row = QtWidgets.QHBoxLayout()
+            row.setContentsMargins(0, 6, 8, 2)
+            row.setSpacing(6)
+
+            if collapsible_target is None:
+                lbl = QtWidgets.QLabel(text)
+                lbl.setStyleSheet(caption_css)
+                row.addWidget(lbl)
+            else:
+                btn = QtWidgets.QPushButton("\u25bc  " + text)
+                btn.setCursor(Qt.PointingHandCursor)
+                btn.setStyleSheet(
+                    "QPushButton {{ {base} border: none; text-align: left; }}"
+                    "QPushButton:hover {{ color: {hover}; }}"
+                    .format(base=caption_css, hover=theme.ACCENT_ORANGE)
+                )
+
+                def toggle(_=False, b=btn, target=collapsible_target, label=text):
+                    visible = not target.isVisible()
+                    target.setVisible(visible)
+                    arrow = "\u25bc" if visible else "\u25b6"
+                    b.setText("{}  {}".format(arrow, label))
+
+                btn.clicked.connect(toggle)
+                row.addWidget(btn)
+
+            rule = QtWidgets.QFrame()
+            rule.setFixedHeight(1)
+            rule.setStyleSheet(
+                "background: transparent;"
+                " border: none; border-top: 1px dashed {};".format(theme.BORDER_HOVER)
+            )
+            row.addWidget(rule, stretch=1)
+            return row
+
+        # ----- Profile section ----------------------------------------------
+        profile_container = QtWidgets.QWidget()
+        profile_row = QtWidgets.QHBoxLayout(profile_container)
+        profile_row.setContentsMargins(0, 0, 0, 0)
+        profile_row.setSpacing(4)
+
+        self._profile_combo = QtWidgets.QComboBox()
+        self._profile_combo.setStyleSheet(theme.combobox_style())
+        self._profile_combo.currentIndexChanged.connect(self._on_profile_combo_changed)
+        profile_row.addWidget(self._profile_combo, stretch=1)
+
+        manage_btn = QtWidgets.QToolButton()
+        manage_btn.setText("\u2699")  # gear
+        manage_btn.setToolTip(t("profile_manage"))
+        manage_btn.setCursor(Qt.PointingHandCursor)
+        manage_btn.setFixedSize(26, 26)
+        manage_btn.setStyleSheet(
+            "QToolButton {{ background: {bg2}; border: 1px solid {border};"
+            "  border-radius: 4px; color: {muted}; font-size: 14px; }}"
+            "QToolButton:hover {{ color: {text}; border-color: {border_h};"
+            "  background: {hover}; }}".format(
+                bg2=theme.BG_SECONDARY, border=theme.BORDER,
+                border_h=theme.BORDER_HOVER, muted=theme.TEXT_MUTED,
+                text=theme.TEXT_PRIMARY, hover=theme.BG_HOVER)
+        )
+        manage_btn.clicked.connect(self._open_profile_manager)
+        profile_row.addWidget(manage_btn)
+
+        sidebar_layout.addLayout(make_caption_row(
+            t("profile_label").upper(), collapsible_target=profile_container,
+        ))
+        sidebar_layout.addWidget(profile_container)
+        sidebar_layout.addSpacing(16)
+
+        # ----- Registries section -------------------------------------------
+        self._registry_list = QtWidgets.QListWidget()
+        self._registry_list.setStyleSheet(theme.sidebar_list_style())
+        self._registry_list.setFrameShape(QtWidgets.QFrame.NoFrame)
+        self._registry_list.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self._registry_list.setSizeAdjustPolicy(
+            QtWidgets.QAbstractScrollArea.AdjustToContents
+        )
+        self._registry_list.currentRowChanged.connect(self._on_registry_row_changed)
+        sidebar_layout.addLayout(make_caption_row(
+            t("sidebar_library").upper(), collapsible_target=self._registry_list,
+        ))
+        sidebar_layout.addWidget(self._registry_list)
+
+        sidebar_layout.addSpacing(16)
+
+        # ----- My Tools section ---------------------------------------------
+        self._mytools_list = QtWidgets.QListWidget()
+        self._mytools_list.setStyleSheet(theme.sidebar_list_style())
+        self._mytools_list.setFrameShape(QtWidgets.QFrame.NoFrame)
+        self._mytools_list.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self._mytools_list.setSizeAdjustPolicy(
+            QtWidgets.QAbstractScrollArea.AdjustToContents
+        )
+        self._mytools_list.currentRowChanged.connect(self._on_mytools_row_changed)
+        sidebar_layout.addLayout(make_caption_row(
+            t("my_tools").upper(), collapsible_target=self._mytools_list,
+        ))
+        sidebar_layout.addWidget(self._mytools_list)
+
+        sidebar_layout.addStretch(1)
+
+        # ----- Footer --------------------------------------------------------
+        sidebar_layout.addSpacing(8)
         settings_btn = QtWidgets.QPushButton("⚙  " + t("settings_title").split("—")[-1].strip())
+        settings_btn.setCursor(Qt.PointingHandCursor)
         settings_btn.setStyleSheet(
             "QPushButton {{ background: transparent; border: none;"
-            "  color: {muted}; font-size: 11px; text-align: left; padding: 6px 8px; }}"
-            "QPushButton:hover {{ color: {dim}; }}".format(
-                muted=theme.TEXT_MUTED, dim=theme.TEXT_SECONDARY)
+            "  color: {sec}; font-size: 11px; text-align: left;"
+            "  padding: 8px 6px; border-top: 1px solid {border}; }}"
+            "QPushButton:hover {{ color: {text}; }}".format(
+                sec=theme.TEXT_PRIMARY, text=theme.ACCENT_ORANGE,
+                border=theme.BORDER)
         )
         settings_btn.clicked.connect(self._open_settings)
         sidebar_layout.addWidget(settings_btn)
@@ -284,8 +401,8 @@ class CartonWindow(QtWidgets.QDialog):
             "  border-radius: 6px; font-size: 16px; color: {dim}; }}"
             "QPushButton:hover {{ background: {hover}; color: {text};"
             "  border-color: {border_hover}; }}".format(
-                border=theme.BORDER, dim=theme.TEXT_DIM, hover=theme.BG_HOVER,
-                text=theme.TEXT_PRIMARY, border_hover=theme.BORDER_HOVER)
+                border=theme.BORDER, dim=theme.TEXT_PRIMARY, hover=theme.BG_HOVER,
+                text=theme.ACCENT_ORANGE, border_hover=theme.BORDER_HOVER)
         )
         refresh_btn.clicked.connect(self.refresh)
         search_row.addWidget(refresh_btn)
@@ -305,7 +422,7 @@ class CartonWindow(QtWidgets.QDialog):
                 "QPushButton:hover {{ color: {sec}; }}"
                 "QPushButton:checked {{ color: {orange};"
                 "  border-bottom: 2px solid {orange}; }}".format(
-                    dim=theme.TEXT_DIM, sec=theme.TEXT_SECONDARY,
+                    dim=theme.TEXT_SECONDARY, sec=theme.TEXT_PRIMARY,
                     orange=theme.ACCENT_ORANGE)
             )
         self._tab_installed.setChecked(True)
@@ -322,8 +439,8 @@ class CartonWindow(QtWidgets.QDialog):
             "  border-radius: 6px; color: {dim}; font-size: 12px; padding: 0 10px; }}"
             "QPushButton:hover {{ background: {hover}; color: {text};"
             "  border-color: {border_hover}; }}".format(
-                border=theme.BORDER, dim=theme.TEXT_DIM, hover=theme.BG_HOVER,
-                text=theme.TEXT_PRIMARY, border_hover=theme.BORDER_HOVER)
+                border=theme.BORDER, dim=theme.TEXT_PRIMARY, hover=theme.BG_HOVER,
+                text=theme.ACCENT_ORANGE, border_hover=theme.BORDER_HOVER)
         )
         self._register_btn.clicked.connect(self._on_add_script)
         self._register_btn.setVisible(False)
@@ -437,6 +554,67 @@ class CartonWindow(QtWidgets.QDialog):
         self._script_manager = script_manager
         self._publisher = publisher
         self._config = config
+        self._rebuild_profile_combo()
+
+    def _rebuild_profile_combo(self):
+        if not self._config:
+            return
+        from carton.core import profile_store
+        self._profile_combo.blockSignals(True)
+        self._profile_combo.clear()
+        self._profile_combo.addItem(t("profile_none"), "")
+        for name in profile_store.list_profiles():
+            self._profile_combo.addItem(name, name)
+        # Select current
+        active = self._config.active_profile or ""
+        idx = self._profile_combo.findData(active)
+        if idx < 0:
+            idx = 0
+        self._profile_combo.setCurrentIndex(idx)
+        self._profile_combo.blockSignals(False)
+
+    def _on_profile_combo_changed(self, index):
+        if not self._config or index < 0:
+            return
+        new_name = self._profile_combo.itemData(index) or ""
+        if new_name == (self._config.active_profile or ""):
+            return
+        self._switch_profile(new_name)
+
+    def _switch_profile(self, name):
+        from carton.core import profile_store
+        from carton.core.profile import InvalidProfileError
+        if name:
+            try:
+                profile = profile_store.load_profile(name)
+            except InvalidProfileError as e:
+                QtWidgets.QMessageBox.warning(self, "Carton", str(e))
+                self._rebuild_profile_combo()
+                return
+            self._config.apply_profile(profile)
+        # Empty name = "no profile"; leave overlay fields as-is so the user
+        # doesn't accidentally lose their current registries by switching
+        # off the profile. They can edit them via Settings afterwards.
+        self._config.active_profile = name
+        self._config.save()
+        self._config.apply_proxy_to_env()
+        self.refresh()
+
+    def _open_profile_manager(self):
+        from carton.ui.profile_manager_dialog import ProfileManagerDialog
+        dlg = ProfileManagerDialog(self._config, parent=self)
+        dlg.exec_()
+        self._rebuild_profile_combo()
+        # The user may have edited the active profile — reapply just in case.
+        if self._config.active_profile:
+            try:
+                from carton.core import profile_store
+                profile = profile_store.load_profile(self._config.active_profile)
+                self._config.apply_profile(profile)
+                self._config.save()
+                self.refresh()
+            except Exception:
+                pass
 
     def refresh(self):
         if not self._registry_client:
@@ -447,12 +625,25 @@ class CartonWindow(QtWidgets.QDialog):
         self._check_self_update()
 
     _MYTOOLS_KEY = "__my_tools__"
+    _MYTOOLS_NS_PREFIX = "__my_tools__:"
+
+    def _is_mytools_selection(self, key):
+        return key == self._MYTOOLS_KEY or (
+            isinstance(key, str) and key.startswith(self._MYTOOLS_NS_PREFIX)
+        )
+
+    def _mytools_ns_filter(self, key):
+        """Return the namespace key if selection is a child, else None."""
+        if isinstance(key, str) and key.startswith(self._MYTOOLS_NS_PREFIX):
+            return key[len(self._MYTOOLS_NS_PREFIX):]
+        return None
 
     def _rebuild_sidebar(self):
         """Rebuild sidebar items from config registries + My Tools."""
         prev = self._sidebar_selection
-        self._sidebar_list.blockSignals(True)
-        self._sidebar_list.clear()
+        for lst in (self._registry_list, self._mytools_list):
+            lst.blockSignals(True)
+            lst.clear()
 
         packages = self._registry_client.get_packages() if self._registry_client else {}
         installed = self._install_manager.get_installed_packages() if self._install_manager else {}
@@ -463,65 +654,90 @@ class CartonWindow(QtWidgets.QDialog):
             rn = pkg_data.get("_registry_name", "")
             reg_counts[rn] = reg_counts.get(rn, 0) + 1
 
-        # Registry items (config order)
+        # Registries
         if self._config:
             for entry in self._config.registries:
                 count = reg_counts.get(entry.name, 0)
                 item = QtWidgets.QListWidgetItem("{} ({})".format(entry.name, count))
                 item.setData(Qt.UserRole, entry.name)
-                self._sidebar_list.addItem(item)
+                self._registry_list.addItem(item)
 
-        # Separator — use a dedicated widget to avoid hover highlight
-        sep = QtWidgets.QListWidgetItem()
-        sep.setFlags(Qt.NoItemFlags)
-        sep.setSizeHint(QtCore.QSize(0, 13))
-        self._sidebar_list.addItem(sep)
-        sep_container = QtWidgets.QWidget()
-        sep_container.setStyleSheet("background: transparent;")
-        sep_lay = QtWidgets.QVBoxLayout(sep_container)
-        sep_lay.setContentsMargins(8, 6, 8, 6)
-        sep_line = QtWidgets.QFrame()
-        sep_line.setFixedHeight(1)
-        sep_line.setStyleSheet("background: {};".format(theme.BORDER))
-        sep_lay.addWidget(sep_line)
-        self._sidebar_list.setItemWidget(sep, sep_container)
-
-        # My Tools
-        my_count = sum(
-            1 for p in installed.values()
+        # My Tools — All + namespace children
+        my_pkgs = [
+            p for p in installed.values()
             if p.get("source") in ("local_script", "published")
-        )
-        my_item = QtWidgets.QListWidgetItem("{} ({})".format(t("my_tools"), my_count))
-        my_item.setData(Qt.UserRole, self._MYTOOLS_KEY)
-        self._sidebar_list.addItem(my_item)
+        ]
+        my_count = len(my_pkgs)
+        all_item = QtWidgets.QListWidgetItem("{} ({})".format(t("my_tools_all"), my_count))
+        all_item.setData(Qt.UserRole, self._MYTOOLS_KEY)
+        self._mytools_list.addItem(all_item)
+
+        ns_counts = {}
+        for p in my_pkgs:
+            ns = (p.get("namespace") or "").lower()
+            ns_counts[ns] = ns_counts.get(ns, 0) + 1
+        for ns in sorted(ns_counts.keys(), key=lambda k: (k == "", k)):
+            label = ns if ns else t("my_tools_no_namespace")
+            child = QtWidgets.QListWidgetItem("{} ({})".format(label, ns_counts[ns]))
+            child.setData(Qt.UserRole, self._MYTOOLS_NS_PREFIX + ns)
+            self._mytools_list.addItem(child)
+
+        for lst in (self._registry_list, self._mytools_list):
+            lst.blockSignals(False)
 
         # Restore or default selection
-        self._sidebar_list.blockSignals(False)
-        restored = False
-        if prev:
-            for i in range(self._sidebar_list.count()):
-                item = self._sidebar_list.item(i)
-                if item and item.data(Qt.UserRole) == prev:
-                    self._sidebar_list.setCurrentRow(i)
-                    restored = True
-                    break
-        if not restored:
-            # Default: first registry, or My Tools if no registries
-            if self._sidebar_list.count() > 0:
-                first = self._sidebar_list.item(0)
-                if first and first.flags() & Qt.ItemIsSelectable:
-                    self._sidebar_list.setCurrentRow(0)
-                else:
-                    # Skip separator, select My Tools
-                    self._sidebar_list.setCurrentRow(self._sidebar_list.count() - 1)
+        if not self._restore_sidebar_selection(prev):
+            # Default: first registry; fall back to My Tools "All"
+            if self._registry_list.count() > 0:
+                self._registry_list.setCurrentRow(0)
+            elif self._mytools_list.count() > 0:
+                self._mytools_list.setCurrentRow(0)
 
-    def _on_sidebar_changed(self, row):
-        """Handle sidebar selection change."""
-        item = self._sidebar_list.item(row)
-        if not item or not (item.flags() & Qt.ItemIsSelectable):
+    def _restore_sidebar_selection(self, key):
+        if not key:
+            return False
+        if self._is_mytools_selection(key):
+            for i in range(self._mytools_list.count()):
+                if self._mytools_list.item(i).data(Qt.UserRole) == key:
+                    self._mytools_list.setCurrentRow(i)
+                    return True
+        else:
+            for i in range(self._registry_list.count()):
+                if self._registry_list.item(i).data(Qt.UserRole) == key:
+                    self._registry_list.setCurrentRow(i)
+                    return True
+        return False
+
+    def _on_registry_row_changed(self, row):
+        if row < 0:
             return
-        self._sidebar_selection = item.data(Qt.UserRole)
-        is_my_tools = self._sidebar_selection == self._MYTOOLS_KEY
+        item = self._registry_list.item(row)
+        if not item:
+            return
+        # Clear the My Tools selection so only one row in the sidebar is
+        # ever highlighted at a time.
+        self._mytools_list.blockSignals(True)
+        self._mytools_list.clearSelection()
+        self._mytools_list.setCurrentRow(-1)
+        self._mytools_list.blockSignals(False)
+        self._apply_sidebar_selection(item.data(Qt.UserRole))
+
+    def _on_mytools_row_changed(self, row):
+        if row < 0:
+            return
+        item = self._mytools_list.item(row)
+        if not item:
+            return
+        self._registry_list.blockSignals(True)
+        self._registry_list.clearSelection()
+        self._registry_list.setCurrentRow(-1)
+        self._registry_list.blockSignals(False)
+        self._apply_sidebar_selection(item.data(Qt.UserRole))
+
+    def _apply_sidebar_selection(self, key):
+        """Common path for both sidebar lists."""
+        self._sidebar_selection = key
+        is_my_tools = self._is_mytools_selection(self._sidebar_selection)
         # Show tabs for registries, register button for My Tools
         self._tab_all.setVisible(not is_my_tools)
         self._tab_installed.setVisible(not is_my_tools)
@@ -622,14 +838,20 @@ class CartonWindow(QtWidgets.QDialog):
 
         visible_items = []
 
-        if selection == self._MYTOOLS_KEY:
+        if self._is_mytools_selection(selection):
+            ns_filter = self._mytools_ns_filter(selection)
             # My Tools: show locally registered scripts, grouped by namespace
             for pkg_id, pkg_data in installed.items():
-                if pkg_data.get("source") in ("local_script", "published"):
-                    item = dict(pkg_data)
-                    item["_installed_ver"] = pkg_data.get("version")
-                    item["_local_script"] = True
-                    visible_items.append((pkg_id, item))
+                if pkg_data.get("source") not in ("local_script", "published"):
+                    continue
+                if ns_filter is not None:
+                    pkg_ns = (pkg_data.get("namespace") or "").lower()
+                    if pkg_ns != ns_filter:
+                        continue
+                item = dict(pkg_data)
+                item["_installed_ver"] = pkg_data.get("version")
+                item["_local_script"] = True
+                visible_items.append((pkg_id, item))
             visible_items.sort(key=lambda x: (
                 (x[1].get("namespace") or "~").lower(),
                 x[1].get("display_name", ""),
@@ -651,7 +873,7 @@ class CartonWindow(QtWidgets.QDialog):
                 visible_items.append((pkg_id, item))
             visible_items.sort(key=lambda x: x[1].get("display_name", ""))
 
-        is_my_tools_view = (selection == self._MYTOOLS_KEY)
+        is_my_tools_view = (selection == self._MYTOOLS_KEY)  # only "All", not ns children
         current_ns = None
         ns_groups = {}  # ns_key -> (header_btn, [card widgets])
         for pkg_id, pkg_data in visible_items:
