@@ -1045,6 +1045,7 @@ class CartonWindow(QtWidgets.QDialog):
             pkg_data["homepage"] = result["homepage"]
             pkg_data["description"] = result["description"]
             pkg_data["entry_point"] = result["entry_point"]
+            pkg_data["include_compiled"] = result.get("include_compiled", False)
 
             new_ns = result.get("namespace", "")
             old_ns = pkg_data.get("namespace", "")

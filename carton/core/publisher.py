@@ -43,6 +43,7 @@ class Publisher:
         self._config = config
 
     def publish(self, pkg_data, registry_entry, namespace=None, release_notes=""):
+        include_compiled = bool(pkg_data.get("include_compiled", False))
         """Publish to a registry.
 
         Args:
@@ -96,6 +97,7 @@ class Publisher:
             local_path, ns, name, version, is_folder,
             entry_point, display_name, icon, description, pkg_type, author,
             home_registry=pkg_data.get("home_registry"),
+            include_compiled=include_compiled,
         )
 
         sha256 = self._compute_sha256(zip_path)
@@ -166,7 +168,7 @@ class Publisher:
 
     def _create_zip(self, local_path, namespace, name, version, is_folder,
                     entry_point, display_name, icon, description, pkg_type, author,
-                    home_registry=None):
+                    home_registry=None, include_compiled=False):
         """Create a zip file in the staging directory."""
         staging = self._config.staging_dir
         os.makedirs(staging, exist_ok=True)
@@ -195,7 +197,13 @@ class Publisher:
                 for root, dirs, files in os.walk(local_path):
                     dirs[:] = [d for d in dirs if d not in _EXCLUDE_DIRS]
                     for f in files:
-                        if f.endswith(".pyc") or f in _EXCLUDE_FILES:
+                        # .pyc are stripped by default — they're build
+                        # output and bloat the zip — but the user can
+                        # opt in via include_compiled=True for tools
+                        # that ship without source.
+                        if not include_compiled and f.endswith(".pyc"):
+                            continue
+                        if f in _EXCLUDE_FILES:
                             continue
                         # Skip stale package.json — we'll inject the canonical one
                         if f == "package.json" and root == local_path:

@@ -213,6 +213,17 @@ class EditDialog(QtWidgets.QDialog):
             self._plugin_cmd_label.setVisible(False)
             self._plugin_cmd_input.setVisible(False)
 
+        # Include .pyc when publishing — only meaningful for folders that
+        # need to ship compiled-only Python files (older in-house tools).
+        self._include_compiled_cb = QtWidgets.QCheckBox(t("edit_include_compiled"))
+        self._include_compiled_cb.setToolTip(t("edit_include_compiled_tooltip"))
+        self._include_compiled_cb.setChecked(
+            bool(self._pkg_data.get("include_compiled", False))
+        )
+        if not self._pkg_data.get("is_folder"):
+            self._include_compiled_cb.setVisible(False)
+        layout.addWidget(self._include_compiled_cb)
+
         layout.addStretch()
 
         # Buttons
@@ -315,6 +326,7 @@ class EditDialog(QtWidgets.QDialog):
             "icon": self._icon_input.text().strip() or "🔧",
             "homepage": self._homepage_input.text().strip(),
             "description": self._desc_input.text().strip(),
+            "include_compiled": self._include_compiled_cb.isChecked(),
             "entry_point": entry_point,
             "namespace": slugify_namespace(self._namespace_input.text()),
         }
