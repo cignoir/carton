@@ -5,7 +5,7 @@ Usage:
     carton.show()
 """
 
-__version__ = "0.1.21"
+__version__ = "0.2.0"
 
 _window = None
 _initialized = False
