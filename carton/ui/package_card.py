@@ -153,15 +153,20 @@ class PackageCard(QtWidgets.QFrame):
             )
             title_layout.addWidget(pin_label)
 
-        # Verified badge — installed packages whose registry entry carried a
-        # sha256 (and therefore had it checked at download time).
+        # Verified mark — installed packages whose registry entry carried
+        # a sha256 (and therefore had it checked at download time). A
+        # tiny checkbox glyph rather than a pill so the SHA verification
+        # state stays out of the way of the tool name.
         if self._installed_version and self._pkg_data.get("sha256"):
-            verified = QtWidgets.QLabel("\u2713 " + t("verified_badge"))
-            verified.setToolTip(t("verified_badge_tooltip"))
+            verified = QtWidgets.QLabel("\u2611")
+            verified.setToolTip(
+                "{}\n{}".format(
+                    t("verified_badge"), t("verified_badge_tooltip")
+                )
+            )
             verified.setStyleSheet(
-                "font-size: 10px; font-weight: 600; color: {color};"
-                " background: transparent; padding: 1px 6px;"
-                " border: 1px solid {color}; border-radius: 3px;".format(
+                "font-size: 14px; color: {color};"
+                " background: transparent; padding: 0 2px;".format(
                     color=theme.ACCENT_GREEN)
             )
             title_layout.addWidget(verified)
