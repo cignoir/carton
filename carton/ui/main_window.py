@@ -219,82 +219,102 @@ class CartonWindow(QtWidgets.QDialog):
         self._stack = QtWidgets.QStackedWidget()
         main_layout.addWidget(self._stack)
 
+        # Section caption style — small uppercase tracking, used by every
+        # sidebar section so the visual rhythm comes from typography +
+        # whitespace, not from hairlines.
+        self._sidebar_caption_css = (
+            "color: {c}; font-size: 10px; font-weight: 800;"
+            " letter-spacing: 2px; padding: 4px 8px 4px 8px;"
+            " background: transparent;"
+        ).format(c=theme.TEXT_PRIMARY)
+
         # ---- Page 0: Sidebar + Package list ----
         list_page = QtWidgets.QWidget()
         page_layout = QtWidgets.QHBoxLayout(list_page)
         page_layout.setContentsMargins(0, 0, 0, 0)
         page_layout.setSpacing(0)
+        page_layout.addWidget(self._build_sidebar())
+        page_layout.addWidget(self._build_content_area())
+        self._stack.addWidget(list_page)
 
-        # -- Sidebar --
+        # ---- Page 1: Detail ----
+        self._stack.addWidget(self._build_detail_page())
+
+        self._current_tab = "installed"
+        self._sidebar_selection = None  # Will be set on refresh
+
+    # ---- _setup_ui helpers ----------------------------------------------
+
+    def _make_sidebar_caption_row(self, text, collapsible_target=None):
+        """Caption label + dashed rule on its right.
+
+        If ``collapsible_target`` is given, the caption becomes a clickable
+        button that toggles the target widget's visibility and shows a
+        chevron next to the text.
+        """
+        caption_css = self._sidebar_caption_css
+        row = QtWidgets.QHBoxLayout()
+        row.setContentsMargins(0, 6, 8, 2)
+        row.setSpacing(6)
+
+        if collapsible_target is None:
+            lbl = QtWidgets.QLabel(text)
+            lbl.setStyleSheet(caption_css)
+            row.addWidget(lbl)
+        else:
+            btn = QtWidgets.QPushButton("\u25bc  " + text)
+            btn.setCursor(Qt.PointingHandCursor)
+            btn.setStyleSheet(
+                "QPushButton {{ {base} border: none; text-align: left; }}"
+                "QPushButton:hover {{ color: {hover}; }}"
+                .format(base=caption_css, hover=theme.ACCENT_ORANGE)
+            )
+
+            def toggle(_=False, b=btn, target=collapsible_target, label=text):
+                visible = not target.isVisible()
+                target.setVisible(visible)
+                arrow = "\u25bc" if visible else "\u25b6"
+                b.setText("{}  {}".format(arrow, label))
+
+            btn.clicked.connect(toggle)
+            row.addWidget(btn)
+
+        rule = QtWidgets.QFrame()
+        rule.setFixedHeight(1)
+        rule.setStyleSheet(
+            "background: transparent;"
+            " border: none; border-top: 1px dashed {};".format(theme.BORDER_HOVER)
+        )
+        row.addWidget(rule, stretch=1)
+        return row
+
+    def _build_sidebar(self):
         sidebar = QtWidgets.QWidget()
         sidebar.setFixedWidth(180)
         sidebar.setStyleSheet("QWidget {{ background: {}; }}".format(theme.BG_SIDEBAR))
-        sidebar_layout = QtWidgets.QVBoxLayout(sidebar)
-        sidebar_layout.setContentsMargins(10, 14, 10, 10)
-        sidebar_layout.setSpacing(0)
+        layout = QtWidgets.QVBoxLayout(sidebar)
+        layout.setContentsMargins(10, 14, 10, 10)
+        layout.setSpacing(0)
 
-        # Section caption style — small uppercase tracking, used by every
-        # sidebar section so the visual rhythm comes from typography +
-        # whitespace, not from hairlines.
-        caption_css = (
-            "color: {c}; font-size: 10px; font-weight: 800;"
-            " letter-spacing: 2px; padding: 4px 8px 4px 8px;"
-            " background: transparent;"
-        ).format(c=theme.TEXT_PRIMARY)
-        self._sidebar_caption_css = caption_css
+        self._build_sidebar_profile_section(layout)
+        layout.addSpacing(16)
+        self._build_sidebar_registry_section(layout)
+        layout.addSpacing(16)
+        self._build_sidebar_mytools_section(layout)
+        layout.addStretch(1)
+        self._build_sidebar_footer(layout)
+        return sidebar
 
-        def make_caption_row(text, collapsible_target=None):
-            """Caption label + dashed rule on its right.
-
-            If ``collapsible_target`` is given, the caption becomes a
-            clickable button that toggles the target widget's visibility
-            and shows a chevron next to the text.
-            """
-            row = QtWidgets.QHBoxLayout()
-            row.setContentsMargins(0, 6, 8, 2)
-            row.setSpacing(6)
-
-            if collapsible_target is None:
-                lbl = QtWidgets.QLabel(text)
-                lbl.setStyleSheet(caption_css)
-                row.addWidget(lbl)
-            else:
-                btn = QtWidgets.QPushButton("\u25bc  " + text)
-                btn.setCursor(Qt.PointingHandCursor)
-                btn.setStyleSheet(
-                    "QPushButton {{ {base} border: none; text-align: left; }}"
-                    "QPushButton:hover {{ color: {hover}; }}"
-                    .format(base=caption_css, hover=theme.ACCENT_ORANGE)
-                )
-
-                def toggle(_=False, b=btn, target=collapsible_target, label=text):
-                    visible = not target.isVisible()
-                    target.setVisible(visible)
-                    arrow = "\u25bc" if visible else "\u25b6"
-                    b.setText("{}  {}".format(arrow, label))
-
-                btn.clicked.connect(toggle)
-                row.addWidget(btn)
-
-            rule = QtWidgets.QFrame()
-            rule.setFixedHeight(1)
-            rule.setStyleSheet(
-                "background: transparent;"
-                " border: none; border-top: 1px dashed {};".format(theme.BORDER_HOVER)
-            )
-            row.addWidget(rule, stretch=1)
-            return row
-
-        # ----- Profile section ----------------------------------------------
+    def _build_sidebar_profile_section(self, parent_layout):
         profile_container = QtWidgets.QWidget()
-        profile_row = QtWidgets.QHBoxLayout(profile_container)
-        profile_row.setContentsMargins(0, 0, 0, 0)
-        profile_row.setSpacing(4)
+        row = QtWidgets.QHBoxLayout(profile_container)
+        row.setContentsMargins(0, 0, 0, 0)
+        row.setSpacing(4)
 
         self._profile_combo = QtWidgets.QComboBox()
         self._profile_combo.setStyleSheet(theme.combobox_style())
         self._profile_combo.currentIndexChanged.connect(self._on_profile_combo_changed)
-        profile_row.addWidget(self._profile_combo, stretch=1)
+        row.addWidget(self._profile_combo, stretch=1)
 
         manage_btn = _ClickableLabel("\u2699")
         manage_btn.setToolTip(t("profile_manage"))
@@ -311,15 +331,14 @@ class CartonWindow(QtWidgets.QDialog):
                 text=theme.TEXT_PRIMARY, hover=theme.BG_HOVER)
         )
         manage_btn.clicked.connect(self._open_profile_manager)
-        profile_row.addWidget(manage_btn)
+        row.addWidget(manage_btn)
 
-        sidebar_layout.addLayout(make_caption_row(
+        parent_layout.addLayout(self._make_sidebar_caption_row(
             t("profile_label").upper(), collapsible_target=profile_container,
         ))
-        sidebar_layout.addWidget(profile_container)
-        sidebar_layout.addSpacing(16)
+        parent_layout.addWidget(profile_container)
 
-        # ----- Registries section -------------------------------------------
+    def _build_sidebar_registry_section(self, parent_layout):
         self._registry_list = QtWidgets.QListWidget()
         self._registry_list.setStyleSheet(theme.sidebar_list_style())
         self._registry_list.setFrameShape(QtWidgets.QFrame.NoFrame)
@@ -328,14 +347,12 @@ class CartonWindow(QtWidgets.QDialog):
             QtWidgets.QAbstractScrollArea.AdjustToContents
         )
         self._registry_list.currentRowChanged.connect(self._on_registry_row_changed)
-        sidebar_layout.addLayout(make_caption_row(
+        parent_layout.addLayout(self._make_sidebar_caption_row(
             t("sidebar_library").upper(), collapsible_target=self._registry_list,
         ))
-        sidebar_layout.addWidget(self._registry_list)
+        parent_layout.addWidget(self._registry_list)
 
-        sidebar_layout.addSpacing(16)
-
-        # ----- My Tools section ---------------------------------------------
+    def _build_sidebar_mytools_section(self, parent_layout):
         self._mytools_list = QtWidgets.QListWidget()
         self._mytools_list.setStyleSheet(theme.sidebar_list_style())
         self._mytools_list.setFrameShape(QtWidgets.QFrame.NoFrame)
@@ -344,16 +361,16 @@ class CartonWindow(QtWidgets.QDialog):
             QtWidgets.QAbstractScrollArea.AdjustToContents
         )
         self._mytools_list.currentRowChanged.connect(self._on_mytools_row_changed)
-        sidebar_layout.addLayout(make_caption_row(
+        parent_layout.addLayout(self._make_sidebar_caption_row(
             t("my_tools").upper(), collapsible_target=self._mytools_list,
         ))
-        sidebar_layout.addWidget(self._mytools_list)
+        parent_layout.addWidget(self._mytools_list)
 
-        sidebar_layout.addStretch(1)
-
-        # ----- Footer --------------------------------------------------------
-        sidebar_layout.addSpacing(8)
-        settings_btn = QtWidgets.QPushButton("⚙  " + t("settings_title").split("—")[-1].strip())
+    def _build_sidebar_footer(self, parent_layout):
+        parent_layout.addSpacing(8)
+        settings_btn = QtWidgets.QPushButton(
+            "⚙  " + t("settings_title").split("—")[-1].strip()
+        )
         settings_btn.setCursor(Qt.PointingHandCursor)
         settings_btn.setStyleSheet(
             "QPushButton {{ background: transparent; border: none;"
@@ -364,17 +381,21 @@ class CartonWindow(QtWidgets.QDialog):
                 border=theme.BORDER)
         )
         settings_btn.clicked.connect(self._open_settings)
-        sidebar_layout.addWidget(settings_btn)
+        parent_layout.addWidget(settings_btn)
 
-        page_layout.addWidget(sidebar)
-
-        # -- Content area --
+    def _build_content_area(self):
         content = QtWidgets.QWidget()
-        content_layout = QtWidgets.QVBoxLayout(content)
-        content_layout.setContentsMargins(16, 12, 16, 12)
-        content_layout.setSpacing(10)
+        layout = QtWidgets.QVBoxLayout(content)
+        layout.setContentsMargins(16, 12, 16, 12)
+        layout.setSpacing(10)
 
-        # Update banner
+        self._build_update_banner(layout)
+        self._build_search_row(layout)
+        self._build_toolbar(layout)
+        self._build_card_list(layout)
+        return content
+
+    def _build_update_banner(self, parent_layout):
         self._update_banner = QtWidgets.QWidget()
         self._update_banner.setFixedHeight(32)
         self._update_banner.setStyleSheet(
@@ -401,14 +422,14 @@ class CartonWindow(QtWidgets.QDialog):
         self._update_banner_btn.clicked.connect(self._on_self_update)
         self._update_banner_btn.setVisible(False)
         banner_layout.addWidget(self._update_banner_btn)
-        content_layout.addWidget(self._update_banner)
+        parent_layout.addWidget(self._update_banner)
 
-        # Search + refresh
-        search_row = QtWidgets.QHBoxLayout()
+    def _build_search_row(self, parent_layout):
+        row = QtWidgets.QHBoxLayout()
         self._search = QtWidgets.QLineEdit()
         self._search.setPlaceholderText(t("search_placeholder"))
         self._search.textChanged.connect(self._filter_cards)
-        search_row.addWidget(self._search)
+        row.addWidget(self._search)
 
         refresh_btn = QtWidgets.QPushButton("↻")
         refresh_btn.setFixedSize(28, 28)
@@ -421,10 +442,11 @@ class CartonWindow(QtWidgets.QDialog):
                 text=theme.ACCENT_ORANGE, border_hover=theme.BORDER_HOVER)
         )
         refresh_btn.clicked.connect(self.refresh)
-        search_row.addWidget(refresh_btn)
-        content_layout.addLayout(search_row)
+        row.addWidget(refresh_btn)
+        parent_layout.addLayout(row)
 
-        # Toolbar (tabs + register button, visibility depends on sidebar selection)
+    def _build_toolbar(self, parent_layout):
+        """Tabs + register button. Visibility depends on sidebar selection."""
         toolbar = QtWidgets.QHBoxLayout()
 
         self._tab_all = QtWidgets.QPushButton(t("tab_all"))
@@ -462,9 +484,9 @@ class CartonWindow(QtWidgets.QDialog):
         self._register_btn.setVisible(False)
         toolbar.addWidget(self._register_btn)
 
-        content_layout.addLayout(toolbar)
+        parent_layout.addLayout(toolbar)
 
-        # Card list
+    def _build_card_list(self, parent_layout):
         scroll = QtWidgets.QScrollArea()
         scroll.setWidgetResizable(True)
         scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
@@ -483,23 +505,16 @@ class CartonWindow(QtWidgets.QDialog):
         self._card_layout.addStretch()
 
         scroll.setWidget(self._card_container)
-        content_layout.addWidget(scroll)
+        parent_layout.addWidget(scroll)
 
-        page_layout.addWidget(content)
-
-        self._stack.addWidget(list_page)
-
-        # ---- Page 1: Detail ----
+    def _build_detail_page(self):
         self._detail = PackageDetailPanel()
         self._detail.back_requested.connect(lambda: self._stack.setCurrentIndex(0))
         self._detail.install_requested.connect(self._on_install)
         self._detail.rollback_requested.connect(self._on_rollback)
         self._detail.uninstall_requested.connect(self._on_uninstall)
         self._detail.launch_requested.connect(self._on_launch)
-        self._stack.addWidget(self._detail)
-
-        self._current_tab = "installed"
-        self._sidebar_selection = None  # Will be set on refresh
+        return self._detail
 
     # ---- public API ----
 
@@ -843,159 +858,47 @@ class CartonWindow(QtWidgets.QDialog):
 
     def _rebuild_cards(self):
         """Rebuild the card list based on sidebar selection."""
-        # Stop any in-flight icon fetcher from a previous rebuild
-        if self._icon_fetcher and self._icon_fetcher.isRunning():
-            self._icon_fetcher.quit()
-            self._icon_fetcher.wait()
-            self._icon_fetcher = None
+        self._stop_icon_fetcher()
         self._card_map = {}
-        icon_fetch_tasks = []
+        self._clear_card_layout()
 
-        while self._card_layout.count() > 1:
-            item = self._card_layout.takeAt(0)
-            if item.widget():
-                item.widget().deleteLater()
-
-        packages = self._registry_client.get_packages() if self._registry_client else {}
-        installed = self._install_manager.get_installed_packages() if self._install_manager else {}
         selection = self._sidebar_selection
-
-        # Build a reverse index: pkg_id -> [writable local registry names]
-        # so each card can show its Published-to badge without re-reading
-        # every registry.json per card.
-        published_map = self._build_published_map()
-
-        visible_items = []
+        installed = (
+            self._install_manager.get_installed_packages()
+            if self._install_manager else {}
+        )
 
         if self._is_mytools_selection(selection):
-            ns_filter = self._mytools_ns_filter(selection)
-            # My Tools: show locally registered scripts, grouped by namespace
-            for pkg_id, pkg_data in installed.items():
-                if pkg_data.get("source") not in ("local_script", "published"):
-                    continue
-                if ns_filter is not None:
-                    pkg_ns = (pkg_data.get("namespace") or "").lower()
-                    if pkg_ns != ns_filter:
-                        continue
-                item = dict(pkg_data)
-                item["_installed_ver"] = pkg_data.get("version")
-                item["_local_script"] = True
-                visible_items.append((pkg_id, item))
-            visible_items.sort(key=lambda x: (
-                (x[1].get("namespace") or "~").lower(),
-                x[1].get("display_name", ""),
-            ))
+            visible_items = self._collect_mytools_items(installed, selection)
         else:
-            # Registry view: show packages from selected registry
-            for pkg_id, pkg_data in packages.items():
-                if pkg_data.get("_registry_name") != selection:
-                    continue
-                item = dict(pkg_data)
-                # A demoted (uninstalled-from-registry) entry stays in
-                # installed.json with source=local_script so it remains in
-                # My Tools, but the registry view should show it as
-                # not-installed so the user can re-install if they want.
-                inst_entry = installed.get(pkg_id, {})
-                is_installed = (
-                    pkg_id in installed
-                    and inst_entry.get("source") != "local_script"
-                )
-                if is_installed:
-                    inst = installed[pkg_id]
-                    item["_installed_ver"] = inst.get("version")
-                    # Surface the recorded sha256 so the card can render
-                    # the verified badge — registry view shows it from the
-                    # installed.json snapshot, not from the live registry.
-                    if inst.get("sha256"):
-                        item["sha256"] = inst.get("sha256")
-                    if inst.get("pinned"):
-                        item["pinned"] = True
-                    if inst.get("source") in ("local_script", "published") and inst.get("local_path"):
-                        item["_local_script"] = True
-                if self._current_tab == "installed" and not is_installed:
-                    continue
-                visible_items.append((pkg_id, item))
-            visible_items.sort(key=lambda x: x[1].get("display_name", ""))
+            packages = (
+                self._registry_client.get_packages()
+                if self._registry_client else {}
+            )
+            visible_items = self._collect_registry_items(packages, installed, selection)
+
+        # pkg_id -> [writable local registry names], for "Published-to" badges.
+        # Built once per rebuild instead of per-card.
+        published_map = self._build_published_map()
 
         is_my_tools_view = (selection == self._MYTOOLS_KEY)  # only "All", not ns children
-        current_ns = None
+        icon_fetch_tasks = []
         ns_groups = {}  # ns_key -> (header_btn, [card widgets])
+        current_ns = None
+
         for pkg_id, pkg_data in visible_items:
             if is_my_tools_view:
                 ns = (pkg_data.get("namespace") or "").lower()
                 if ns != current_ns:
                     current_ns = ns
-                    label_text = ns if ns else t("my_tools_no_namespace")
-                    collapsed = ns in self._mytools_collapsed
-                    arrow = "\u25b6" if collapsed else "\u25bc"
-                    header = QtWidgets.QPushButton("{}  {}".format(arrow, label_text))
-                    header.setCursor(Qt.PointingHandCursor)
-                    header.setStyleSheet(
-                        "QPushButton {{ color: {dim}; background: transparent;"
-                        " font-size: 11px; font-weight: bold; text-align: left;"
-                        " padding: 8px 4px 4px 4px; border: none;"
-                        " border-bottom: 1px solid {border}; }}"
-                        "QPushButton:hover {{ color: {text}; }}"
-                        .format(dim=theme.TEXT_DIM, border=theme.BORDER,
-                                text=theme.TEXT_PRIMARY)
-                    )
+                    header = self._create_mytools_group_header(ns)
                     ns_groups[ns] = (header, [])
-                    header.clicked.connect(
-                        lambda _checked=False, k=ns: self._toggle_mytools_group(k)
-                    )
-                    idx = self._card_layout.count() - 1
-                    self._card_layout.insertWidget(idx, header)
-            installed_ver = pkg_data.get("_installed_ver")
-            pkg_name = pkg_data.get("name", "")
+                    self._insert_card_widget(header)
 
-            # Icon resolution
-            icon_path = self._resolve_icon_path(pkg_data)
-            if not icon_path:
-                icon_filename = _icon_filename(pkg_data)
-                base_dir = pkg_data.get("_registry_base_dir", "")
-                is_remote = pkg_data.get("_registry_remote", False)
-                if icon_filename and is_remote and base_dir:
-                    icon_fetch_tasks.append((pkg_id, base_dir, icon_filename))
-
-            # In a registry view we render the same plain consumer card
-            # regardless of whether the user happens to own the package:
-            # no Publish button, no "published-to" badge, no Edit click.
-            # Those affordances only make sense in My Tools.
-            in_my_tools_view = self._is_mytools_selection(selection)
-            if in_my_tools_view:
-                card_pkg_data = pkg_data
-                card_published = published_map.get(pkg_id, [])
-            else:
-                card_pkg_data = {
-                    k: v for k, v in pkg_data.items() if k != "_local_script"
-                }
-                card_published = []
-
-            card = PackageCard(
-                pkg_id, card_pkg_data,
-                installed_version=installed_ver,
-                icon_path=icon_path,
-                published_registries=card_published,
+            card = self._create_package_card(
+                pkg_id, pkg_data, selection, published_map, icon_fetch_tasks,
             )
-            card.launch_requested.connect(self._on_launch)
-            card.install_requested.connect(self._on_install)
-            card.publish_requested.connect(self._on_publish)
-            card.update_requested.connect(self._on_update)
-            card.unpublish_requested.connect(self._on_card_unpublish)
-            card.setCursor(Qt.PointingHandCursor)
-            self._card_map[pkg_id] = card
-
-            # Edit only opens from My Tools view. In a registry view the
-            # user is acting as a consumer — even for packages they
-            # published — so show the detail panel (with rollback /
-            # version history) instead.
-            if self._is_mytools_selection(selection):
-                card.mousePressEvent = lambda e, pid=pkg_id: self._show_edit(pid)
-            else:
-                card.mousePressEvent = lambda e, pid=pkg_id: self._show_detail(pid)
-
-            idx = self._card_layout.count() - 1
-            self._card_layout.insertWidget(idx, card)
+            self._insert_card_widget(card)
             if is_my_tools_view and current_ns in ns_groups:
                 ns_groups[current_ns][1].append(card)
 
@@ -1006,11 +909,167 @@ class CartonWindow(QtWidgets.QDialog):
                 for c in cards:
                     c.setVisible(False)
 
-        # Start background icon download for uncached remote icons
-        if icon_fetch_tasks:
-            self._icon_fetcher = _IconFetcher(icon_fetch_tasks, self._config, parent=self)
-            self._icon_fetcher.icon_ready.connect(self._on_icon_ready)
-            self._icon_fetcher.start()
+        self._start_icon_fetcher(icon_fetch_tasks)
+
+    # ---- _rebuild_cards helpers ------------------------------------------
+
+    def _stop_icon_fetcher(self):
+        """Stop any in-flight icon fetcher from a previous rebuild."""
+        if self._icon_fetcher and self._icon_fetcher.isRunning():
+            self._icon_fetcher.quit()
+            self._icon_fetcher.wait()
+            self._icon_fetcher = None
+
+    def _clear_card_layout(self):
+        """Remove all cards from the layout, leaving the trailing stretch."""
+        while self._card_layout.count() > 1:
+            item = self._card_layout.takeAt(0)
+            if item.widget():
+                item.widget().deleteLater()
+
+    def _insert_card_widget(self, widget):
+        """Insert a widget just before the trailing stretch in the card layout."""
+        idx = self._card_layout.count() - 1
+        self._card_layout.insertWidget(idx, widget)
+
+    def _start_icon_fetcher(self, tasks):
+        """Kick off background icon download for uncached remote icons."""
+        if not tasks:
+            return
+        self._icon_fetcher = _IconFetcher(tasks, self._config, parent=self)
+        self._icon_fetcher.icon_ready.connect(self._on_icon_ready)
+        self._icon_fetcher.start()
+
+    def _collect_mytools_items(self, installed, selection):
+        """Return ``[(pkg_id, view_data)]`` for the My Tools view, sorted by ns."""
+        ns_filter = self._mytools_ns_filter(selection)
+        items = []
+        for pkg_id, pkg_data in installed.items():
+            if pkg_data.get("source") not in ("local_script", "published"):
+                continue
+            if ns_filter is not None:
+                pkg_ns = (pkg_data.get("namespace") or "").lower()
+                if pkg_ns != ns_filter:
+                    continue
+            item = dict(pkg_data)
+            item["_installed_ver"] = pkg_data.get("version")
+            item["_local_script"] = True
+            items.append((pkg_id, item))
+        items.sort(key=lambda x: (
+            (x[1].get("namespace") or "~").lower(),
+            x[1].get("display_name", ""),
+        ))
+        return items
+
+    def _collect_registry_items(self, packages, installed, selection):
+        """Return ``[(pkg_id, view_data)]`` for the selected registry view."""
+        items = []
+        for pkg_id, pkg_data in packages.items():
+            if pkg_data.get("_registry_name") != selection:
+                continue
+            item = dict(pkg_data)
+            # A demoted (uninstalled-from-registry) entry stays in
+            # installed.json with source=local_script so it remains in
+            # My Tools, but the registry view should show it as
+            # not-installed so the user can re-install if they want.
+            inst_entry = installed.get(pkg_id, {})
+            is_installed = (
+                pkg_id in installed
+                and inst_entry.get("source") != "local_script"
+            )
+            if is_installed:
+                inst = installed[pkg_id]
+                item["_installed_ver"] = inst.get("version")
+                # Surface the recorded sha256 so the card can render
+                # the verified badge — registry view shows it from the
+                # installed.json snapshot, not from the live registry.
+                if inst.get("sha256"):
+                    item["sha256"] = inst.get("sha256")
+                if inst.get("pinned"):
+                    item["pinned"] = True
+                if inst.get("source") in ("local_script", "published") and inst.get("local_path"):
+                    item["_local_script"] = True
+            if self._current_tab == "installed" and not is_installed:
+                continue
+            items.append((pkg_id, item))
+        items.sort(key=lambda x: x[1].get("display_name", ""))
+        return items
+
+    def _create_mytools_group_header(self, ns):
+        """Build the collapsible header button for a My Tools namespace group."""
+        label_text = ns if ns else t("my_tools_no_namespace")
+        collapsed = ns in self._mytools_collapsed
+        arrow = "\u25b6" if collapsed else "\u25bc"
+        header = QtWidgets.QPushButton("{}  {}".format(arrow, label_text))
+        header.setCursor(Qt.PointingHandCursor)
+        header.setStyleSheet(
+            "QPushButton {{ color: {dim}; background: transparent;"
+            " font-size: 11px; font-weight: bold; text-align: left;"
+            " padding: 8px 4px 4px 4px; border: none;"
+            " border-bottom: 1px solid {border}; }}"
+            "QPushButton:hover {{ color: {text}; }}"
+            .format(dim=theme.TEXT_DIM, border=theme.BORDER,
+                    text=theme.TEXT_PRIMARY)
+        )
+        header.clicked.connect(
+            lambda _checked=False, k=ns: self._toggle_mytools_group(k)
+        )
+        return header
+
+    def _create_package_card(self, pkg_id, pkg_data, selection,
+                              published_map, icon_fetch_tasks):
+        """Build a single PackageCard and register it in ``_card_map``.
+
+        Side effect: appends ``(pkg_id, base_dir, icon_filename)`` to
+        ``icon_fetch_tasks`` for any remote icon that needs to be fetched
+        in the background.
+        """
+        # Icon resolution
+        icon_path = self._resolve_icon_path(pkg_data)
+        if not icon_path:
+            icon_filename = _icon_filename(pkg_data)
+            base_dir = pkg_data.get("_registry_base_dir", "")
+            is_remote = pkg_data.get("_registry_remote", False)
+            if icon_filename and is_remote and base_dir:
+                icon_fetch_tasks.append((pkg_id, base_dir, icon_filename))
+
+        # In a registry view we render the same plain consumer card
+        # regardless of whether the user happens to own the package:
+        # no Publish button, no "published-to" badge, no Edit click.
+        # Those affordances only make sense in My Tools.
+        in_my_tools_view = self._is_mytools_selection(selection)
+        if in_my_tools_view:
+            card_pkg_data = pkg_data
+            card_published = published_map.get(pkg_id, [])
+        else:
+            card_pkg_data = {
+                k: v for k, v in pkg_data.items() if k != "_local_script"
+            }
+            card_published = []
+
+        card = PackageCard(
+            pkg_id, card_pkg_data,
+            installed_version=pkg_data.get("_installed_ver"),
+            icon_path=icon_path,
+            published_registries=card_published,
+        )
+        card.launch_requested.connect(self._on_launch)
+        card.install_requested.connect(self._on_install)
+        card.publish_requested.connect(self._on_publish)
+        card.update_requested.connect(self._on_update)
+        card.unpublish_requested.connect(self._on_card_unpublish)
+        card.setCursor(Qt.PointingHandCursor)
+        self._card_map[pkg_id] = card
+
+        # Edit only opens from My Tools view. In a registry view the
+        # user is acting as a consumer — even for packages they
+        # published — so show the detail panel (with rollback /
+        # version history) instead.
+        if in_my_tools_view:
+            card.mousePressEvent = lambda e, pid=pkg_id: self._show_edit(pid)
+        else:
+            card.mousePressEvent = lambda e, pid=pkg_id: self._show_detail(pid)
+        return card
 
     def _toggle_mytools_group(self, ns_key):
         group = self._mytools_groups.get(ns_key)
@@ -1051,8 +1110,7 @@ class CartonWindow(QtWidgets.QDialog):
         self._stack.setCurrentIndex(1)
 
     def _show_edit(self, pkg_id):
-        installed = self._install_manager.get_installed_packages()
-        pkg_data = installed.get(pkg_id, {})
+        pkg_data = self._install_manager.get_installed_packages().get(pkg_id, {})
         if not pkg_data:
             return
 
@@ -1061,63 +1119,86 @@ class CartonWindow(QtWidgets.QDialog):
         if self._publisher:
             published_regs = self._publisher.find_published_registries(pkg_id)
 
-        result = EditDialog.prompt(pkg_id, pkg_data,
-                                   published_registries=published_regs, parent=self)
+        result = EditDialog.prompt(
+            pkg_id, pkg_data,
+            published_registries=published_regs, parent=self,
+        )
         if not result:
             return
-        if result["action"] == "history":
+
+        action = result["action"]
+        if action == "history":
             self._show_history_for(pkg_id)
-            return
-        if result["action"] == "unpublish":
+        elif action == "unpublish":
             self._on_unpublish(pkg_id, result["registry"])
-            return
-        if result["action"] == "remove":
+        elif action == "remove":
             if self._script_manager:
                 self._script_manager.unregister(pkg_id)
             self._rebuild_sidebar()
             self._rebuild_cards()
-        elif result["action"] == "save":
-            pkg_data["display_name"] = result["display_name"]
-            pkg_data["version"] = result["version"]
-            pkg_data["author"] = result["author"]
-            pkg_data["icon"] = result["icon"]
-            pkg_data["homepage"] = result["homepage"]
-            pkg_data["description"] = result["description"]
-            pkg_data["entry_point"] = result["entry_point"]
-            pkg_data["include_compiled"] = result.get("include_compiled", False)
+        elif action == "save":
+            self._apply_edit_save(pkg_id, pkg_data, result, published_regs)
 
-            new_ns = result.get("namespace", "")
-            old_ns = pkg_data.get("namespace", "")
-            installed_pkgs = self._install_manager._installed["packages"]
-            if new_ns != old_ns and not published_regs:
-                # Slugify + validate; the dialog should already have shown a
-                # preview but be defensive in case it didn't.
-                if new_ns:
-                    from carton.core.identity import (
-                        slugify_namespace, validate_namespace, InvalidIdentityError,
-                    )
-                    new_ns = slugify_namespace(new_ns)
-                    try:
-                        new_ns = validate_namespace(new_ns)
-                    except InvalidIdentityError as e:
-                        QtWidgets.QMessageBox.warning(self, t("register_error"), str(e))
-                        return
-                pkg_data["namespace"] = new_ns
-                name = pkg_data.get("name", "")
-                new_pkg_id = "{}/{}".format(new_ns, name) if new_ns else name
-                if new_pkg_id != pkg_id:
-                    installed_pkgs.pop(pkg_id, None)
-                    installed_pkgs[new_pkg_id] = pkg_data
-                else:
-                    installed_pkgs[pkg_id] = pkg_data
-            else:
-                installed_pkgs[pkg_id] = pkg_data
-            self._install_manager._save_installed()
-            # Sidebar counts and namespace children depend on the current
-            # installed.json snapshot — refresh both views so renames /
-            # namespace changes show up immediately.
-            self._rebuild_sidebar()
-            self._rebuild_cards()
+    def _apply_edit_save(self, pkg_id, pkg_data, result, published_regs):
+        """Persist an EditDialog "save" result and refresh the views."""
+        fields = {
+            "display_name": result["display_name"],
+            "version": result["version"],
+            "author": result["author"],
+            "icon": result["icon"],
+            "homepage": result["homepage"],
+            "description": result["description"],
+            "entry_point": result["entry_point"],
+            "include_compiled": result.get("include_compiled", False),
+        }
+
+        new_pkg_id = self._resolve_edit_namespace_change(
+            pkg_id, pkg_data, result, published_regs, fields,
+        )
+        if new_pkg_id is None:
+            return  # Validation failed; user already saw an error dialog
+
+        if new_pkg_id != pkg_id:
+            self._install_manager.rekey_package(pkg_id, new_pkg_id, fields)
+        else:
+            self._install_manager.update_package_fields(pkg_id, fields)
+        # Sidebar counts and namespace children depend on the current
+        # installed.json snapshot — refresh both views so renames /
+        # namespace changes show up immediately.
+        self._rebuild_sidebar()
+        self._rebuild_cards()
+
+    def _resolve_edit_namespace_change(self, pkg_id, pkg_data, result,
+                                        published_regs, fields):
+        """Validate a namespace change from the edit dialog.
+
+        Mutates ``fields`` in place to add ``namespace`` when the change is
+        accepted. Returns the (possibly new) pkg_id, or None if validation
+        failed (in which case an error dialog has already been shown).
+        Namespace changes are ignored when the package is already published
+        somewhere — the on-disk identity is locked.
+        """
+        new_ns = result.get("namespace", "")
+        old_ns = pkg_data.get("namespace", "")
+        if new_ns == old_ns or published_regs:
+            return pkg_id
+
+        # Slugify + validate; the dialog should already have shown a
+        # preview but be defensive in case it didn't.
+        if new_ns:
+            from carton.core.identity import (
+                slugify_namespace, validate_namespace, InvalidIdentityError,
+            )
+            new_ns = slugify_namespace(new_ns)
+            try:
+                new_ns = validate_namespace(new_ns)
+            except InvalidIdentityError as e:
+                QtWidgets.QMessageBox.warning(self, t("register_error"), str(e))
+                return None
+
+        fields["namespace"] = new_ns
+        name = pkg_data.get("name", "")
+        return "{}/{}".format(new_ns, name) if new_ns else name
 
     def _filter_cards(self, text):
         text = text.lower()
@@ -1176,78 +1257,99 @@ class CartonWindow(QtWidgets.QDialog):
         if not self._publisher or not self._config:
             return
 
-        installed = self._install_manager.get_installed_packages()
-        pkg_data = installed.get(pkg_id)
+        pkg_data = self._install_manager.get_installed_packages().get(pkg_id)
         if not pkg_data:
             return
 
-        display = pkg_data.get("display_name", pkg_id)
-        local_version = pkg_data.get("version", "0.0.0")
+        target_registry = self._pick_publish_target_registry()
+        if not target_registry:
+            return
 
-        # Select target registry for publishing
+        if not self._confirm_home_registry_mismatch(pkg_data, target_registry):
+            return
+
+        namespace = self._ensure_publish_namespace(pkg_id, pkg_data)
+        if not namespace:
+            return
+
+        confirm_result = self._confirm_publish_details(pkg_data, target_registry)
+        if not confirm_result:
+            return
+        release_notes, embed_source_path = confirm_result
+
+        self._run_publish(
+            pkg_id, pkg_data, target_registry,
+            namespace, release_notes, embed_source_path,
+        )
+
+    def _pick_publish_target_registry(self):
+        """Show the publish-target dialog and return a registry, or None."""
         registries = [r for r in self._config.registries if not r.is_remote]
         dlg = _PublishTargetDialog(registries, parent=self)
         result = dlg.exec_()
+        if result == 1:  # Selected from dropdown
+            return dlg.selected_registry
+        if result == 2:  # Create new
+            return self._create_new_registry()
+        if result == 3:  # Add existing
+            return self._add_existing_registry()
+        return None  # Cancelled / unknown
 
-        if result == 0:  # Rejected / cancelled
-            return
-        elif result == 1:  # Accepted — selected from dropdown
-            target_registry = dlg.selected_registry
-            if not target_registry:
-                return
-        elif result == 2:  # Create new registry
-            target_registry = self._create_new_registry()
-            if not target_registry:
-                return
-        elif result == 3:  # Add existing registry
-            target_registry = self._add_existing_registry()
-            if not target_registry:
-                return
-        else:
-            return
+    def _confirm_home_registry_mismatch(self, pkg_data, target_registry):
+        """Warn if publishing to a different registry than the home one.
 
-        # Home registry mismatch warning
-        home_reg = pkg_data.get("home_registry") or {}
-        home_name = home_reg.get("name", "")
-        if home_name and home_name != target_registry.name:
-            reply = QtWidgets.QMessageBox.question(
-                self, t("publish"),
-                t("publish_home_registry_mismatch", home_name, target_registry.name),
-                QtWidgets.QMessageBox.Yes | QtWidgets.QMessageBox.No,
-            )
-            if reply != QtWidgets.QMessageBox.Yes:
-                return
+        Returns True to proceed, False if the user cancelled.
+        """
+        home_name = (pkg_data.get("home_registry") or {}).get("name", "")
+        if not home_name or home_name == target_registry.name:
+            return True
+        reply = QtWidgets.QMessageBox.question(
+            self, t("publish"),
+            t("publish_home_registry_mismatch", home_name, target_registry.name),
+            QtWidgets.QMessageBox.Yes | QtWidgets.QMessageBox.No,
+        )
+        return reply == QtWidgets.QMessageBox.Yes
 
-        # Ensure namespace is set; prompt if not
+    def _ensure_publish_namespace(self, pkg_id, pkg_data):
+        """Return the package namespace, prompting and persisting if missing.
+
+        Returns None if the user cancelled or supplied an invalid value.
+        """
         namespace = pkg_data.get("namespace", "")
+        if namespace:
+            return namespace
+        from carton.core.identity import slugify_namespace
+        ns, ok = QtWidgets.QInputDialog.getText(
+            self, t("publish"), t("publish_namespace_prompt"),
+        )
+        if not ok or not ns.strip():
+            return None
+        namespace = slugify_namespace(ns)
         if not namespace:
-            from carton.core.identity import slugify_namespace
-            ns, ok = QtWidgets.QInputDialog.getText(
-                self, t("publish"),
-                t("publish_namespace_prompt"),
-            )
-            if not ok or not ns.strip():
-                return
-            namespace = slugify_namespace(ns)
-            if not namespace:
-                return
-            # Persist immediately so subsequent publishes don't re-ask
-            installed_pkgs = self._install_manager._installed["packages"]
-            if pkg_id in installed_pkgs:
-                installed_pkgs[pkg_id]["namespace"] = namespace
-                self._install_manager._save_installed()
+            return None
+        # Persist immediately so subsequent publishes don't re-ask
+        self._install_manager.update_package_fields(
+            pkg_id, {"namespace": namespace}
+        )
+        return namespace
 
-        # Confirm + collect release notes in one dialog so the user only
-        # gets prompted once. Cancel returns without publishing.
+    def _confirm_publish_details(self, pkg_data, target_registry):
+        """Show the confirm dialog. Returns ``(release_notes, embed_source_path)``
+        or None if cancelled.
+        """
         from carton.ui.publish_confirm_dialog import PublishConfirmDialog
+        display = pkg_data.get("display_name", "")
+        local_version = pkg_data.get("version", "0.0.0")
         confirm = PublishConfirmDialog(
             display, local_version, target_registry.name, parent=self,
         )
         if confirm.exec_() != QtWidgets.QDialog.Accepted:
-            return
-        release_notes = confirm.release_notes()
-        embed_source_path = confirm.embed_source_path()
+            return None
+        return confirm.release_notes(), confirm.embed_source_path()
 
+    def _run_publish(self, pkg_id, pkg_data, target_registry,
+                     namespace, release_notes, embed_source_path):
+        """Execute the publish call and reflect the result in installed.json."""
         self._set_publish_button_state(pkg_id, busy=True)
         QtWidgets.QApplication.processEvents()
 
@@ -1257,35 +1359,39 @@ class CartonWindow(QtWidgets.QDialog):
                 release_notes=release_notes,
                 embed_source_path=embed_source_path,
             )
-
-            new_pkg_id = result["id"]
-            installed_pkgs = self._install_manager._installed["packages"]
-            # Re-key the installed entry under the canonical namespace/name
-            if pkg_id in installed_pkgs:
-                entry = installed_pkgs.pop(pkg_id)
-                entry["namespace"] = result["namespace"]
-                entry["name"] = result["name"]
-                entry["source"] = "published"
-                entry.setdefault("home_registry", {"name": target_registry.name})
-                installed_pkgs[new_pkg_id] = entry
-                self._install_manager._save_installed()
-
-            warnings = result.get("warnings") or []
-            msg = t("publish_success", display)
-            if warnings:
-                msg += "\n\nWarnings:\n  - " + "\n  - ".join(warnings)
-            QtWidgets.QMessageBox.information(self, t("publish"), msg)
-            self.refresh()
         except Exception as e:
             self._set_publish_button_state(pkg_id, busy=False)
-            from carton.core.publisher import VersionConflictError, MissingNamespaceError
-            if isinstance(e, VersionConflictError):
-                msg = t("publish_already_published", e.version)
-            elif isinstance(e, MissingNamespaceError):
-                msg = str(e)
-            else:
-                msg = str(e)
-            QtWidgets.QMessageBox.warning(self, t("publish_error"), msg)
+            self._show_publish_error(e)
+            return
+
+        # Re-key the installed entry under the canonical namespace/name
+        fields = {
+            "namespace": result["namespace"],
+            "name": result["name"],
+            "source": "published",
+        }
+        if not pkg_data.get("home_registry"):
+            fields["home_registry"] = {"name": target_registry.name}
+        self._install_manager.rekey_package(pkg_id, result["id"], fields)
+
+        display = pkg_data.get("display_name", pkg_id)
+        warnings = result.get("warnings") or []
+        msg = t("publish_success", display)
+        if warnings:
+            msg += "\n\nWarnings:\n  - " + "\n  - ".join(warnings)
+        QtWidgets.QMessageBox.information(self, t("publish"), msg)
+        self.refresh()
+
+    def _show_publish_error(self, exc):
+        """Display a publish-error dialog mapped to a friendly message."""
+        from carton.core.publisher import VersionConflictError, MissingNamespaceError
+        if isinstance(exc, VersionConflictError):
+            msg = t("publish_already_published", exc.version)
+        elif isinstance(exc, MissingNamespaceError):
+            msg = str(exc)
+        else:
+            msg = str(exc)
+        QtWidgets.QMessageBox.warning(self, t("publish_error"), msg)
 
     def _build_published_map(self):
         """Return ``{pkg_id: [registry_name, ...]}`` for all writable local
@@ -1361,10 +1467,9 @@ class CartonWindow(QtWidgets.QDialog):
             self._publisher.unpublish(pkg_id, registry_entry)
 
             # Revert source back to local_script
-            installed_pkgs = self._install_manager._installed["packages"]
-            if pkg_id in installed_pkgs:
-                installed_pkgs[pkg_id]["source"] = "local_script"
-                self._install_manager._save_installed()
+            self._install_manager.update_package_fields(
+                pkg_id, {"source": "local_script"}
+            )
 
             QtWidgets.QMessageBox.information(
                 self, t("unpublish"),

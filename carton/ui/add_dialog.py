@@ -14,6 +14,10 @@ from carton.ui.compat import QtWidgets, QtCore, Qt
 from carton.ui.i18n import t
 from carton.ui import theme
 from carton.ui.utils import list_functions
+from carton.ui._dialog_widgets import (
+    make_dim_label, make_readonly_input, make_namespace_preview_label,
+    update_namespace_preview, make_icon_row, browse_icon_into,
+)
 from carton.core.sidecar import read_sidecar
 from carton.core.identity import (
     slugify_namespace, slugify_name, is_valid_python_module_name,
@@ -176,54 +180,32 @@ class AddDialog(QtWidgets.QDialog):
         # Form
         form = QtWidgets.QFormLayout()
         form.setSpacing(8)
-        name_label = QtWidgets.QLabel(t("label_display_name"))
-        name_label.setStyleSheet(theme.LABEL_DIM)
         self._name_input = QtWidgets.QLineEdit()
-        form.addRow(name_label, self._name_input)
+        form.addRow(make_dim_label(t("label_display_name")), self._name_input)
 
-        slug_label = QtWidgets.QLabel(t("label_name"))
-        slug_label.setStyleSheet(theme.LABEL_DIM)
-        self._slug_display = QtWidgets.QLineEdit()
-        self._slug_display.setReadOnly(True)
-        self._slug_display.setPlaceholderText("(select a file or folder)")
-        self._slug_display.setToolTip(t("name_tooltip"))
-        slug_label.setToolTip(t("name_tooltip"))
-        self._slug_display.setStyleSheet(
-            self._slug_display.styleSheet() + " color: {};".format(theme.TEXT_DIM)
+        self._slug_display = make_readonly_input(
+            "", tooltip=t("name_tooltip"),
+            placeholder="(select a file or folder)",
         )
-        form.addRow(slug_label, self._slug_display)
+        form.addRow(
+            make_dim_label(t("label_name"), tooltip=t("name_tooltip")),
+            self._slug_display,
+        )
 
-        ns_label = QtWidgets.QLabel(t("label_namespace"))
-        ns_label.setStyleSheet(theme.LABEL_DIM)
         self._namespace_input = QtWidgets.QLineEdit()
         self._namespace_input.setPlaceholderText(t("namespace_placeholder"))
         self._namespace_input.textChanged.connect(self._update_namespace_preview)
-        form.addRow(ns_label, self._namespace_input)
+        form.addRow(make_dim_label(t("label_namespace")), self._namespace_input)
         # Slug preview lives on its own row so the input doesn't get squished
         # when the wrapper widget tries to share vertical space.
-        self._namespace_preview = QtWidgets.QLabel("")
-        self._namespace_preview.setStyleSheet(
-            "color: {}; font-size: 11px;".format(theme.TEXT_MUTED)
-        )
-        self._namespace_preview.setVisible(False)
+        self._namespace_preview = make_namespace_preview_label()
         form.addRow("", self._namespace_preview)
 
-        icon_label = QtWidgets.QLabel(t("label_icon"))
-        icon_label.setStyleSheet(theme.LABEL_DIM)
-        icon_row = QtWidgets.QHBoxLayout()
-        self._icon_input = QtWidgets.QLineEdit("🔧")
-        icon_row.addWidget(self._icon_input)
-        icon_browse_btn = QtWidgets.QPushButton(t("file"))
-        icon_browse_btn.setFixedWidth(60)
-        icon_browse_btn.setStyleSheet(theme.btn_small_browse())
-        icon_browse_btn.clicked.connect(self._browse_icon)
-        icon_row.addWidget(icon_browse_btn)
-        form.addRow(icon_label, icon_row)
+        icon_row, self._icon_input = make_icon_row("🔧", self._browse_icon)
+        form.addRow(make_dim_label(t("label_icon")), icon_row)
 
-        desc_label = QtWidgets.QLabel(t("label_description"))
-        desc_label.setStyleSheet(theme.LABEL_DIM)
         self._desc_input = QtWidgets.QLineEdit()
-        form.addRow(desc_label, self._desc_input)
+        form.addRow(make_dim_label(t("label_description")), self._desc_input)
 
         layout.addLayout(form)
 
@@ -281,21 +263,10 @@ class AddDialog(QtWidgets.QDialog):
         layout.addLayout(btn_layout)
 
     def _update_namespace_preview(self, text):
-        slug = slugify_namespace(text)
-        if slug and slug != text.strip().lower():
-            self._namespace_preview.setText("→ {}".format(slug))
-            self._namespace_preview.setVisible(True)
-        else:
-            self._namespace_preview.setText("")
-            self._namespace_preview.setVisible(False)
+        update_namespace_preview(self._namespace_preview, text)
 
     def _browse_icon(self):
-        path, _ = QtWidgets.QFileDialog.getOpenFileName(
-            self, t("label_icon"), "",
-            "Images (*.png *.jpg *.svg);;All (*)",
-        )
-        if path:
-            self._icon_input.setText(path)
+        browse_icon_into(self, self._icon_input)
 
     def _browse_file(self):
         path, _ = QtWidgets.QFileDialog.getOpenFileName(
