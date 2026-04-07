@@ -83,3 +83,22 @@ def delete_profile(name):
 
 def profile_exists(name):
     return is_valid_name(name) and os.path.exists(_path_for(name))
+
+
+def ordered_profiles(preferred_order):
+    """Return profile names ordered by ``preferred_order`` first.
+
+    Names from ``preferred_order`` that exist on disk come first in the
+    given order. Any remaining profile files are appended alphabetically
+    so brand-new profiles appear without manual ordering work.
+    """
+    on_disk = set(list_profiles())
+    out = []
+    seen = set()
+    for name in preferred_order or []:
+        if name in on_disk and name not in seen:
+            out.append(name)
+            seen.add(name)
+    for name in sorted(on_disk - seen):
+        out.append(name)
+    return out

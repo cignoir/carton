@@ -563,14 +563,7 @@ class CartonWindow(QtWidgets.QDialog):
         from carton.core import profile_store
         self._profile_combo.blockSignals(True)
         self._profile_combo.clear()
-        # default first, the rest alphabetical
-        names = profile_store.list_profiles()
-        if profile_store.DEFAULT_PROFILE_NAME in names:
-            names = [profile_store.DEFAULT_PROFILE_NAME] + sorted(
-                n for n in names if n != profile_store.DEFAULT_PROFILE_NAME
-            )
-        else:
-            names = sorted(names)
+        names = profile_store.ordered_profiles(self._config.profile_order)
         for name in names:
             self._profile_combo.addItem(name, name)
         active = self._config.active_profile or profile_store.DEFAULT_PROFILE_NAME

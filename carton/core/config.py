@@ -96,6 +96,7 @@ class Config:
         proxy="",
         active_profile="",
         strict_verify=False,
+        profile_order=None,
     ):
         self.registries = registries or []
         self.install_dir = install_dir
@@ -113,6 +114,11 @@ class Config:
         # downloader already raises on mismatch). Off by default so
         # legacy registries keep working; users opt in via Settings.
         self.strict_verify = bool(strict_verify)
+        # User-facing ordering of profiles in the sidebar dropdown.
+        # Names not in this list (newly created profiles, or profiles
+        # added on disk by another machine) are appended at the end on
+        # display, and persisted on the next save().
+        self.profile_order = list(profile_order or [])
         # HTTP(S) proxy URL, e.g. ``http://proxy.studio.internal:8080`` or
         # ``http://user:pass@host:8080``. Empty string means "don't override
         # whatever urllib picks up from the environment" — so users who
@@ -138,6 +144,7 @@ class Config:
                 proxy=data.get("proxy", ""),
                 active_profile=data.get("active_profile", ""),
                 strict_verify=data.get("strict_verify", False),
+                profile_order=data.get("profile_order", []),
             )
             # Only overlay the profile when loading from the canonical
             # location — explicit `path=` callers (tests, multi-config
@@ -299,6 +306,7 @@ class Config:
             "proxy": self.proxy,
             "active_profile": self.active_profile,
             "strict_verify": self.strict_verify,
+            "profile_order": list(self.profile_order),
         }
 
     def apply_profile(self, profile):

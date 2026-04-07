@@ -108,6 +108,23 @@ class ProfileManagerDialog(QtWidgets.QDialog):
         btn_row.addWidget(del_btn)
         btn_row.addStretch()
 
+        arrow_style = (
+            "QPushButton {{ background: {bg}; color: {dim}; border: 1px solid {border};"
+            "  border-radius: 4px; }}"
+            "QPushButton:hover {{ color: {text}; }}"
+        ).format(bg=theme.BG_SECONDARY, dim=theme.TEXT_DIM,
+                 border=theme.BORDER, text=theme.TEXT_PRIMARY)
+        up_btn = QtWidgets.QPushButton("\u25b2")
+        up_btn.setFixedWidth(32)
+        up_btn.setStyleSheet(arrow_style)
+        up_btn.clicked.connect(self._on_move_up)
+        btn_row.addWidget(up_btn)
+        down_btn = QtWidgets.QPushButton("\u25bc")
+        down_btn.setFixedWidth(32)
+        down_btn.setStyleSheet(arrow_style)
+        down_btn.clicked.connect(self._on_move_down)
+        btn_row.addWidget(down_btn)
+
         close_btn = QtWidgets.QPushButton(t("close"))
         close_btn.setStyleSheet(theme.btn_ghost())
         close_btn.clicked.connect(self.accept)
@@ -117,12 +134,27 @@ class ProfileManagerDialog(QtWidgets.QDialog):
         self._refresh()
 
     def _refresh(self):
+        prev = self._selected_name()
         self._list.clear()
-        for name in profile_store.list_profiles():
+        names = profile_store.ordered_profiles(self._config.profile_order)
+        # Persist any newly-discovered names so the saved order matches
+        # what the user sees the next time they open the dialog.
+        if names != list(self._config.profile_order or []):
+            self._config.profile_order = names
+            try:
+                self._config.save()
+            except Exception:
+                pass
+        for name in names:
             label = name
             if name == (self._config.active_profile or ""):
                 label = "{}  ({})".format(name, t("profile_active"))
             self._list.addItem(label)
+        if prev:
+            for i in range(self._list.count()):
+                if self._list.item(i).text().split("  (")[0] == prev:
+                    self._list.setCurrentRow(i)
+                    break
 
     def _selected_name(self):
         row = self._list.currentRow()
@@ -175,6 +207,29 @@ class ProfileManagerDialog(QtWidgets.QDialog):
         dlg = _ProfileEditDialog(name, profile, parent=self)
         if dlg.exec_() == QtWidgets.QDialog.Accepted:
             self._refresh()
+
+    def _on_move_up(self):
+        self._move_selected(-1)
+
+    def _on_move_down(self):
+        self._move_selected(1)
+
+    def _move_selected(self, delta):
+        row = self._list.currentRow()
+        if row < 0:
+            return
+        new_row = row + delta
+        order = list(self._config.profile_order or [])
+        if new_row < 0 or new_row >= len(order):
+            return
+        order[row], order[new_row] = order[new_row], order[row]
+        self._config.profile_order = order
+        try:
+            self._config.save()
+        except Exception:
+            pass
+        self._refresh()
+        self._list.setCurrentRow(new_row)
 
     def _on_delete(self):
         name = self._selected_name()
