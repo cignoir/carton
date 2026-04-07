@@ -181,8 +181,14 @@ class InstallManager:
                 home_registry=inner_home_registry or {},
             )
             entry_dict = info.to_installed_dict()
-            if relink_local_path and inner_is_folder is not None:
-                entry_dict["is_folder"] = inner_is_folder
+            if relink_local_path:
+                if inner_is_folder is not None:
+                    entry_dict["is_folder"] = inner_is_folder
+                # Stash the icon as an absolute path so My Tools can
+                # render it without re-fetching from the registry.
+                icon_resolved = meta.get("icon_resolved", "")
+                if icon_resolved:
+                    entry_dict["icon"] = icon_resolved
             self._installed["packages"][pkg_id] = entry_dict
             try:
                 self._save_installed()

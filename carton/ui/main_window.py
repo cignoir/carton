@@ -1568,12 +1568,19 @@ class CartonWindow(QtWidgets.QDialog):
                 "entry_point": {},
                 "sha256": version_info.get("sha256", ""),
                 "pinned": bool(pinned),
+                # Resolved absolute icon path so a relinked My Tools
+                # entry can render its custom icon without re-fetching.
+                "icon_resolved": self._resolve_icon_path(pkg_data) or "",
             }
             self._install_manager.install_package(dest, meta)
 
             if os.path.exists(dest):
                 os.remove(dest)
 
+            # Refresh sidebar too — installs that auto-relink as My
+            # Tools entries change the My Tools count and namespace
+            # children, and the sidebar wouldn't otherwise notice.
+            self._rebuild_sidebar()
             self._rebuild_cards()
 
         except Exception as e:
