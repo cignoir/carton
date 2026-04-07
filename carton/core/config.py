@@ -95,7 +95,7 @@ class Config:
         language="auto",
         proxy="",
         active_profile="",
-        strict_verify=False,
+        strict_verify=True,
         profile_order=None,
     ):
         self.registries = registries or []
@@ -111,8 +111,10 @@ class Config:
         self.active_profile = active_profile
         # When True, refuse to install any package whose registry entry
         # lacks a sha256, and treat hash mismatches as fatal (default
-        # downloader already raises on mismatch). Off by default so
-        # legacy registries keep working; users opt in via Settings.
+        # downloader already raises on mismatch). On by default — every
+        # zip Carton publishes carries a sha256, so the only registries
+        # this affects are very old or hand-rolled ones. Disable in
+        # Settings if you need to install from such a registry.
         self.strict_verify = bool(strict_verify)
         # User-facing ordering of profiles in the sidebar dropdown.
         # Names not in this list (newly created profiles, or profiles
@@ -143,7 +145,7 @@ class Config:
                 language=data.get("language", "auto"),
                 proxy=data.get("proxy", ""),
                 active_profile=data.get("active_profile", ""),
-                strict_verify=data.get("strict_verify", False),
+                strict_verify=data.get("strict_verify", True),
                 profile_order=data.get("profile_order", []),
             )
             # Only overlay the profile when loading from the canonical
