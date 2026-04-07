@@ -141,6 +141,18 @@ class PackageCard(QtWidgets.QFrame):
         )
         title_layout.addWidget(ver_label)
 
+        # Pinned badge — version held intentionally after a rollback.
+        if self._installed_version and self._pkg_data.get("pinned"):
+            pin_label = QtWidgets.QLabel("\U0001f4cc " + t("pinned_badge"))
+            pin_label.setToolTip(t("pinned_badge_tooltip"))
+            pin_label.setStyleSheet(
+                "font-size: 10px; font-weight: 600; color: {color};"
+                " background: transparent; padding: 1px 6px;"
+                " border: 1px solid {color}; border-radius: 3px;".format(
+                    color=theme.ACCENT_ORANGE)
+            )
+            title_layout.addWidget(pin_label)
+
         # Verified badge — installed packages whose registry entry carried a
         # sha256 (and therefore had it checked at download time).
         if self._installed_version and self._pkg_data.get("sha256"):
@@ -244,11 +256,15 @@ class PackageCard(QtWidgets.QFrame):
 
         is_local = self._pkg_data.get("_local_script", False)
 
+        is_pinned = bool(self._pkg_data.get("pinned"))
+
         if self._installed_version or is_local:
-            # Determine if an update is available
+            # Determine if an update is available. Pinned packages are
+            # held intentionally (after a rollback), so the Update button
+            # is suppressed even if a newer version exists.
             has_update = False
             latest = self._pkg_data.get("latest_version", "")
-            if latest and latest != self._installed_version and not is_local:
+            if latest and latest != self._installed_version and not is_local and not is_pinned:
                 try:
                     from carton.models.version import Version
                     has_update = Version.parse(latest) > Version.parse(self._installed_version)

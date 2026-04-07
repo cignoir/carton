@@ -477,6 +477,7 @@ class CartonWindow(QtWidgets.QDialog):
         self._detail = PackageDetailPanel()
         self._detail.back_requested.connect(lambda: self._stack.setCurrentIndex(0))
         self._detail.install_requested.connect(self._on_install)
+        self._detail.rollback_requested.connect(self._on_rollback)
         self._detail.uninstall_requested.connect(self._on_uninstall)
         self._detail.launch_requested.connect(self._on_launch)
         self._stack.addWidget(self._detail)
@@ -871,6 +872,8 @@ class CartonWindow(QtWidgets.QDialog):
                     # installed.json snapshot, not from the live registry.
                     if inst.get("sha256"):
                         item["sha256"] = inst.get("sha256")
+                    if inst.get("pinned"):
+                        item["pinned"] = True
                     if inst.get("source") in ("local_script", "published") and inst.get("local_path"):
                         item["_local_script"] = True
                 if self._current_tab == "installed" and not is_installed:
@@ -1322,6 +1325,22 @@ class CartonWindow(QtWidgets.QDialog):
                         btn.setEnabled(not busy)
                         return
 
+    def _on_rollback(self, pkg_id, version):
+        """Install a specific older version and pin it."""
+        self._on_install(pkg_id, version=version, pinned=True)
+        # Refresh the detail panel so the new installed version + pin
+        # badge are visible without backing out.
+        if self._registry_client:
+            packages = self._registry_client.get_packages()
+            pkg_data = packages.get(pkg_id)
+            if pkg_data:
+                installed = self._install_manager.get_installed_packages()
+                self._detail.show_package(
+                    pkg_id, pkg_data,
+                    installed_version=installed.get(pkg_id, {}).get("version"),
+                    icon_path=self._resolve_icon_path(pkg_data),
+                )
+
     def _on_update(self, pkg_id):
         packages = self._registry_client.get_packages() if self._registry_client else {}
         pkg_data = packages.get(pkg_id)
@@ -1414,7 +1433,8 @@ class CartonWindow(QtWidgets.QDialog):
             self._update_banner_btn.setEnabled(True)
             QtWidgets.QMessageBox.warning(self, t("update_error"), str(e))
 
-    def _on_install(self, pkg_id):
+    def _on_install(self, pkg_id, version=None, pinned=False):
+        """Install a package. Optionally a specific version and/or pin it."""
         if not self._downloader or not self._install_manager:
             return
         packages = self._registry_client.get_packages() if self._registry_client else {}
@@ -1426,8 +1446,8 @@ class CartonWindow(QtWidgets.QDialog):
         QtWidgets.QApplication.processEvents()
 
         pkg_name = pkg_data.get("name", "")
-        latest = pkg_data.get("latest_version", "")
-        version_info = pkg_data.get("versions", {}).get(latest, {})
+        target_version = version or pkg_data.get("latest_version", "")
+        version_info = pkg_data.get("versions", {}).get(target_version, {})
 
         try:
             url = version_info.get("download_url")
@@ -1442,7 +1462,7 @@ class CartonWindow(QtWidgets.QDialog):
 
             dest = os.path.join(
                 self._install_manager._config.staging_dir,
-                "{}-{}.zip".format(pkg_name, latest),
+                "{}-{}.zip".format(pkg_name, target_version),
             )
             self._downloader.download(
                 url, dest,
@@ -1454,15 +1474,14 @@ class CartonWindow(QtWidgets.QDialog):
                 "id": pkg_id,
                 "namespace": pkg_data.get("namespace", ""),
                 "name": pkg_name,
-                "version": latest,
+                "version": target_version,
                 "type": pkg_data.get("type", "python_package"),
                 "display_name": pkg_data.get("display_name", pkg_name),
                 "entry_point": {},
                 "sha256": version_info.get("sha256", ""),
+                "pinned": bool(pinned),
             }
             self._install_manager.install_package(dest, meta)
-            # install_package now reads entry_point from the inner package.json
-            # itself, so no post-install fixup is needed.
 
             if os.path.exists(dest):
                 os.remove(dest)

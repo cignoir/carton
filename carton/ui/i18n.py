@@ -107,6 +107,16 @@ _STRINGS = {
         "install_strict_no_sha256": "Strict verification is enabled, but this package has no SHA256 in the registry. Install refused.",
         "publish_release_notes_label": "Release notes (optional)",
         "publish_release_notes_placeholder": "What changed in this version? Plain text. Visible to anyone who installs this version.",
+        "show_history": "Version History",
+        "version_history_title": "Version History — {}",
+        "version_history_hint": "Browse every published version. Roll back to install an older one; rolled-back packages are pinned and skipped by Update.",
+        "version_history_latest": "latest",
+        "version_history_installed": "installed",
+        "version_history_rollback": "Rollback",
+        "version_history_no_notes": "(no release notes)",
+        "version_history_confirm_rollback": "Roll back to v{}? The package will be pinned to this version until you update it manually.",
+        "pinned_badge": "Pinned",
+        "pinned_badge_tooltip": "Held at this version after a rollback. Update is suppressed until you reinstall manually.",
 
         # Edit dialog
         "edit_title": "Carton — Edit",
@@ -299,6 +309,16 @@ _STRINGS = {
         "install_strict_no_sha256": "厳密検証が有効ですが、このパッケージにはレジストリ上の SHA256 がありません。インストールを拒否しました。",
         "publish_release_notes_label": "リリースノート（任意）",
         "publish_release_notes_placeholder": "このバージョンの変更点を入力。プレーンテキスト。インストールする全員が見られます。",
+        "show_history": "バージョン履歴",
+        "version_history_title": "バージョン履歴 — {}",
+        "version_history_hint": "公開済みの全バージョンを参照できます。ロールバックすると旧バージョンがインストールされ、固定（Pinned）扱いで自動更新の対象外になります。",
+        "version_history_latest": "最新",
+        "version_history_installed": "使用中",
+        "version_history_rollback": "ロールバック",
+        "version_history_no_notes": "（リリースノートなし）",
+        "version_history_confirm_rollback": "v{} にロールバックしますか？このバージョンは固定され、手動で再インストールするまで自動更新されません。",
+        "pinned_badge": "固定",
+        "pinned_badge_tooltip": "ロールバック後にこのバージョンに固定されています。手動で再インストールするまで更新されません。",
 
         # Edit dialog
         "edit_title": "Carton — 編集",

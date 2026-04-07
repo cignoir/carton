@@ -33,6 +33,7 @@ class PackageDetailPanel(QtWidgets.QWidget):
     install_requested = QtCore.Signal(str)
     uninstall_requested = QtCore.Signal(str)
     launch_requested = QtCore.Signal(str)
+    rollback_requested = QtCore.Signal(str, str)  # (pkg_id, version)
     back_requested = QtCore.Signal()
 
     def __init__(self, parent=None):
@@ -121,6 +122,19 @@ class PackageDetailPanel(QtWidgets.QWidget):
             lambda: self.uninstall_requested.emit(self._pkg_id)
         )
         action_col.addWidget(self._uninstall_btn)
+
+        self._history_btn = QtWidgets.QPushButton(t("show_history"))
+        self._history_btn.setFixedWidth(120)
+        self._history_btn.setStyleSheet(
+            "QPushButton {{ color: {dim}; background: transparent;"
+            "  border: 1px solid {border}; border-radius: 6px;"
+            "  padding: 6px; font-size: 11px; }}"
+            "QPushButton:hover {{ color: {text}; border-color: {border_h}; }}".format(
+                dim=theme.TEXT_SECONDARY, text=theme.TEXT_PRIMARY,
+                border=theme.BORDER, border_h=theme.BORDER_HOVER)
+        )
+        self._history_btn.clicked.connect(self._open_history)
+        action_col.addWidget(self._history_btn)
 
         hero.addLayout(action_col)
         layout.addLayout(hero)
@@ -220,10 +234,25 @@ class PackageDetailPanel(QtWidgets.QWidget):
             import webbrowser
             webbrowser.open(self._homepage)
 
+    def _open_history(self):
+        if not getattr(self, "_registry_data", None):
+            return
+        from carton.ui.version_history_dialog import VersionHistoryDialog
+        dlg = VersionHistoryDialog(
+            self._pkg_id, self._registry_data,
+            self._installed_version, parent=self,
+        )
+        if dlg.exec_() == QtWidgets.QDialog.Accepted:
+            chosen = dlg.chosen_version()
+            if chosen:
+                self.rollback_requested.emit(self._pkg_id, chosen)
+
     def show_package(self, pkg_id, registry_data, installed_version=None,
                      icon_path=None):
         """Display package information."""
         self._pkg_id = pkg_id
+        self._registry_data = registry_data
+        self._installed_version = installed_version
         pkg_type = registry_data.get("type", "python_package")
         latest = registry_data.get("latest_version", "")
         version_info = registry_data.get("versions", {}).get(latest, {})

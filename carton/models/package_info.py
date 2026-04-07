@@ -32,6 +32,7 @@ class PackageInfo:
         home_registry=None,
         activated_paths=None,
         sha256="",
+        pinned=False,
     ):
         # Resolve identity. If pkg_id is given, prefer it; otherwise derive from ns/name.
         if pkg_id and "/" in pkg_id:
@@ -68,6 +69,10 @@ class PackageInfo:
         # Stored so the package can be re-verified later and so the UI
         # can show a "verified" badge for registry-sourced installs.
         self.sha256 = sha256 or ""
+        # When True, this version is intentionally held — usually after a
+        # rollback. Auto-update flows must skip pinned packages so the
+        # user's choice isn't immediately undone.
+        self.pinned = bool(pinned)
 
     @classmethod
     def from_registry_entry(cls, pkg_id, pkg_data, version_key=None):
@@ -106,6 +111,7 @@ class PackageInfo:
             home_registry=data.get("home_registry", {}),
             activated_paths=data.get("activated_paths", {}),
             sha256=data.get("sha256", ""),
+            pinned=data.get("pinned", False),
         )
 
     def to_installed_dict(self):
@@ -130,4 +136,6 @@ class PackageInfo:
             d["activated_paths"] = self.activated_paths
         if self.sha256:
             d["sha256"] = self.sha256
+        if self.pinned:
+            d["pinned"] = True
         return d
