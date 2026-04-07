@@ -935,10 +935,11 @@ class CartonWindow(QtWidgets.QDialog):
             card.setCursor(Qt.PointingHandCursor)
             self._card_map[pkg_id] = card
 
-            is_local = pkg_data.get("_local_script", False)
-            is_published_local = (pkg_id in installed and
-                                  installed[pkg_id].get("source") in ("local_script", "published"))
-            if is_local or is_published_local:
+            # Edit only opens from My Tools view. In a registry view the
+            # user is acting as a consumer — even for packages they
+            # published — so show the detail panel (with rollback /
+            # version history) instead.
+            if self._is_mytools_selection(selection):
                 card.mousePressEvent = lambda e, pid=pkg_id: self._show_edit(pid)
             else:
                 card.mousePressEvent = lambda e, pid=pkg_id: self._show_detail(pid)
@@ -1013,6 +1014,9 @@ class CartonWindow(QtWidgets.QDialog):
         result = EditDialog.prompt(pkg_id, pkg_data,
                                    published_registries=published_regs, parent=self)
         if not result:
+            return
+        if result["action"] == "history":
+            self._show_history_for(pkg_id)
             return
         if result["action"] == "unpublish":
             self._on_unpublish(pkg_id, result["registry"])
@@ -1324,6 +1328,32 @@ class CartonWindow(QtWidgets.QDialog):
                         btn.setText(t("publishing") if busy else t("publish"))
                         btn.setEnabled(not busy)
                         return
+
+    def _show_history_for(self, pkg_id):
+        """Open the version history dialog for a published package.
+
+        Used from the Edit dialog flow, where the click target is the
+        installed-side data (no `versions` map). We pull the registry
+        snapshot via the registry client and reuse the same dialog as
+        the detail panel.
+        """
+        if not self._registry_client:
+            return
+        packages = self._registry_client.get_packages()
+        pkg_data = packages.get(pkg_id)
+        if not pkg_data:
+            QtWidgets.QMessageBox.information(
+                self, "Carton", t("history_no_registry_data"),
+            )
+            return
+        installed = self._install_manager.get_installed_packages()
+        installed_ver = installed.get(pkg_id, {}).get("version")
+        from carton.ui.version_history_dialog import VersionHistoryDialog
+        dlg = VersionHistoryDialog(pkg_id, pkg_data, installed_ver, parent=self)
+        if dlg.exec_() == QtWidgets.QDialog.Accepted:
+            chosen = dlg.chosen_version()
+            if chosen:
+                self._on_rollback(pkg_id, chosen)
 
     def _on_rollback(self, pkg_id, version):
         """Install a specific older version and pin it."""

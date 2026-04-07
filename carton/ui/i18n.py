@@ -117,6 +117,7 @@ _STRINGS = {
         "version_history_confirm_rollback": "Roll back to v{}? The package will be pinned to this version until you update it manually.",
         "pinned_badge": "Pinned",
         "pinned_badge_tooltip": "Held at this version after a rollback. Update is suppressed until you reinstall manually.",
+        "history_no_registry_data": "No registry version history found for this package. Make sure the registry containing it is configured.",
 
         # Edit dialog
         "edit_title": "Carton — Edit",
@@ -319,6 +320,7 @@ _STRINGS = {
         "version_history_confirm_rollback": "v{} にロールバックしますか？このバージョンは固定され、手動で再インストールするまで自動更新されません。",
         "pinned_badge": "固定",
         "pinned_badge_tooltip": "ロールバック後にこのバージョンに固定されています。手動で再インストールするまで更新されません。",
+        "history_no_registry_data": "このパッケージのレジストリ側のバージョン履歴が見つかりません。対象レジストリが設定されているか確認してください。",
 
         # Edit dialog
         "edit_title": "Carton — 編集",

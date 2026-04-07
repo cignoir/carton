@@ -225,6 +225,11 @@ class EditDialog(QtWidgets.QDialog):
         btn_layout.addWidget(remove_btn)
 
         if self._published_registries:
+            history_btn = QtWidgets.QPushButton(t("show_history"))
+            history_btn.setStyleSheet(theme.btn_ghost_text())
+            history_btn.clicked.connect(self._on_history)
+            btn_layout.addWidget(history_btn)
+
             unpub_btn = QtWidgets.QPushButton(t("unpublish"))
             unpub_btn.setStyleSheet(theme.btn_warning())
             unpub_btn.clicked.connect(self._on_unpublish)
@@ -325,6 +330,12 @@ class EditDialog(QtWidgets.QDialog):
         if reply == QtWidgets.QMessageBox.Yes:
             self._result = {"action": "remove"}
             self.accept()
+
+    def _on_history(self):
+        # Hand off to main_window — it owns the registry client and can
+        # render the version history with full version info.
+        self._result = {"action": "history"}
+        self.accept()
 
     def _on_unpublish(self):
         display = self._pkg_data.get("display_name", self._pkg_id)
