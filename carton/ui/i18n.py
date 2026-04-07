@@ -99,6 +99,7 @@ _STRINGS = {
         "add_browse_folder": "Select folder",
         "add_invalid_path": "Please select a valid file or folder.",
         "add_no_display_name": "Please enter a Display Name.",
+        "add_invalid_module_name": "'{}' is not a valid Python module name. Rename the file/folder to use only letters, digits and underscores (no spaces or hyphens), then try again.",
 
         # Edit dialog
         "edit_title": "Carton — Edit",
@@ -283,6 +284,7 @@ _STRINGS = {
         "add_browse_folder": "フォルダを選択",
         "add_invalid_path": "有効なファイルまたはフォルダを選択してください。",
         "add_no_display_name": "表示名を入力してください。",
+        "add_invalid_module_name": "'{}' は Python のモジュール名として無効です。ファイル／フォルダ名を英数字とアンダースコアのみ（スペース・ハイフン不可）にリネームしてから再度お試しください。",
 
         # Edit dialog
         "edit_title": "Carton — 編集",

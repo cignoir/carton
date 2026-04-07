@@ -11,7 +11,24 @@ from carton.core.identity import (
     validate_name,
     slugify_namespace,
     slugify_name,
+    is_valid_python_module_name,
 )
+
+
+def test_python_module_name_accepts_camelcase():
+    assert is_valid_python_module_name("CreaningScene")
+    assert is_valid_python_module_name("my_tool")
+    assert is_valid_python_module_name("_private")
+    assert is_valid_python_module_name("Tool2")
+
+
+def test_python_module_name_rejects_invalid():
+    assert not is_valid_python_module_name("")
+    assert not is_valid_python_module_name("my tool")     # space
+    assert not is_valid_python_module_name("my-tool")     # hyphen
+    assert not is_valid_python_module_name("2tool")       # leading digit
+    assert not is_valid_python_module_name("tool.py")     # dot
+    assert not is_valid_python_module_name("日本語")      # non-ascii
 
 
 def test_make_pkg_id_normalizes_case():

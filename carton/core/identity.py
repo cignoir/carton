@@ -78,6 +78,22 @@ def validate_namespace(namespace):
     return ns
 
 
+_PY_MODULE_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
+
+
+def is_valid_python_module_name(name):
+    """True if ``name`` can be used as a Python module identifier.
+
+    Used at registration time to refuse file/folder names that would
+    later blow up at ``importlib.import_module`` (spaces, hyphens,
+    leading digits, dots in non-extension positions, etc.). The check
+    is intentionally strict — Carton's import path is straight
+    ``importlib`` so anything that wouldn't survive there is rejected
+    up front instead of failing on Launch.
+    """
+    return bool(name) and bool(_PY_MODULE_RE.match(name))
+
+
 def validate_name(name):
     """Validate a package name; return the normalized form."""
     nm = normalize(name)

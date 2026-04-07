@@ -15,7 +15,9 @@ from carton.ui.i18n import t
 from carton.ui import theme
 from carton.ui.utils import list_functions
 from carton.core.sidecar import read_sidecar
-from carton.core.identity import slugify_namespace, slugify_name
+from carton.core.identity import (
+    slugify_namespace, slugify_name, is_valid_python_module_name,
+)
 from carton.core.maya_module_detect import detect as detect_maya_module
 
 
@@ -391,6 +393,12 @@ class AddDialog(QtWidgets.QDialog):
         description = self._desc_input.text().strip()
         namespace = slugify_namespace(self._namespace_input.text())
 
+        # Reject names that aren't valid Python identifiers when the
+        # entry point will go through importlib. Single-file MEL / .mll
+        # / exec-mode files are exempt because they don't import.
+        if not self._validate_import_target(path, is_exec_mode):
+            return
+
         if self._is_folder:
             info = getattr(self, "_detected_info", None)
             # Maya module: type already determined, no entry_point
@@ -442,9 +450,46 @@ class AddDialog(QtWidgets.QDialog):
 
         self.accept()
 
+    def _validate_import_target(self, path, is_exec_mode):
+        """Refuse names that importlib can't load.
+
+        Returns True if the registration may proceed. On failure, shows
+        a message box pointing the user at what to rename and returns
+        False.
+        """
+        if self._is_folder:
+            info = getattr(self, "_detected_info", None) or _detect_from_folder(path)
+            # maya_module / package.json folders bring their own naming;
+            # we trust them.
+            if info.get("is_maya_module") or info.get("has_package_json"):
+                return True
+            if info.get("type") != "python_package":
+                return True
+            module_name = info.get("name") or os.path.basename(path)
+        else:
+            # Single file: only python imports go through importlib.
+            if is_exec_mode:
+                return True
+            if path.endswith((".mel", ".mll")):
+                return True
+            module_name = os.path.splitext(os.path.basename(path))[0]
+
+        if is_valid_python_module_name(module_name):
+            return True
+
+        QtWidgets.QMessageBox.warning(
+            self, "Carton",
+            t("add_invalid_module_name", module_name),
+        )
+        return False
+
     def _build_file_result(self, path, display_name, func, icon, description, is_exec_mode):
         raw_basename = os.path.splitext(os.path.basename(path))[0]
-        basename = slugify_name(raw_basename) or raw_basename.lower()
+        slug = slugify_name(raw_basename) or raw_basename.lower()
+        # Import target keeps the original casing so importlib finds the
+        # actual file on case-sensitive filesystems (macOS / Linux). The
+        # slug is identity only.
+        module_name = raw_basename
         is_mel = path.endswith(".mel")
         is_plugin = path.endswith(".mll")
 
@@ -467,20 +512,20 @@ class AddDialog(QtWidgets.QDialog):
             entry_point = {
                 "type": "mel",
                 "script": os.path.basename(path),
-                "procedure": func or basename,
+                "procedure": func or module_name,
             }
             pkg_type = "mel_script"
         else:
             entry_point = {
                 "type": "python",
-                "module": basename,
+                "module": module_name,
                 "function": func or "show",
             }
             pkg_type = "python_package"
 
         return {
             "file_path": path,
-            "name": basename,
+            "name": slug,
             "display_name": display_name,
             "icon": icon,
             "description": description,
@@ -491,7 +536,10 @@ class AddDialog(QtWidgets.QDialog):
 
     def _build_folder_result(self, path, display_name, func, icon, description):
         info = _detect_from_folder(path)
-        name = slugify_name(info["name"]) or info["name"].lower()
+        raw_name = info["name"]
+        slug = slugify_name(raw_name) or raw_name.lower()
+        # Same split as files: slug = identity, raw_name = import target.
+        module_name = raw_name
         pkg_type = info["type"]
 
         if pkg_type == "mel_script":
@@ -502,7 +550,7 @@ class AddDialog(QtWidgets.QDialog):
             for f in os.listdir(search_dir):
                 if f.endswith(".mel"):
                     mel_files.append(f)
-            script_file = mel_files[0] if mel_files else "{}.mel".format(name)
+            script_file = mel_files[0] if mel_files else "{}.mel".format(module_name)
             entry_point = {
                 "type": "mel",
                 "script": script_file,
@@ -511,13 +559,13 @@ class AddDialog(QtWidgets.QDialog):
         else:
             entry_point = {
                 "type": "python",
-                "module": name,
+                "module": module_name,
                 "function": func or "show",
             }
 
         return {
             "file_path": path,
-            "name": name,
+            "name": slug,
             "display_name": display_name,
             "icon": icon,
             "description": description,
