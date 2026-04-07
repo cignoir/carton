@@ -860,7 +860,15 @@ class CartonWindow(QtWidgets.QDialog):
                 if pkg_data.get("_registry_name") != selection:
                     continue
                 item = dict(pkg_data)
-                is_installed = pkg_id in installed
+                # A demoted (uninstalled-from-registry) entry stays in
+                # installed.json with source=local_script so it remains in
+                # My Tools, but the registry view should show it as
+                # not-installed so the user can re-install if they want.
+                inst_entry = installed.get(pkg_id, {})
+                is_installed = (
+                    pkg_id in installed
+                    and inst_entry.get("source") != "local_script"
+                )
                 if is_installed:
                     inst = installed[pkg_id]
                     item["_installed_ver"] = inst.get("version")

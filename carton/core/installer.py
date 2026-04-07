@@ -192,7 +192,16 @@ class InstallManager:
             shutil.rmtree(backup_dir, ignore_errors=True)
 
     def uninstall_package(self, pkg_id):
-        """Uninstall a package."""
+        """Uninstall a package.
+
+        If the package originated from a local My Tools registration that
+        was later published (``source == "published"`` with a stored
+        ``local_path``), the uninstall is treated as "revert to My Tools
+        only": the registry-side env wiring is undone but the entry
+        stays in installed.json with ``source = "local_script"`` so the
+        user keeps their registration. Otherwise the entry is removed
+        completely as before.
+        """
         pkg_data = self._installed["packages"].get(pkg_id)
         if not pkg_data:
             return
@@ -210,6 +219,18 @@ class InstallManager:
         activated = pkg_data.get("activated_paths") or {}
         if activated:
             self._env_manager.remove_tracked(activated)
+
+        # Demote published-from-local entries back to plain My Tools
+        # registrations instead of dropping them. Registration state is
+        # the user's data; uninstalling from a registry view shouldn't
+        # erase it.
+        if pkg_data.get("source") == "published" and pkg_data.get("local_path"):
+            pkg_data["source"] = "local_script"
+            pkg_data["activated_paths"] = {}
+            pkg_data.pop("path", None)
+            pkg_data.pop("sha256", None)
+            self._save_installed()
+            return
 
         del self._installed["packages"][pkg_id]
         self._save_installed()
