@@ -1174,19 +1174,24 @@ class CartonWindow(QtWidgets.QDialog):
                 installed_pkgs[pkg_id]["namespace"] = namespace
                 self._install_manager._save_installed()
 
-        reply = QtWidgets.QMessageBox.question(
-            self, t("publish"),
-            t("confirm_publish", display, local_version, target_registry.name),
-            QtWidgets.QMessageBox.Yes | QtWidgets.QMessageBox.No,
+        # Confirm + collect release notes in one dialog so the user only
+        # gets prompted once. Cancel returns without publishing.
+        from carton.ui.publish_confirm_dialog import PublishConfirmDialog
+        confirm = PublishConfirmDialog(
+            display, local_version, target_registry.name, parent=self,
         )
-        if reply != QtWidgets.QMessageBox.Yes:
+        if confirm.exec_() != QtWidgets.QDialog.Accepted:
             return
+        release_notes = confirm.release_notes()
 
         self._set_publish_button_state(pkg_id, busy=True)
         QtWidgets.QApplication.processEvents()
 
         try:
-            result = self._publisher.publish(pkg_data, target_registry, namespace=namespace)
+            result = self._publisher.publish(
+                pkg_data, target_registry, namespace=namespace,
+                release_notes=release_notes,
+            )
 
             new_pkg_id = result["id"]
             installed_pkgs = self._install_manager._installed["packages"]

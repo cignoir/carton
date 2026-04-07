@@ -105,6 +105,8 @@ _STRINGS = {
         "verified_badge": "Verified",
         "verified_badge_tooltip": "SHA256 was checked against the registry entry at install time.",
         "install_strict_no_sha256": "Strict verification is enabled, but this package has no SHA256 in the registry. Install refused.",
+        "publish_release_notes_label": "Release notes (optional)",
+        "publish_release_notes_placeholder": "What changed in this version? Plain text. Visible to anyone who installs this version.",
 
         # Edit dialog
         "edit_title": "Carton — Edit",
@@ -295,6 +297,8 @@ _STRINGS = {
         "verified_badge": "検証済",
         "verified_badge_tooltip": "インストール時にレジストリの SHA256 と照合されました。",
         "install_strict_no_sha256": "厳密検証が有効ですが、このパッケージにはレジストリ上の SHA256 がありません。インストールを拒否しました。",
+        "publish_release_notes_label": "リリースノート（任意）",
+        "publish_release_notes_placeholder": "このバージョンの変更点を入力。プレーンテキスト。インストールする全員が見られます。",
 
         # Edit dialog
         "edit_title": "Carton — 編集",

@@ -42,7 +42,7 @@ class Publisher:
     def __init__(self, config):
         self._config = config
 
-    def publish(self, pkg_data, registry_entry, namespace=None):
+    def publish(self, pkg_data, registry_entry, namespace=None, release_notes=""):
         """Publish to a registry.
 
         Args:
@@ -139,6 +139,7 @@ class Publisher:
             size_bytes=size_bytes,
             entry_point=entry_point,
             tags=pkg_data.get("tags", []),
+            release_notes=release_notes,
         )
 
         # 5. Persist namespace/name back into source so the next user converges
@@ -213,7 +214,7 @@ class Publisher:
 
     def _update_registry(self, registry_entry, pkg_id, namespace, name, display_name,
                          version, pkg_type, description, icon, author,
-                         sha256, size_bytes, entry_point, tags):
+                         sha256, size_bytes, entry_point, tags, release_notes=""):
         """Update registry.json. Returns a list of warning strings (may be empty)."""
         reg_path = os.path.normpath(registry_entry.path)
 
@@ -272,7 +273,7 @@ class Publisher:
             "sha256": sha256,
             "size_bytes": size_bytes,
             "released_at": now,
-            "changelog": "",
+            "changelog": release_notes or "",
         }
 
         registry["last_updated"] = now
