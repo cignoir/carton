@@ -174,12 +174,22 @@ class Config:
             return
         if not self.active_profile:
             self.active_profile = profile_store.DEFAULT_PROFILE_NAME
+        # Make sure the canonical "default" profile exists at all times,
+        # regardless of which profile happens to be active. Without this
+        # an installer built from "viatora" produces an environment with
+        # only viatora.json on disk and the user can never switch to a
+        # blank baseline.
+        if not profile_store.profile_exists(profile_store.DEFAULT_PROFILE_NAME):
+            try:
+                profile_store.save_profile(
+                    profile_store.DEFAULT_PROFILE_NAME, InstallerProfile.blank(),
+                )
+            except Exception:
+                pass
         if not profile_store.profile_exists(self.active_profile):
-            # Only seed an empty default profile from a non-empty Config.
-            # If the current Config snapshot is empty (because someone
-            # called Config.load on a missing/zero file), avoid creating
-            # a permanent empty profile that would later mask recovered
-            # data.
+            # Only seed the active profile from a non-empty Config. If
+            # the snapshot is empty avoid creating a permanent empty
+            # profile that would later mask recovered data.
             if self.registries:
                 try:
                     profile_store.save_profile(

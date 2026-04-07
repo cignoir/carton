@@ -253,6 +253,20 @@ def onMayaDroppedPythonFile(*args, **kwargs):
             if not os.path.exists(profile_file):
                 with open(profile_file, "w", encoding="utf-8") as f:
                     json.dump(SEED_CONFIG, f, indent=2, ensure_ascii=False)
+            # Always materialise an empty "default" profile next to the
+            # named one so the consumer can always switch back to a
+            # blank baseline.
+            default_file = os.path.join(profiles_dir, "default.json")
+            if not os.path.exists(default_file):
+                blank = {
+                    "registries": [],
+                    "language": "auto",
+                    "auto_check_updates": True,
+                    "github_repo": "cignoir/carton",
+                    "proxy": "",
+                }
+                with open(default_file, "w", encoding="utf-8") as f:
+                    json.dump(blank, f, indent=2, ensure_ascii=False)
         except Exception:
             pass
     with open(config_path, "w", encoding="utf-8") as f:
