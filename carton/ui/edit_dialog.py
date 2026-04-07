@@ -154,6 +154,20 @@ class EditDialog(QtWidgets.QDialog):
         mode_func_layout.addWidget(self._func_combo)
         mode_layout.addLayout(mode_func_layout)
 
+        # Module override — only meaningful for folder packages where the
+        # importable target may differ from the folder name (e.g. a
+        # ``scripts/`` folder containing standalone tools where the
+        # entry point is ``import genimport`` rather than ``import scripts``).
+        self._module_label = QtWidgets.QLabel(t("edit_module_name"))
+        self._module_label.setStyleSheet(theme.LABEL_DIM)
+        self._module_input = QtWidgets.QLineEdit(entry.get("module", ""))
+        self._module_input.setPlaceholderText("e.g. genimport")
+        mode_layout.addWidget(self._module_label)
+        mode_layout.addWidget(self._module_input)
+        if not self._pkg_data.get("is_folder") or ep_type != "python":
+            self._module_label.setVisible(False)
+            self._module_input.setVisible(False)
+
         # Populate function list in dropdown
         if local_path and os.path.isfile(local_path) and local_path.endswith(".py"):
             funcs = list_functions(local_path)
@@ -312,9 +326,10 @@ class EditDialog(QtWidgets.QDialog):
                 "procedure": self._func_combo.currentText().strip() or name,
             }
         else:
+            override = self._module_input.text().strip()
             entry_point = {
                 "type": "python",
-                "module": name,
+                "module": override or name,
                 "function": self._func_combo.currentText().strip() or "show",
             }
 

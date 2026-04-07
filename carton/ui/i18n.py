@@ -120,6 +120,7 @@ _STRINGS = {
         "history_no_registry_data": "No registry version history found for this package. Make sure the registry containing it is configured.",
         "edit_include_compiled": "Include .pyc files when publishing",
         "edit_include_compiled_tooltip": "Carton normally strips compiled .pyc files when zipping a folder package. Turn this on for legacy in-house tools that ship as .pyc only.",
+        "edit_module_name": "Module to import (overrides folder name):",
 
         # Edit dialog
         "edit_title": "Carton — Edit",
@@ -331,6 +332,7 @@ _STRINGS = {
         "history_no_registry_data": "このパッケージのレジストリ側のバージョン履歴が見つかりません。対象レジストリが設定されているか確認してください。",
         "edit_include_compiled": ".pyc ファイルも公開時に含める",
         "edit_include_compiled_tooltip": "Carton はフォルダパッケージを zip 化する際、デフォルトで .pyc を除外します。.pyc 形式でしか配布できない既存ツールを公開する場合はオンにしてください。",
+        "edit_module_name": "import するモジュール名（フォルダ名を上書き）:",
 
         # Edit dialog
         "edit_title": "Carton — 編集",
