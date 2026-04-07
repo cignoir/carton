@@ -918,11 +918,25 @@ class CartonWindow(QtWidgets.QDialog):
                 if icon_filename and is_remote and base_dir:
                     icon_fetch_tasks.append((pkg_id, base_dir, icon_filename))
 
+            # In a registry view we render the same plain consumer card
+            # regardless of whether the user happens to own the package:
+            # no Publish button, no "published-to" badge, no Edit click.
+            # Those affordances only make sense in My Tools.
+            in_my_tools_view = self._is_mytools_selection(selection)
+            if in_my_tools_view:
+                card_pkg_data = pkg_data
+                card_published = published_map.get(pkg_id, [])
+            else:
+                card_pkg_data = {
+                    k: v for k, v in pkg_data.items() if k != "_local_script"
+                }
+                card_published = []
+
             card = PackageCard(
-                pkg_id, pkg_data,
+                pkg_id, card_pkg_data,
                 installed_version=installed_ver,
                 icon_path=icon_path,
-                published_registries=published_map.get(pkg_id, []),
+                published_registries=card_published,
             )
             card.launch_requested.connect(self._on_launch)
             card.install_requested.connect(self._on_install)
