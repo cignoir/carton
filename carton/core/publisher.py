@@ -185,6 +185,13 @@ class Publisher:
             "maya_versions": ["2024", "2025", "2026", "2027"],
             "entry_point": entry_point,
             "icon": os.path.basename(icon) if self._is_icon_file(icon) else icon,
+            # Absolute path of the source files at publish time. The
+            # installer uses this to auto-relink My Tools entries when
+            # the same user reinstalls Carton on a machine that still
+            # has the original sources at this path. Privacy: this
+            # leaks the publisher's directory layout, so use private /
+            # in-house registries only when that matters.
+            "source_path": os.path.abspath(local_path),
         }
         if home_registry:
             pkg_json["home_registry"] = home_registry

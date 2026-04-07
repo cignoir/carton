@@ -119,6 +119,9 @@ class InstallManager:
             # details.
             entry_point = meta.get("entry_point", {}) or {}
             inner_pkg_json = os.path.join(package_dir, "package.json")
+            inner_source_path = ""
+            inner_is_folder = None
+            inner_home_registry = None
             if os.path.exists(inner_pkg_json):
                 try:
                     with open(inner_pkg_json, "rb") as f:
@@ -128,8 +131,24 @@ class InstallManager:
                         entry_point = inner["entry_point"]
                     if inner.get("type"):
                         pkg_type = inner["type"]
+                    inner_source_path = inner.get("source_path", "") or ""
+                    if "is_folder" in inner:
+                        inner_is_folder = bool(inner["is_folder"])
+                    if inner.get("home_registry"):
+                        inner_home_registry = inner["home_registry"]
                 except (OSError, ValueError):
                     pass
+
+            # If the publisher stamped the source path AND the same path
+            # exists on this machine, treat the install as a "published"
+            # entry that doubles as a My Tools registration. This lets a
+            # user reinstall Carton (or move to a fresh install_dir) and
+            # get their My Tools entries back automatically.
+            relink_local_path = ""
+            if inner_source_path and os.path.exists(inner_source_path):
+                relink_local_path = inner_source_path
+                if inner_is_folder is None:
+                    inner_is_folder = os.path.isdir(inner_source_path)
 
             handler = get_handler(pkg_type)
             # Snapshot env_manager state before the handler runs so we can
@@ -153,13 +172,18 @@ class InstallManager:
                 pkg_type=pkg_type,
                 entry_point=entry_point,
                 path=rel_path,
-                source="registry",
+                source="published" if relink_local_path else "registry",
                 installed_at=datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
                 activated_paths=activated_paths,
                 sha256=meta.get("sha256", ""),
                 pinned=meta.get("pinned", False),
+                local_path=relink_local_path,
+                home_registry=inner_home_registry or {},
             )
-            self._installed["packages"][pkg_id] = info.to_installed_dict()
+            entry_dict = info.to_installed_dict()
+            if relink_local_path and inner_is_folder is not None:
+                entry_dict["is_folder"] = inner_is_folder
+            self._installed["packages"][pkg_id] = entry_dict
             try:
                 self._save_installed()
             except OSError as e:
@@ -261,4 +285,14 @@ class InstallManager:
         return None
 
     def is_installed(self, pkg_id):
-        return pkg_id in self._installed.get("packages", {})
+        """True if a package has registry-installed bytes on disk.
+
+        A package whose entry has been demoted to ``source == local_script``
+        (after the user uninstalled it from the registry view but kept the
+        My Tools registration) is reported as NOT installed — the registry
+        bytes are gone and only the local reference survives.
+        """
+        entry = self._installed.get("packages", {}).get(pkg_id)
+        if not entry:
+            return False
+        return entry.get("source") != "local_script"
