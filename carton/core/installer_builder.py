@@ -24,6 +24,7 @@ import carton
 
 _EXCLUDE_DIRS = {"__pycache__", ".git", ".svn", ".idea", ".vscode"}
 SEED_TOKEN = "__SEED_CONFIG_JSON__"
+PROFILE_NAME_TOKEN = "__SEED_PROFILE_NAME__"
 
 
 def _carton_pkg_dir():
@@ -56,7 +57,8 @@ def _zip_carton_to_bytes():
     return buf.getvalue()
 
 
-def build_one(output_path, version=None, seed=None, language="auto"):
+def build_one(output_path, version=None, seed=None, language="auto",
+              profile_name=None):
     """Build a single installer .py to ``output_path``.
 
     Args:
@@ -90,11 +92,13 @@ def build_one(output_path, version=None, seed=None, language="auto"):
     with open(tpl_path, "r", encoding="utf-8") as f:
         template = f.read()
     seed_literal = repr(seed) if seed is not None else "None"
+    profile_literal = repr(profile_name) if profile_name else "None"
     installer = (
         template
         .replace("__VERSION__", version)
         .replace("__CARTON_ZIP_B64__", b64)
         .replace(SEED_TOKEN, seed_literal)
+        .replace(PROFILE_NAME_TOKEN, profile_literal)
         .replace("__LANGUAGE__", language)
     )
 
@@ -103,12 +107,21 @@ def build_one(output_path, version=None, seed=None, language="auto"):
     return output_path
 
 
-def build_from_profile(profile_path, output_path, version=None):
+def build_from_profile(profile_path, output_path, version=None,
+                       profile_name=None):
     """Convenience for the runtime UI: read a profile JSON and build."""
     from carton.core.profile import InstallerProfile
     profile = InstallerProfile.load(profile_path)
     seed = profile.to_dict()
     language = seed.get("language", "auto")
+    if profile_name is None:
+        # Default to the file's basename so the source profile name
+        # round-trips into the consumer's installation.
+        base = os.path.basename(profile_path)
+        if base.endswith(".json"):
+            base = base[:-5]
+        profile_name = base or None
     return build_one(
         output_path, version=version, seed=seed, language=language,
+        profile_name=profile_name,
     )

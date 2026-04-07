@@ -41,6 +41,7 @@ DEFAULT_LANGUAGES = ["auto", "ja", "en"]
 # Token in the template that gets replaced with the JSON-encoded seed
 # config (or "null" when no profile is supplied).
 SEED_TOKEN = "__SEED_CONFIG_JSON__"
+PROFILE_NAME_TOKEN = "__SEED_PROFILE_NAME__"
 
 
 def _detect_version():
@@ -90,6 +91,13 @@ def build(version=None, languages=None, profile_path=None, output=None):
     # field types and emits ``True`` / ``False`` / ``None`` (not the JSON
     # ``true`` / ``false`` / ``null``).
     seed_literal = repr(seed) if seed is not None else "None"
+    profile_name = None
+    if profile_path:
+        base = os.path.basename(profile_path)
+        if base.endswith(".json"):
+            base = base[:-5]
+        profile_name = base or None
+    profile_name_literal = repr(profile_name) if profile_name else "None"
 
     os.makedirs(DIST_DIR, exist_ok=True)
     zip_path = os.path.join(DIST_DIR, "carton.zip")
@@ -121,6 +129,7 @@ def build(version=None, languages=None, profile_path=None, output=None):
         .replace("__VERSION__", version)
         .replace("__CARTON_ZIP_B64__", b64)
         .replace(SEED_TOKEN, seed_literal)
+        .replace(PROFILE_NAME_TOKEN, profile_name_literal)
     )
 
     release_kb = os.path.getsize(release_zip) / 1024

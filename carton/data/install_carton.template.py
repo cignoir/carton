@@ -26,6 +26,11 @@ CARTON_ZIP_B64 = """__CARTON_ZIP_B64__"""
 # existing config.json files are never overwritten.
 SEED_CONFIG = __SEED_CONFIG_JSON__
 
+# Source profile name (e.g. "viatora") so the consumer ends up with that
+# profile selected as active and a real profile file under profiles/
+# instead of having the seed silently merged into the default profile.
+SEED_PROFILE_NAME = __SEED_PROFILE_NAME__
+
 # ---- Bootstrap ----
 USERSETUP_HOOK = """\
 
@@ -221,7 +226,8 @@ def onMayaDroppedPythonFile(*args, **kwargs):
     #     verbatim (custom installer built with --profile)
     #   * fresh install + no SEED_CONFIG → fall back to DEFAULT_CONFIG
     config_path = os.path.join(install_dir, "config.json")
-    if os.path.exists(config_path):
+    is_fresh_install = not os.path.exists(config_path)
+    if not is_fresh_install:
         with open(config_path, "r", encoding="utf-8") as f:
             config = json.load(f)
     elif SEED_CONFIG is not None:
@@ -232,6 +238,23 @@ def onMayaDroppedPythonFile(*args, **kwargs):
     # variant) and stamp install_dir if it isn't already there.
     config["language"] = CARTON_LANGUAGE
     config.setdefault("install_dir", install_dir)
+    # On a fresh install built from a named profile, also stamp the
+    # active_profile field and write a real profile file so the consumer
+    # sees ``viatora`` (or whatever) selected in the dropdown — not the
+    # seed silently merged into "default".
+    if is_fresh_install and SEED_PROFILE_NAME and SEED_CONFIG is not None:
+        config["active_profile"] = SEED_PROFILE_NAME
+        try:
+            profiles_dir = os.path.join(install_dir, "profiles")
+            os.makedirs(profiles_dir, exist_ok=True)
+            profile_file = os.path.join(
+                profiles_dir, "{}.json".format(SEED_PROFILE_NAME)
+            )
+            if not os.path.exists(profile_file):
+                with open(profile_file, "w", encoding="utf-8") as f:
+                    json.dump(SEED_CONFIG, f, indent=2, ensure_ascii=False)
+        except Exception:
+            pass
     with open(config_path, "w", encoding="utf-8") as f:
         json.dump(config, f, indent=2, ensure_ascii=False)
 
