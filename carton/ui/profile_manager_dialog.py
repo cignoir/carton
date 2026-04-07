@@ -110,7 +110,7 @@ class ProfileManagerDialog(QtWidgets.QDialog):
         super().__init__(parent)
         self._config = config
         self.setWindowTitle(t("profile_manager_title"))
-        self.setFixedSize(420, 460)
+        self.setFixedSize(540, 480)
         self.setStyleSheet(theme.dialog_style() + theme.listwidget_style())
 
         root = QtWidgets.QVBoxLayout(self)
@@ -122,10 +122,39 @@ class ProfileManagerDialog(QtWidgets.QDialog):
         hint.setStyleSheet("color: {}; font-size: 11px;".format(theme.TEXT_MUTED))
         root.addWidget(hint)
 
+        # List + reorder column to its right
+        list_row = QtWidgets.QHBoxLayout()
+        list_row.setSpacing(6)
         self._list = QtWidgets.QListWidget()
-        root.addWidget(self._list, stretch=1)
+        list_row.addWidget(self._list, stretch=1)
 
+        arrow_col = QtWidgets.QVBoxLayout()
+        arrow_col.setSpacing(4)
+        arrow_style = (
+            "QPushButton {{ background: {bg}; color: {dim}; border: 1px solid {border};"
+            "  border-radius: 4px; }}"
+            "QPushButton:hover {{ color: {text}; }}"
+        ).format(bg=theme.BG_SECONDARY, dim=theme.TEXT_DIM,
+                 border=theme.BORDER, text=theme.TEXT_PRIMARY)
+        up_btn = QtWidgets.QPushButton("\u25b2")
+        up_btn.setFixedSize(28, 28)
+        up_btn.setStyleSheet(arrow_style)
+        up_btn.clicked.connect(self._on_move_up)
+        arrow_col.addWidget(up_btn)
+        down_btn = QtWidgets.QPushButton("\u25bc")
+        down_btn.setFixedSize(28, 28)
+        down_btn.setStyleSheet(arrow_style)
+        down_btn.clicked.connect(self._on_move_down)
+        arrow_col.addWidget(down_btn)
+        arrow_col.addStretch(1)
+        list_row.addLayout(arrow_col)
+
+        root.addLayout(list_row, stretch=1)
+
+        # Action buttons — single row, left-aligned actions + right-aligned Close
         btn_row = QtWidgets.QHBoxLayout()
+        btn_row.setSpacing(8)
+
         new_btn = QtWidgets.QPushButton(t("profile_new"))
         new_btn.setStyleSheet(theme.btn_success())
         new_btn.clicked.connect(self._on_new)
@@ -136,34 +165,17 @@ class ProfileManagerDialog(QtWidgets.QDialog):
         edit_btn.clicked.connect(self._on_edit)
         btn_row.addWidget(edit_btn)
 
-        del_btn = QtWidgets.QPushButton(t("remove"))
-        del_btn.setStyleSheet(theme.btn_danger())
-        del_btn.clicked.connect(self._on_delete)
-        btn_row.addWidget(del_btn)
-
         build_btn = QtWidgets.QPushButton(t("profile_build_installer"))
         build_btn.setStyleSheet(theme.btn_ghost_text())
         build_btn.clicked.connect(self._on_build_installer)
         btn_row.addWidget(build_btn)
 
-        btn_row.addStretch()
+        del_btn = QtWidgets.QPushButton(t("remove"))
+        del_btn.setStyleSheet(theme.btn_danger())
+        del_btn.clicked.connect(self._on_delete)
+        btn_row.addWidget(del_btn)
 
-        arrow_style = (
-            "QPushButton {{ background: {bg}; color: {dim}; border: 1px solid {border};"
-            "  border-radius: 4px; }}"
-            "QPushButton:hover {{ color: {text}; }}"
-        ).format(bg=theme.BG_SECONDARY, dim=theme.TEXT_DIM,
-                 border=theme.BORDER, text=theme.TEXT_PRIMARY)
-        up_btn = QtWidgets.QPushButton("\u25b2")
-        up_btn.setFixedWidth(32)
-        up_btn.setStyleSheet(arrow_style)
-        up_btn.clicked.connect(self._on_move_up)
-        btn_row.addWidget(up_btn)
-        down_btn = QtWidgets.QPushButton("\u25bc")
-        down_btn.setFixedWidth(32)
-        down_btn.setStyleSheet(arrow_style)
-        down_btn.clicked.connect(self._on_move_down)
-        btn_row.addWidget(down_btn)
+        btn_row.addStretch(1)
 
         close_btn = QtWidgets.QPushButton(t("close"))
         close_btn.setStyleSheet(theme.btn_ghost())
