@@ -85,13 +85,18 @@ def _detect_from_folder(folder_path):
     for root, dirs, files in os.walk(folder_path):
         for f in files:
             extensions.add(os.path.splitext(f)[1].lower())
-    has_python = ".py" in extensions or ".pyc" in extensions
-    if has_python:
+    has_py = ".py" in extensions
+    has_pyc = ".pyc" in extensions
+    if has_py or has_pyc:
         info["type"] = "python_package"
     elif ".mll" in extensions:
         info["type"] = "plugin"
     elif ".mel" in extensions:
         info["type"] = "mel_script"
+
+    # Auto-include .pyc when there is no .py source to ship — that's the
+    # only situation where stripping compiled bytecode would lose data.
+    info["include_compiled"] = has_pyc and not has_py
 
     return info
 
@@ -579,6 +584,7 @@ class AddDialog(QtWidgets.QDialog):
             "type": pkg_type,
             "entry_point": entry_point,
             "is_folder": True,
+            "include_compiled": bool(info.get("include_compiled", False)),
         }
 
     def get_result(self):

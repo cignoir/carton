@@ -1122,6 +1122,7 @@ class CartonWindow(QtWidgets.QDialog):
                 author=result.get("author", ""),
                 namespace=result.get("namespace", ""),
                 home_registry=result.get("home_registry"),
+                include_compiled=result.get("include_compiled", False),
             )
             self._rebuild_sidebar()
             self._rebuild_cards()

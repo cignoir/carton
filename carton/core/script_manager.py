@@ -22,7 +22,8 @@ class ScriptManager:
 
     def register(self, file_path, name, display_name, icon, description,
                  pkg_type, entry_point, is_folder=False, version="0.0.0",
-                 author="", namespace="", home_registry=None):
+                 author="", namespace="", home_registry=None,
+                 include_compiled=False):
         """Register locally.
 
         Args:
@@ -75,6 +76,8 @@ class ScriptManager:
         }
         if home_registry:
             installed_data["home_registry"] = home_registry
+        if include_compiled:
+            installed_data["include_compiled"] = True
 
         installed = self._install_mgr._installed
         installed["packages"][pkg_id] = installed_data
