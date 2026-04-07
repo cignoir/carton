@@ -167,7 +167,7 @@ class PackageCard(QtWidgets.QFrame):
             verified.setStyleSheet(
                 "font-size: 10px; color: {color};"
                 " background: transparent; padding: 0 2px;".format(
-                    color=theme.TEXT_DIM)
+                    color=theme.ACCENT_GREEN)
             )
             title_layout.addWidget(verified)
 
