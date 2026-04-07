@@ -20,7 +20,16 @@ from carton.core.config import default_bootstrap_dir
 from carton.core.profile import InstallerProfile, InvalidProfileError
 
 
-_VALID_NAME = re.compile(r"^[A-Za-z0-9._-]+$")
+# Filesystem-unsafe characters (Windows is the strictest of the three
+# major platforms, so this list also covers macOS and Linux). Anything
+# else — including non-ASCII letters like Japanese — is allowed because
+# profile names are user-facing labels, not identifiers on the wire.
+_FORBIDDEN_CHARS = set('\\/:*?"<>|')
+_WINDOWS_RESERVED = {
+    "CON", "PRN", "AUX", "NUL",
+    "COM1", "COM2", "COM3", "COM4", "COM5", "COM6", "COM7", "COM8", "COM9",
+    "LPT1", "LPT2", "LPT3", "LPT4", "LPT5", "LPT6", "LPT7", "LPT8", "LPT9",
+}
 
 # Canonical name of the always-present fallback profile. The runtime
 # treats it identically to any other profile — it just always exists,
@@ -38,8 +47,20 @@ def _path_for(name):
 
 
 def is_valid_name(name):
-    """Profile names must be filesystem-safe single-segment identifiers."""
-    return bool(name) and bool(_VALID_NAME.match(name))
+    """Profile names must be safe to use as a filename on any OS."""
+    if not name or not isinstance(name, str):
+        return False
+    # Reject leading/trailing spaces and dots — Windows silently strips
+    # them, so two distinct names can collide on disk.
+    if name != name.strip(" ."):
+        return False
+    if any(ch in _FORBIDDEN_CHARS for ch in name):
+        return False
+    if any(ord(ch) < 32 for ch in name):
+        return False
+    if name.upper() in _WINDOWS_RESERVED:
+        return False
+    return True
 
 
 def list_profiles():
