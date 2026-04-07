@@ -36,6 +36,7 @@ class MayaEnvManager:
 
     def remove_python_path(self, path):
         """Remove a path from sys.path and drop it from the tracking book."""
+        path = os.path.normpath(path)
         if path in sys.path:
             sys.path.remove(path)
         tracked = self._added_paths.get("sys.path")

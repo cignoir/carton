@@ -39,13 +39,14 @@ class TestBookkeeping:
 
     def test_remove_python_path_updates_tracking_dict(self, clean_state):
         env = MayaEnvManager()
-        env.add_python_path("/tmp/pypath_A")
-        assert "/tmp/pypath_A" in sys.path
-        assert "/tmp/pypath_A" in env._added_paths["sys.path"]
+        p = os.path.normpath("/tmp/pypath_A")
+        env.add_python_path(p)
+        assert p in sys.path
+        assert p in env._added_paths["sys.path"]
 
-        env.remove_python_path("/tmp/pypath_A")
+        env.remove_python_path(p)
 
-        assert "/tmp/pypath_A" not in sys.path
+        assert p not in sys.path
         assert "sys.path" not in env._added_paths
 
     def test_remove_missing_entry_is_noop(self, clean_state):
