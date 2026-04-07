@@ -76,14 +76,21 @@ def _detect_from_folder(folder_path):
     if os.path.exists(init_py):
         info["function"] = _detect_function_in_file(init_py) or "show"
 
-    # Detect MEL / Plugin
+    # Detect MEL / Plugin via priority: any Python source in the tree
+    # wins (because Python tooling may legitimately ship .mll helpers
+    # alongside it — e.g. an in-house scripts/ folder containing both
+    # animation tools and a vendored exAttrEditor.mll). Only fall back
+    # to plugin / mel_script when there is no Python at all.
     extensions = set()
     for root, dirs, files in os.walk(folder_path):
         for f in files:
             extensions.add(os.path.splitext(f)[1].lower())
-    if ".mll" in extensions:
+    has_python = ".py" in extensions or ".pyc" in extensions
+    if has_python:
+        info["type"] = "python_package"
+    elif ".mll" in extensions:
         info["type"] = "plugin"
-    elif ".mel" in extensions and ".py" not in extensions:
+    elif ".mel" in extensions:
         info["type"] = "mel_script"
 
     return info
