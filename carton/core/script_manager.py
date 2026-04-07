@@ -186,6 +186,11 @@ class ScriptManager:
             if local_path and os.path.exists(local_path):
                 self._add_to_env(local_path, pkg_data.get("type", ""),
                                  pkg_data.get("is_folder", False))
+            # Always drop the path importer cache before resolving — the
+            # path may have been added in a previous session (skipping
+            # add_python_path's own invalidate) and the cache built since
+            # then doesn't know about its contents.
+            importlib.invalidate_caches()
             module_name = entry.get("module", "")
             func_name = entry.get("function", "show")
             mod = importlib.import_module(module_name)
