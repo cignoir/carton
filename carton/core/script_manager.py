@@ -181,6 +181,7 @@ class ScriptManager:
             maya.mel.eval('source "{}"; {}();'.format(script, procedure))
         elif ep_type == "python":
             import importlib
+            import sys as _sys
             # Ensure the package path is in sys.path before importing
             local_path = pkg_data.get("local_path", "")
             if local_path and os.path.exists(local_path):
@@ -193,6 +194,12 @@ class ScriptManager:
             importlib.invalidate_caches()
             module_name = entry.get("module", "")
             func_name = entry.get("function", "show")
+            # Drop any negative-cache entry from a previous failed import
+            # so the next attempt actually re-resolves through the path
+            # importers. ``sys.modules[name] = None`` is how Python marks
+            # "this name has already been tried and was not found".
+            if module_name in _sys.modules and _sys.modules[module_name] is None:
+                del _sys.modules[module_name]
             mod = importlib.import_module(module_name)
             func = getattr(mod, func_name)
             func()
