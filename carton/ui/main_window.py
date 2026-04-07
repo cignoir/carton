@@ -280,19 +280,21 @@ class CartonWindow(QtWidgets.QDialog):
         self._profile_combo.currentIndexChanged.connect(self._on_profile_combo_changed)
         profile_row.addWidget(self._profile_combo, stretch=1)
 
-        manage_btn = QtWidgets.QToolButton()
-        manage_btn.setText("\u2699")  # gear
+        manage_btn = QtWidgets.QPushButton("\u2699")
         manage_btn.setToolTip(t("profile_manage"))
         manage_btn.setCursor(Qt.PointingHandCursor)
         manage_btn.setFixedSize(26, 26)
         manage_btn.setFocusPolicy(Qt.NoFocus)
+        manage_btn.setFlat(True)
         manage_btn.setStyleSheet(
-            "QToolButton {{ background: {bg2}; border: 1px solid {border};"
+            "QPushButton {{ background: {bg2}; border: 1px solid {border};"
             "  border-radius: 4px; color: {muted}; font-size: 14px;"
-            "  outline: none; }}"
-            "QToolButton:hover {{ color: {text}; border-color: {border_h};"
+            "  outline: 0; }}"
+            "QPushButton:hover {{ color: {text}; border: 1px solid {border_h};"
             "  background: {hover}; }}"
-            "QToolButton:focus {{ border: 1px solid {border}; outline: none; }}"
+            "QPushButton:pressed {{ background: {hover};"
+            "  border: 1px solid {border_h}; }}"
+            "QPushButton:focus {{ border: 1px solid {border}; outline: 0; }}"
             .format(
                 bg2=theme.BG_SECONDARY, border=theme.BORDER,
                 border_h=theme.BORDER_HOVER, muted=theme.TEXT_MUTED,
