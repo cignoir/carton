@@ -2,7 +2,7 @@
   "id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
   "name": "carton",
   "display_name": "Carton",
-  "version": "0.3.2",
+  "version": "0.3.3",
   "type": "python_package",
   "description": "Maya Package Manager — ツールの配布・管理・更新をローカルレジストリで一元管理",
   "author": "cignoir",
