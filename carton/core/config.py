@@ -94,12 +94,19 @@ class Config:
         github_repo="cignoir/carton",
         language="auto",
         proxy="",
+        active_profile="",
     ):
         self.registries = registries or []
         self.install_dir = install_dir
         self.auto_check_updates = auto_check_updates
         self.github_repo = github_repo
         self.language = language
+        # Name of the active runtime profile (see carton.core.profile_store).
+        # Empty string means "use config.json directly". When set, the
+        # overlay fields (registries / proxy / language / github_repo /
+        # auto_check_updates) are persisted to the profile file too, so
+        # switching profiles restores those values.
+        self.active_profile = active_profile
         # HTTP(S) proxy URL, e.g. ``http://proxy.studio.internal:8080`` or
         # ``http://user:pass@host:8080``. Empty string means "don't override
         # whatever urllib picks up from the environment" — so users who
@@ -115,14 +122,26 @@ class Config:
             with open(path, "r", encoding="utf-8") as f:
                 data = json.load(f)
             registries = [RegistryEntry.from_dict(r) for r in data.get("registries", [])]
-            return cls(
+            cfg = cls(
                 registries=registries,
                 install_dir=data.get("install_dir", _DEFAULT_INSTALL_DIR),
                 auto_check_updates=data.get("auto_check_updates", True),
                 github_repo=data.get("github_repo", "cignoir/carton"),
                 language=data.get("language", "auto"),
                 proxy=data.get("proxy", ""),
+                active_profile=data.get("active_profile", ""),
             )
+            # If a profile is active, overlay its values on top of the
+            # snapshot stored in config.json. The snapshot is kept in sync
+            # by save() so a missing profile file falls back gracefully.
+            if cfg.active_profile:
+                try:
+                    from carton.core import profile_store
+                    profile = profile_store.load_profile(cfg.active_profile)
+                    cfg.apply_profile(profile)
+                except Exception:
+                    pass
+            return cfg
         return cls()
 
     def save(self, path=None):
@@ -137,6 +156,18 @@ class Config:
         os.makedirs(os.path.dirname(path), exist_ok=True)
         with open(path, "w", encoding="utf-8") as f:
             json.dump(self.to_dict(), f, indent=2, ensure_ascii=False)
+        # Mirror the overlay fields back into the active profile file so
+        # next launch (or another machine pointed at the same profile dir)
+        # picks up the changes. config.json's copy is just a snapshot.
+        if self.active_profile:
+            try:
+                from carton.core import profile_store
+                from carton.core.profile import InstallerProfile
+                profile_store.save_profile(
+                    self.active_profile, InstallerProfile.from_config(self),
+                )
+            except Exception:
+                pass
 
     def change_install_dir(self, new_dir):
         """Move Carton's install directory to ``new_dir`` and persist the change.
@@ -229,7 +260,23 @@ class Config:
             "github_repo": self.github_repo,
             "language": self.language,
             "proxy": self.proxy,
+            "active_profile": self.active_profile,
         }
+
+    def apply_profile(self, profile):
+        """Overlay the 5 profile fields onto this config (in-memory only).
+
+        Does not call ``save()`` — caller decides when to persist. Used
+        on startup (after loading config.json) and when the user switches
+        profiles via the UI.
+        """
+        self.registries = [
+            RegistryEntry(name=r.name, path=r.path) for r in profile.registries
+        ]
+        self.language = profile.language
+        self.auto_check_updates = profile.auto_check_updates
+        self.github_repo = profile.github_repo
+        self.proxy = profile.proxy
 
     def apply_proxy_to_env(self):
         """Push ``self.proxy`` into HTTP_PROXY / HTTPS_PROXY for urllib.
