@@ -39,6 +39,22 @@ def _icon_filename(pkg_data):
     return None
 
 
+class _ClickableLabel(QtWidgets.QLabel):
+    """QLabel that emits ``clicked`` on left mouse press.
+
+    Used for tiny icon-style controls (e.g. the profile gear button)
+    where Qt's button widgets in Maya unconditionally draw an outer
+    frame that bleeds Maya's palette colours through stylesheets.
+    """
+
+    clicked = QtCore.Signal()
+
+    def mousePressEvent(self, event):
+        if event.button() == Qt.LeftButton:
+            self.clicked.emit()
+        super().mousePressEvent(event)
+
+
 class _IconFetcher(QtCore.QThread):
     """Background thread that downloads remote icons in bulk."""
 
@@ -280,22 +296,16 @@ class CartonWindow(QtWidgets.QDialog):
         self._profile_combo.currentIndexChanged.connect(self._on_profile_combo_changed)
         profile_row.addWidget(self._profile_combo, stretch=1)
 
-        manage_btn = QtWidgets.QPushButton("\u2699")
+        manage_btn = _ClickableLabel("\u2699")
         manage_btn.setToolTip(t("profile_manage"))
         manage_btn.setCursor(Qt.PointingHandCursor)
         manage_btn.setFixedSize(26, 26)
-        manage_btn.setFocusPolicy(Qt.NoFocus)
-        manage_btn.setFlat(True)
+        manage_btn.setAlignment(Qt.AlignCenter)
         manage_btn.setStyleSheet(
-            "QPushButton {{ background: {bg2}; border: 1px solid {border};"
-            "  border-radius: 4px; color: {muted}; font-size: 14px;"
-            "  outline: 0; }}"
-            "QPushButton:hover {{ color: {text}; border: 1px solid {border_h};"
-            "  background: {hover}; }}"
-            "QPushButton:pressed {{ background: {hover};"
-            "  border: 1px solid {border_h}; }}"
-            "QPushButton:focus {{ border: 1px solid {border}; outline: 0; }}"
-            .format(
+            "QLabel {{ background: {bg2}; border: 1px solid {border};"
+            "  border-radius: 4px; color: {muted}; font-size: 14px; }}"
+            "QLabel:hover {{ color: {text}; border: 1px solid {border_h};"
+            "  background: {hover}; }}".format(
                 bg2=theme.BG_SECONDARY, border=theme.BORDER,
                 border_h=theme.BORDER_HOVER, muted=theme.TEXT_MUTED,
                 text=theme.TEXT_PRIMARY, hover=theme.BG_HOVER)
