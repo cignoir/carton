@@ -59,31 +59,35 @@ class TestBookkeeping:
 class TestSnapshotDiff:
     def test_diff_reports_adds_since_snapshot(self, clean_state):
         env = MayaEnvManager()
-        env.add_python_path("/tmp/preexisting")
+        pre = os.path.normpath("/tmp/preexisting")
+        new_py = os.path.normpath("/tmp/new_py")
+        env.add_python_path(pre)
 
         before = env.snapshot()
-        env.add_python_path("/tmp/new_py")
+        env.add_python_path(new_py)
         env.add_env_path("MAYA_SCRIPT_PATH", "/tmp/new_mel")
 
         diff = env.diff_since(before)
         assert diff == {
-            "sys.path": ["/tmp/new_py"],
+            "sys.path": [new_py],
             "MAYA_SCRIPT_PATH": ["/tmp/new_mel"],
         }
         # Preexisting path is NOT reported.
-        assert "/tmp/preexisting" not in diff.get("sys.path", [])
+        assert pre not in diff.get("sys.path", [])
 
     def test_snapshot_is_deep_copied(self, clean_state):
         env = MayaEnvManager()
-        env.add_python_path("/tmp/a")
+        a = os.path.normpath("/tmp/a")
+        b = os.path.normpath("/tmp/b")
+        env.add_python_path(a)
         before = env.snapshot()
-        env.add_python_path("/tmp/b")
+        env.add_python_path(b)
         # before should not have been mutated by the later add
-        assert before["sys.path"] == ["/tmp/a"]
+        assert before["sys.path"] == [a]
 
     def test_empty_diff_when_nothing_added(self, clean_state):
         env = MayaEnvManager()
-        env.add_python_path("/tmp/a")
+        env.add_python_path(os.path.normpath("/tmp/a"))
         before = env.snapshot()
         # No new adds
         assert env.diff_since(before) == {}
@@ -92,15 +96,16 @@ class TestSnapshotDiff:
 class TestRemoveTracked:
     def test_removes_all_entries_from_diff(self, clean_state):
         env = MayaEnvManager()
+        ia = os.path.normpath("/tmp/install_a")
         before = env.snapshot()
-        env.add_python_path("/tmp/install_a")
+        env.add_python_path(ia)
         env.add_env_path("MAYA_SCRIPT_PATH", "/tmp/install_b")
         env.add_env_path("MAYA_PLUG_IN_PATH", "/tmp/install_c")
 
         diff = env.diff_since(before)
         env.remove_tracked(diff)
 
-        assert "/tmp/install_a" not in sys.path
+        assert ia not in sys.path
         assert "/tmp/install_b" not in os.environ.get("MAYA_SCRIPT_PATH", "")
         assert "/tmp/install_c" not in os.environ.get("MAYA_PLUG_IN_PATH", "")
         assert env._added_paths == {}
