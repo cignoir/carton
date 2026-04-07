@@ -28,10 +28,41 @@ def reload_carton():
     for k in to_remove:
         del sys.modules[k]
 
-    # 3. Copy files
+    # 3. Copy files. Use a robust replace strategy: clear __pycache__
+    # subdirs first (Maya's import machinery holds these open), then
+    # rmtree what's left, then copytree from source. Wrapped in
+    # explicit error handling so any failure is loud — silently
+    # leaving the deployed dir half-deleted has caused config / profile
+    # data loss reports in the past.
     if os.path.exists(_DST):
-        shutil.rmtree(_DST)
-    shutil.copytree(_SRC, _DST)
+        # Drop all __pycache__/ first; these are the files Maya is
+        # most likely to have open and that prevent rmtree from
+        # finishing on Windows.
+        for root, dirs, _files in os.walk(_DST):
+            for d in list(dirs):
+                if d == "__pycache__":
+                    try:
+                        shutil.rmtree(os.path.join(root, d), ignore_errors=True)
+                    except Exception:
+                        pass
+        try:
+            shutil.rmtree(_DST)
+        except Exception as e:
+            raise RuntimeError(
+                "[dev_reload] Failed to remove deployed Carton at {}: {}\n"
+                "Restart Maya and try again — a stale .pyc lock is the usual cause."
+                .format(_DST, e)
+            )
+    try:
+        shutil.copytree(_SRC, _DST)
+    except Exception as e:
+        raise RuntimeError(
+            "[dev_reload] Failed to copy {} -> {}: {}\n"
+            "The deployed Carton package is currently MISSING. Restart Maya"
+            " and re-run dev_reload (or copy the directory manually) before"
+            " using Carton again."
+            .format(_SRC, _DST, e)
+        )
 
     # 3b. Ensure the bootstrap dir is on sys.path. If the deployed
     # userSetup bootstrap is stale (or install_dir was relocated and the
