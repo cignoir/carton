@@ -22,6 +22,11 @@ from carton.core.profile import InstallerProfile, InvalidProfileError
 
 _VALID_NAME = re.compile(r"^[A-Za-z0-9._-]+$")
 
+# Canonical name of the always-present fallback profile. The runtime
+# treats it identically to any other profile — it just always exists,
+# can't be deleted, and can't be reused as a name for new profiles.
+DEFAULT_PROFILE_NAME = "default"
+
 
 def profiles_dir():
     """Return the directory profiles live in. Created on demand."""

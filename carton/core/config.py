@@ -122,6 +122,7 @@ class Config:
     @classmethod
     def load(cls, path=None):
         """Load config.json. Return defaults if not found."""
+        is_canonical = path is None
         if path is None:
             path = default_config_path()
         if os.path.exists(path):
@@ -138,18 +139,46 @@ class Config:
                 active_profile=data.get("active_profile", ""),
                 strict_verify=data.get("strict_verify", False),
             )
-            # If a profile is active, overlay its values on top of the
-            # snapshot stored in config.json. The snapshot is kept in sync
-            # by save() so a missing profile file falls back gracefully.
-            if cfg.active_profile:
-                try:
-                    from carton.core import profile_store
-                    profile = profile_store.load_profile(cfg.active_profile)
-                    cfg.apply_profile(profile)
-                except Exception:
-                    pass
+            # Only overlay the profile when loading from the canonical
+            # location — explicit `path=` callers (tests, multi-config
+            # tooling) shouldn't get pollution from the user's real
+            # ~/.carton/profiles directory.
+            if is_canonical:
+                cfg._ensure_default_profile_and_overlay()
             return cfg
+        # No config.json on disk: return raw defaults without touching
+        # the profiles directory. The default profile gets materialised
+        # on the first save() of an actual config.
         return cls()
+
+    def _ensure_default_profile_and_overlay(self):
+        """Make sure the active profile file exists and apply it.
+
+        If ``active_profile`` is empty, normalise it to the canonical
+        ``"default"`` name. If the corresponding profile file is missing
+        (first run, or the user is upgrading from a pre-profile build),
+        seed it from the current snapshot so the user's existing
+        registries become the default profile's contents.
+        """
+        try:
+            from carton.core import profile_store
+            from carton.core.profile import InstallerProfile
+        except Exception:
+            return
+        if not self.active_profile:
+            self.active_profile = profile_store.DEFAULT_PROFILE_NAME
+        if not profile_store.profile_exists(self.active_profile):
+            try:
+                profile_store.save_profile(
+                    self.active_profile, InstallerProfile.from_config(self),
+                )
+            except Exception:
+                return
+        try:
+            profile = profile_store.load_profile(self.active_profile)
+            self.apply_profile(profile)
+        except Exception:
+            pass
 
     def save(self, path=None):
         """Write to config.json.
@@ -158,6 +187,7 @@ class Config:
         (default: ``~/Documents/maya/carton/config.json`` on Windows) so that
         ``load()`` can find it regardless of where ``install_dir`` points.
         """
+        is_canonical = path is None
         if path is None:
             path = default_config_path()
         os.makedirs(os.path.dirname(path), exist_ok=True)
@@ -166,7 +196,7 @@ class Config:
         # Mirror the overlay fields back into the active profile file so
         # next launch (or another machine pointed at the same profile dir)
         # picks up the changes. config.json's copy is just a snapshot.
-        if self.active_profile:
+        if is_canonical and self.active_profile:
             try:
                 from carton.core import profile_store
                 from carton.core.profile import InstallerProfile

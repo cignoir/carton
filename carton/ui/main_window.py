@@ -563,11 +563,17 @@ class CartonWindow(QtWidgets.QDialog):
         from carton.core import profile_store
         self._profile_combo.blockSignals(True)
         self._profile_combo.clear()
-        self._profile_combo.addItem(t("profile_none"), "")
-        for name in profile_store.list_profiles():
+        # default first, the rest alphabetical
+        names = profile_store.list_profiles()
+        if profile_store.DEFAULT_PROFILE_NAME in names:
+            names = [profile_store.DEFAULT_PROFILE_NAME] + sorted(
+                n for n in names if n != profile_store.DEFAULT_PROFILE_NAME
+            )
+        else:
+            names = sorted(names)
+        for name in names:
             self._profile_combo.addItem(name, name)
-        # Select current
-        active = self._config.active_profile or ""
+        active = self._config.active_profile or profile_store.DEFAULT_PROFILE_NAME
         idx = self._profile_combo.findData(active)
         if idx < 0:
             idx = 0
@@ -578,24 +584,22 @@ class CartonWindow(QtWidgets.QDialog):
         if not self._config or index < 0:
             return
         new_name = self._profile_combo.itemData(index) or ""
-        if new_name == (self._config.active_profile or ""):
+        if new_name == self._config.active_profile:
             return
         self._switch_profile(new_name)
 
     def _switch_profile(self, name):
         from carton.core import profile_store
         from carton.core.profile import InvalidProfileError
-        if name:
-            try:
-                profile = profile_store.load_profile(name)
-            except InvalidProfileError as e:
-                QtWidgets.QMessageBox.warning(self, "Carton", str(e))
-                self._rebuild_profile_combo()
-                return
-            self._config.apply_profile(profile)
-        # Empty name = "no profile"; leave overlay fields as-is so the user
-        # doesn't accidentally lose their current registries by switching
-        # off the profile. They can edit them via Settings afterwards.
+        if not name:
+            name = profile_store.DEFAULT_PROFILE_NAME
+        try:
+            profile = profile_store.load_profile(name)
+        except InvalidProfileError as e:
+            QtWidgets.QMessageBox.warning(self, "Carton", str(e))
+            self._rebuild_profile_combo()
+            return
+        self._config.apply_profile(profile)
         self._config.active_profile = name
         self._config.save()
         self._config.apply_proxy_to_env()

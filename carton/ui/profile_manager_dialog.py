@@ -142,6 +142,12 @@ class ProfileManagerDialog(QtWidgets.QDialog):
         if not profile_store.is_valid_name(name):
             QtWidgets.QMessageBox.warning(self, "Carton", t("profile_name_invalid"))
             return
+        if name == profile_store.DEFAULT_PROFILE_NAME:
+            QtWidgets.QMessageBox.warning(
+                self, "Carton",
+                t("profile_name_reserved", profile_store.DEFAULT_PROFILE_NAME),
+            )
+            return
         if profile_store.profile_exists(name):
             QtWidgets.QMessageBox.warning(
                 self, "Carton", t("profile_name_exists", name),
@@ -173,6 +179,12 @@ class ProfileManagerDialog(QtWidgets.QDialog):
     def _on_delete(self):
         name = self._selected_name()
         if not name:
+            return
+        if name == profile_store.DEFAULT_PROFILE_NAME:
+            QtWidgets.QMessageBox.warning(
+                self, "Carton",
+                t("profile_delete_default", profile_store.DEFAULT_PROFILE_NAME),
+            )
             return
         if name == (self._config.active_profile or ""):
             QtWidgets.QMessageBox.warning(
