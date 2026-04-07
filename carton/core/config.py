@@ -175,11 +175,19 @@ class Config:
         if not self.active_profile:
             self.active_profile = profile_store.DEFAULT_PROFILE_NAME
         if not profile_store.profile_exists(self.active_profile):
-            try:
-                profile_store.save_profile(
-                    self.active_profile, InstallerProfile.from_config(self),
-                )
-            except Exception:
+            # Only seed an empty default profile from a non-empty Config.
+            # If the current Config snapshot is empty (because someone
+            # called Config.load on a missing/zero file), avoid creating
+            # a permanent empty profile that would later mask recovered
+            # data.
+            if self.registries:
+                try:
+                    profile_store.save_profile(
+                        self.active_profile, InstallerProfile.from_config(self),
+                    )
+                except Exception:
+                    return
+            else:
                 return
         try:
             profile = profile_store.load_profile(self.active_profile)
@@ -207,6 +215,18 @@ class Config:
             try:
                 from carton.core import profile_store
                 from carton.core.profile import InstallerProfile
+                # Safety: if our in-memory registries list is empty but
+                # the on-disk profile is not, refuse to clobber it. This
+                # protects against any code path that briefly holds an
+                # uninitialised Config and triggers a save before its
+                # state is fully populated.
+                if not self.registries and profile_store.profile_exists(self.active_profile):
+                    try:
+                        existing = profile_store.load_profile(self.active_profile)
+                        if existing.registries:
+                            return
+                    except Exception:
+                        pass
                 profile_store.save_profile(
                     self.active_profile, InstallerProfile.from_config(self),
                 )

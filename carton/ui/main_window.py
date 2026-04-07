@@ -561,9 +561,24 @@ class CartonWindow(QtWidgets.QDialog):
         if not self._config:
             return
         from carton.core import profile_store
+        from carton.core.profile import InstallerProfile
         self._profile_combo.blockSignals(True)
         self._profile_combo.clear()
         names = profile_store.ordered_profiles(self._config.profile_order)
+        # Recovery: if nothing is on disk (fresh install or accidental
+        # state loss), materialise the default profile from the current
+        # Config snapshot so the user always has at least one entry.
+        if not names:
+            try:
+                profile_store.save_profile(
+                    profile_store.DEFAULT_PROFILE_NAME,
+                    InstallerProfile.from_config(self._config),
+                )
+                self._config.active_profile = profile_store.DEFAULT_PROFILE_NAME
+                self._config.save()
+                names = profile_store.ordered_profiles(self._config.profile_order)
+            except Exception:
+                pass
         for name in names:
             self._profile_combo.addItem(name, name)
         active = self._config.active_profile or profile_store.DEFAULT_PROFILE_NAME
