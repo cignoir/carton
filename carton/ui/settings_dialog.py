@@ -1,38 +1,23 @@
-"""Carton settings dialog — sidebar layout with categorized pages."""
+"""Carton settings dialog — sidebar layout with categorized pages.
 
-import json
+Most of the actual editor widgets live in :mod:`carton.ui.settings_widgets`
+so the same code can be reused by the Profile Builder. This file holds the
+shell (sidebar + stacked pages), Carton-only fields like the install_dir
+mover, and the Advanced page with self-uninstall.
+"""
+
 import os
 import shutil
 
-from carton.compat_urllib import urlopen, Request, URLError
-from carton.ui.compat import QtWidgets, QtCore, Qt
-from carton.ui.i18n import t, get_language, set_language
+from carton.ui.compat import QtWidgets, Qt
+from carton.ui.i18n import t
 from carton.ui import theme
-
-
-def _wide_input(parent, title, label, text="", width=480):
-    """Show a wider text input dialog."""
-    dialog = QtWidgets.QDialog(parent)
-    dialog.setWindowTitle(title)
-    dialog.setFixedWidth(width)
-    dialog.setStyleSheet(theme.dialog_style())
-    layout = QtWidgets.QVBoxLayout(dialog)
-    layout.setContentsMargins(20, 16, 20, 16)
-    layout.setSpacing(10)
-    layout.addWidget(QtWidgets.QLabel(label))
-    line = QtWidgets.QLineEdit(text)
-    layout.addWidget(line)
-    btn_layout = QtWidgets.QHBoxLayout()
-    btn_layout.addStretch()
-    ok_btn = QtWidgets.QPushButton("OK")
-    ok_btn.setStyleSheet(theme.btn_primary())
-    ok_btn.setDefault(True)
-    ok_btn.clicked.connect(dialog.accept)
-    btn_layout.addWidget(ok_btn)
-    layout.addLayout(btn_layout)
-    if dialog.exec_() == QtWidgets.QDialog.Accepted:
-        return line.text(), True
-    return "", False
+from carton.ui.settings_widgets import (
+    AutoUpdateSection,
+    LanguageSection,
+    ProxySection,
+    RegistriesSection,
+)
 
 
 class SettingsDialog(QtWidgets.QDialog):
@@ -93,33 +78,41 @@ class SettingsDialog(QtWidgets.QDialog):
         layout.setContentsMargins(20, 20, 20, 20)
         layout.setSpacing(16)
 
-        # Language
-        lang_label = QtWidgets.QLabel(t("settings_language"))
-        lang_label.setStyleSheet(theme.LABEL_DIM_BOLD)
-        layout.addWidget(lang_label)
+        # Language — uses live i18n switching since this IS the live config.
+        layout.addWidget(LanguageSection(
+            self._config, self._config.save, apply_live=True,
+        ))
 
-        self._lang_combo = QtWidgets.QComboBox()
-        self._lang_combo.setStyleSheet(theme.combobox_style())
-        self._lang_combo.addItem(t("settings_language_auto"), "auto")
-        self._lang_combo.addItem("English", "en")
-        self._lang_combo.addItem("日本語", "ja")
+        # Install directory (Carton-specific, not part of a profile)
+        self._build_install_dir_block(layout)
 
-        current = self._config.language
-        for i in range(self._lang_combo.count()):
-            if self._lang_combo.itemData(i) == current:
-                self._lang_combo.setCurrentIndex(i)
-                break
+        # Auto-update + manual check (live mode: pass the self_updater)
+        layout.addWidget(AutoUpdateSection(
+            self._config, self._config.save, self_updater=self._self_updater,
+        ))
 
-        self._lang_combo.currentIndexChanged.connect(self._on_language_changed)
-        layout.addWidget(self._lang_combo)
+        # HTTP proxy — push to env on change
+        layout.addWidget(ProxySection(
+            self._config, self._config.save, apply_to_env=True,
+        ))
 
-        # Install directory
+        # Profile Builder entry point
+        builder_btn = QtWidgets.QPushButton(t("settings_open_profile_builder"))
+        builder_btn.setStyleSheet(theme.btn_ghost_text())
+        builder_btn.clicked.connect(self._open_profile_builder)
+        layout.addWidget(builder_btn, alignment=Qt.AlignLeft)
+
+        layout.addStretch()
+        return page
+
+    def _build_install_dir_block(self, layout):
+        """Carton-only install_dir editor (not shared with the profile)."""
         dir_label = QtWidgets.QLabel(t("settings_install_dir"))
         dir_label.setStyleSheet(theme.LABEL_DIM_BOLD)
         layout.addWidget(dir_label)
 
-        dir_row = QtWidgets.QHBoxLayout()
-        dir_row.setSpacing(8)
+        row = QtWidgets.QHBoxLayout()
+        row.setSpacing(8)
         self._install_dir_edit = QtWidgets.QLineEdit(self._config.install_dir)
         self._install_dir_edit.setReadOnly(True)
         self._install_dir_edit.setStyleSheet(
@@ -127,144 +120,24 @@ class SettingsDialog(QtWidgets.QDialog):
             "  border: 1px solid {border}; border-radius: 4px; padding: 4px 6px; }}".format(
                 bg=theme.BG_SECONDARY, text=theme.TEXT_SECONDARY, border=theme.BORDER)
         )
-        dir_row.addWidget(self._install_dir_edit, stretch=1)
+        row.addWidget(self._install_dir_edit, stretch=1)
 
         change_btn = QtWidgets.QPushButton(t("settings_install_dir_change"))
         change_btn.setStyleSheet(theme.btn_ghost_text())
         change_btn.clicked.connect(self._on_change_install_dir)
-        dir_row.addWidget(change_btn)
-        layout.addLayout(dir_row)
+        row.addWidget(change_btn)
+        layout.addLayout(row)
 
         hint = QtWidgets.QLabel(t("settings_install_dir_hint"))
         hint.setWordWrap(True)
-        hint.setStyleSheet(
-            "color: {}; font-size: 11px;".format(theme.TEXT_MUTED)
-        )
+        hint.setStyleSheet("color: {}; font-size: 11px;".format(theme.TEXT_MUTED))
         layout.addWidget(hint)
-
-        # Auto-update check
-        self._auto_update_checkbox = QtWidgets.QCheckBox(
-            t("settings_auto_update_check")
-        )
-        self._auto_update_checkbox.setChecked(bool(self._config.auto_check_updates))
-        self._auto_update_checkbox.toggled.connect(self._on_auto_update_toggled)
-        layout.addWidget(self._auto_update_checkbox)
-
-        auto_hint = QtWidgets.QLabel(t("settings_auto_update_hint"))
-        auto_hint.setWordWrap(True)
-        auto_hint.setStyleSheet(
-            "color: {}; font-size: 11px;".format(theme.TEXT_MUTED)
-        )
-        layout.addWidget(auto_hint)
-
-        self._check_update_btn = QtWidgets.QPushButton(t("settings_check_update_now"))
-        self._check_update_btn.setStyleSheet(theme.btn_ghost_text())
-        self._check_update_btn.clicked.connect(self._on_check_update_now)
-        # Without a self_updater reference we can't perform the check, so
-        # hide the button rather than show a dead control.
-        self._check_update_btn.setVisible(self._self_updater is not None)
-        layout.addWidget(self._check_update_btn, alignment=Qt.AlignLeft)
-
-        # HTTP proxy
-        proxy_label = QtWidgets.QLabel(t("settings_proxy"))
-        proxy_label.setStyleSheet(theme.LABEL_DIM_BOLD)
-        layout.addWidget(proxy_label)
-
-        self._proxy_edit = QtWidgets.QLineEdit(self._config.proxy or "")
-        self._proxy_edit.setPlaceholderText(t("settings_proxy_placeholder"))
-        self._proxy_edit.setStyleSheet(
-            "QLineEdit {{ background: {bg}; color: {text};"
-            "  border: 1px solid {border}; border-radius: 4px; padding: 4px 6px; }}".format(
-                bg=theme.BG_SECONDARY, text=theme.TEXT_PRIMARY, border=theme.BORDER)
-        )
-        self._proxy_edit.editingFinished.connect(self._on_proxy_changed)
-        layout.addWidget(self._proxy_edit)
-
-        proxy_hint = QtWidgets.QLabel(t("settings_proxy_hint"))
-        proxy_hint.setWordWrap(True)
-        proxy_hint.setStyleSheet(
-            "color: {}; font-size: 11px;".format(theme.TEXT_MUTED)
-        )
-        layout.addWidget(proxy_hint)
-
-        layout.addStretch()
-        return page
-
-    def _on_proxy_changed(self):
-        """Persist the proxy URL and apply it to the current process env."""
-        new_value = self._proxy_edit.text().strip()
-        if new_value == (self._config.proxy or ""):
-            return
-        self._config.proxy = new_value
-        self._config.save()
-        # If the user just cleared the field, we also want urllib to stop
-        # using the old value in this session. Drop the env vars we set.
-        if not new_value:
-            import os
-            for key in ("HTTP_PROXY", "HTTPS_PROXY", "http_proxy", "https_proxy"):
-                os.environ.pop(key, None)
-        else:
-            self._config.apply_proxy_to_env()
-
-    def _on_auto_update_toggled(self, checked):
-        self._config.auto_check_updates = bool(checked)
-        self._config.save()
-
-    def _on_check_update_now(self):
-        """Manual update probe — works even when auto-check is disabled.
-
-        Runs the GitHub probe on a background thread so the settings
-        dialog stays responsive. The button is disabled for the duration
-        and re-enabled when the worker finishes.
-        """
-        if not self._self_updater:
-            return
-        # Guard against double-clicks while a probe is in flight.
-        if getattr(self, "_update_worker", None) and self._update_worker.isRunning():
-            return
-
-        self._check_update_btn.setEnabled(False)
-        self._original_check_label = self._check_update_btn.text()
-        self._check_update_btn.setText(t("checking"))
-
-        from carton.ui.main_window import _SelfUpdateCheckWorker
-        self._update_worker = _SelfUpdateCheckWorker(self._self_updater, parent=self)
-        self._update_worker.finished_signal.connect(self._on_check_update_done)
-        self._update_worker.start()
-
-    def _on_check_update_done(self, result, error):
-        """UI-thread slot for the manual update probe."""
-        self._check_update_btn.setEnabled(True)
-        if getattr(self, "_original_check_label", None):
-            self._check_update_btn.setText(self._original_check_label)
-
-        if error:
-            QtWidgets.QMessageBox.warning(
-                self, t("settings_auto_update_check"),
-                t("settings_check_update_failed", error),
-            )
-            return
-
-        if result:
-            version = result[0]
-            QtWidgets.QMessageBox.information(
-                self, t("settings_auto_update_check"),
-                t("settings_check_update_available", version),
-            )
-        else:
-            import carton
-            QtWidgets.QMessageBox.information(
-                self, t("settings_auto_update_check"),
-                t("settings_check_update_uptodate", carton.__version__),
-            )
 
     def _on_change_install_dir(self):
         """Prompt for a new install_dir and migrate Carton's data there."""
         from carton.core.config import InstallDirChangeError
 
         current = self._config.install_dir
-        # Start the picker at the parent of the current install dir so the
-        # user lands somewhere sensible (their Documents folder, usually).
         start_at = os.path.dirname(current) if os.path.isdir(current) else ""
         new_dir = QtWidgets.QFileDialog.getExistingDirectory(
             self, t("settings_install_dir_select"), start_at,
@@ -298,14 +171,11 @@ class SettingsDialog(QtWidgets.QDialog):
             t("settings_install_dir_restart_required", self._config.install_dir),
         )
 
-    def _on_language_changed(self, index):
-        lang = self._lang_combo.itemData(index)
-        self._config.language = lang
-        self._config.save()
-        if lang == "auto":
-            from carton.ui.i18n import detect_language
-            lang = detect_language()
-        set_language(lang)
+    def _open_profile_builder(self):
+        """Launch the Profile Builder dialog with the live config as a seed."""
+        from carton.ui.profile_builder_dialog import ProfileBuilderDialog
+        dlg = ProfileBuilderDialog(self._config, parent=self)
+        dlg.exec_()
 
     # ---- Registries page ----
 
@@ -314,56 +184,7 @@ class SettingsDialog(QtWidgets.QDialog):
         layout = QtWidgets.QVBoxLayout(page)
         layout.setContentsMargins(20, 20, 20, 20)
         layout.setSpacing(12)
-
-        reg_label = QtWidgets.QLabel(t("settings_registries"))
-        reg_label.setStyleSheet(theme.LABEL_DIM_BOLD)
-        layout.addWidget(reg_label)
-
-        self._reg_list = QtWidgets.QListWidget()
-        for entry in self._config.registries:
-            self._reg_list.addItem(str(entry))
-        self._reg_list.itemDoubleClicked.connect(self._edit_registry)
-        layout.addWidget(self._reg_list)
-
-        reg_btn_layout = QtWidgets.QHBoxLayout()
-
-        add_btn = QtWidgets.QPushButton(t("add"))
-        add_btn.setStyleSheet(theme.btn_success())
-        add_btn.clicked.connect(self._add_registry)
-        reg_btn_layout.addWidget(add_btn)
-
-        edit_btn = QtWidgets.QPushButton(t("edit"))
-        edit_btn.setStyleSheet(theme.btn_ghost_text())
-        edit_btn.clicked.connect(self._edit_registry)
-        reg_btn_layout.addWidget(edit_btn)
-
-        remove_btn = QtWidgets.QPushButton(t("remove"))
-        remove_btn.setStyleSheet(theme.btn_danger())
-        remove_btn.clicked.connect(self._remove_registry)
-        reg_btn_layout.addWidget(remove_btn)
-
-        reg_btn_layout.addStretch()
-
-        _arrow_style = (
-            "QPushButton {{ background: {bg}; color: {dim}; border: 1px solid {border};"
-            "  border-radius: 4px; }}"
-            "QPushButton:hover {{ color: {text}; }}"
-        ).format(bg=theme.BG_SECONDARY, dim=theme.TEXT_DIM,
-                 border=theme.BORDER, text=theme.TEXT_PRIMARY)
-
-        up_btn = QtWidgets.QPushButton("▲")
-        up_btn.setFixedWidth(32)
-        up_btn.setStyleSheet(_arrow_style)
-        up_btn.clicked.connect(self._move_up)
-        reg_btn_layout.addWidget(up_btn)
-
-        down_btn = QtWidgets.QPushButton("▼")
-        down_btn.setFixedWidth(32)
-        down_btn.setStyleSheet(_arrow_style)
-        down_btn.clicked.connect(self._move_down)
-        reg_btn_layout.addWidget(down_btn)
-
-        layout.addLayout(reg_btn_layout)
+        layout.addWidget(RegistriesSection(self._config, self._config.save))
         return page
 
     # ---- Advanced page ----
@@ -382,235 +203,6 @@ class SettingsDialog(QtWidgets.QDialog):
         layout.addWidget(uninstall_btn)
 
         return page
-
-    # ---- Registry operations ----
-
-    def _add_registry(self):
-        """Add a registry — local file, GitHub repo, or remote URL."""
-        choices = [t("settings_add_local"), t("settings_add_github"), t("settings_add_url")]
-        chosen, ok = QtWidgets.QInputDialog.getItem(
-            self, t("add"), t("settings_add_method"), choices, 0, False,
-        )
-        if not ok:
-            return
-
-        if chosen == choices[1]:
-            self._add_github_registry()
-        elif chosen == choices[2]:
-            self._add_remote_registry()
-        else:
-            self._add_local_registry()
-
-    def _add_local_registry(self):
-        """Add a local registry via file dialog."""
-        path = QtWidgets.QFileDialog.getOpenFileName(
-            self, t("settings_select_registry"), "",
-            "Registry (registry.json);;JSON (*.json)",
-        )[0]
-        if not path:
-            return
-
-        base = os.path.basename(os.path.dirname(path))
-        self._finish_add_registry(path, default_name=base)
-
-    def _add_github_registry(self):
-        """Add a GitHub-hosted registry. User enters owner/repo."""
-        repo, ok = _wide_input(
-            self, "GitHub",
-            t("settings_github_placeholder"),
-        )
-        if not ok or not repo.strip():
-            return
-        repo = repo.strip().strip("/")
-
-        # Validate format
-        if "/" not in repo or repo.count("/") != 1:
-            QtWidgets.QMessageBox.warning(self, "Carton", t("settings_github_invalid"))
-            return
-
-        # Resolve default branch and registry.json path via GitHub API
-        try:
-            api_url = "https://api.github.com/repos/{}".format(repo)
-            req = Request(api_url)
-            req.add_header("Accept", "application/vnd.github.v3+json")
-            resp = urlopen(req, timeout=10)
-            data = json.loads(resp.read().decode("utf-8"))
-            branch = data.get("default_branch", "main")
-        except Exception as e:
-            QtWidgets.QMessageBox.warning(
-                self, "Carton",
-                t("settings_github_error", str(e)),
-            )
-            return
-
-        # Try common registry.json locations
-        base = "https://raw.githubusercontent.com/{}/{}".format(repo, branch)
-        candidates = [
-            base + "/registry/registry.json",
-            base + "/registry.json",
-        ]
-
-        resolved_url = None
-        for url in candidates:
-            try:
-                req = Request(url)
-                resp = urlopen(req, timeout=10)
-                if resp.getcode() == 200:
-                    resolved_url = url
-                    break
-            except Exception:
-                continue
-
-        if not resolved_url:
-            QtWidgets.QMessageBox.warning(
-                self, "Carton",
-                t("settings_github_no_registry", repo),
-            )
-            return
-
-        # Use repo name as default registry name
-        default_name = repo.split("/")[1]
-        self._finish_add_registry(resolved_url, default_name=default_name)
-
-    def _add_remote_registry(self):
-        """Add a remote registry via URL input."""
-        url, ok = _wide_input(
-            self, t("settings_add_url"),
-            t("settings_url_placeholder"),
-            width=560,
-        )
-        if not ok or not url.strip():
-            return
-        url = url.strip()
-        if not url.startswith(("http://", "https://")):
-            QtWidgets.QMessageBox.warning(self, "Carton", t("settings_invalid_url"))
-            return
-
-        # Guess name from URL path
-        parts = url.rstrip("/").rsplit("/", 2)
-        default_name = parts[-2] if len(parts) >= 2 else "remote"
-        if default_name in ("raw", "main", "master"):
-            default_name = parts[-3] if len(parts) >= 3 else "remote"
-
-        self._finish_add_registry(url, default_name=default_name)
-
-    def _finish_add_registry(self, path, default_name=""):
-        """Common logic for adding a registry after path/URL is determined."""
-        name, ok = _wide_input(
-            self, "Registry Name",
-            t("settings_registry_name"),
-            text=default_name,
-        )
-        if not ok or not name:
-            return
-
-        for r in self._config.registries:
-            if r.name == name:
-                QtWidgets.QMessageBox.warning(
-                    self, "Carton",
-                    t("settings_already_exists", name),
-                )
-                return
-
-        self._config.add_registry(name, path)
-        self._config.save()
-        self._reg_list.addItem(str(self._config.registries[-1]))
-
-    def _edit_registry(self, item=None):
-        """Edit the selected registry's name and path."""
-        row = self._reg_list.currentRow()
-        if row < 0:
-            return
-        entry = self._config.registries[row]
-
-        dialog = QtWidgets.QDialog(self)
-        dialog.setWindowTitle(t("settings_edit_registry"))
-        dialog.setFixedWidth(500)
-        dialog.setStyleSheet(theme.dialog_style())
-        layout = QtWidgets.QVBoxLayout(dialog)
-        layout.setContentsMargins(20, 20, 20, 20)
-        layout.setSpacing(12)
-
-        name_label = QtWidgets.QLabel(t("settings_registry_name"))
-        name_label.setStyleSheet(theme.LABEL_DIM)
-        layout.addWidget(name_label)
-        name_input = QtWidgets.QLineEdit(entry.name)
-        layout.addWidget(name_input)
-
-        path_label = QtWidgets.QLabel(t("label_path"))
-        path_label.setStyleSheet(theme.LABEL_DIM)
-        layout.addWidget(path_label)
-        path_input = QtWidgets.QLineEdit(entry.path)
-        layout.addWidget(path_input)
-
-        btn_layout = QtWidgets.QHBoxLayout()
-        btn_layout.addStretch()
-        cancel_btn = QtWidgets.QPushButton(t("cancel"))
-        cancel_btn.setStyleSheet(theme.btn_ghost())
-        cancel_btn.clicked.connect(dialog.reject)
-        btn_layout.addWidget(cancel_btn)
-
-        save_btn = QtWidgets.QPushButton(t("save"))
-        save_btn.setStyleSheet(theme.btn_primary())
-        save_btn.clicked.connect(dialog.accept)
-        save_btn.setDefault(True)
-        btn_layout.addWidget(save_btn)
-        layout.addLayout(btn_layout)
-
-        if dialog.exec_() == QtWidgets.QDialog.Accepted:
-            new_name = name_input.text().strip()
-            new_path = path_input.text().strip()
-            if not new_name or not new_path:
-                return
-
-            from carton.core.config import RegistryEntry
-            self._config.registries[row] = RegistryEntry(new_name, new_path)
-            self._config.save()
-            self._refresh_list()
-            self._reg_list.setCurrentRow(row)
-
-    def _remove_registry(self):
-        """Remove the selected registry."""
-        row = self._reg_list.currentRow()
-        if row < 0:
-            return
-        entry = self._config.registries[row]
-        reply = QtWidgets.QMessageBox.question(
-            self, "Remove Registry",
-            t("settings_confirm_remove", entry.name),
-            QtWidgets.QMessageBox.Yes | QtWidgets.QMessageBox.No,
-        )
-        if reply == QtWidgets.QMessageBox.Yes:
-            self._config.remove_registry(entry.name)
-            self._config.save()
-            self._reg_list.takeItem(row)
-
-    def _move_up(self):
-        """Move the selected registry up."""
-        row = self._reg_list.currentRow()
-        if row <= 0:
-            return
-        self._config.registries[row], self._config.registries[row - 1] = \
-            self._config.registries[row - 1], self._config.registries[row]
-        self._config.save()
-        self._refresh_list()
-        self._reg_list.setCurrentRow(row - 1)
-
-    def _move_down(self):
-        """Move the selected registry down."""
-        row = self._reg_list.currentRow()
-        if row < 0 or row >= len(self._config.registries) - 1:
-            return
-        self._config.registries[row], self._config.registries[row + 1] = \
-            self._config.registries[row + 1], self._config.registries[row]
-        self._config.save()
-        self._refresh_list()
-        self._reg_list.setCurrentRow(row + 1)
-
-    def _refresh_list(self):
-        self._reg_list.clear()
-        for entry in self._config.registries:
-            self._reg_list.addItem(str(entry))
 
     # ---- Uninstall ----
 
