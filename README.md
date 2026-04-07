@@ -69,14 +69,22 @@ flowchart TB
 Settings (⚙) > Add > select registry.json
 ```
 
-Supports three sources:
+Supports four sources:
 - **Local file** — path to `registry.json`
 - **GitHub repo** — `owner/repo` format
 - **Remote URL** — direct URL to `registry.json`
+- **Create new local registry** — pick an empty folder, Carton scaffolds `registry.json` and `packages/` for you
 
 ### Install a Tool
 
 Open Carton, browse packages, click **Install**.
+
+Installed packages are recorded with their SHA256 from the registry, and the
+card shows a small ✔ when the hash was verified at download time. Browse the
+**Version History** from the package detail panel to see release notes for
+each published version, or roll back to an older one — rolled-back packages
+are **pinned** and skipped by future Update prompts so your manual choice
+isn't undone on the next refresh.
 
 ### Register & Share Your Script
 
@@ -85,11 +93,48 @@ My Tools > + Add > select file or folder
                  > set name, icon, description
                  > Register
 
-Card > Publish > select target registry
+Card > Publish > select target registry, write release notes, ship it
 ```
 
 See the [Registering tools to My Tools](#registering-tools-to-my-tools) section
 below for per-type details.
+
+Uninstalling a tool you previously published from the registry view does **not**
+delete its My Tools registration — Carton just demotes the entry back to a
+local-only registration, so your edit/launch state is independent from whether
+the package is currently installed from the registry.
+
+## Profiles
+
+A **profile** is a saved set of runtime settings — registries, proxy, language,
+auto-update. Switch profiles to flip your whole Carton between, say, "studio
+work" and "personal" without re-adding registries by hand.
+
+Profiles live as JSON files under `~/Documents/maya/carton/profiles/` (Windows)
+or `~/maya/carton/profiles/` (macOS / Linux). The built-in `default` profile
+always exists; create more from the **Profile Manager** (gear icon next to the
+profile dropdown in the sidebar).
+
+From the Profile Manager you can:
+
+- **New** — create a profile seeded from your current Carton settings
+- **Edit** — change registries / proxy / language / name
+- **Reorder** — drag profiles around in the dropdown order
+- **Build Installer…** — generate a custom drag-and-drop installer that
+  pre-seeds the profile on first install. The recipient gets a Carton
+  pre-configured with that profile selected.
+
+Switching profiles is instant (no Maya restart). Installed packages are
+shared across all profiles — the profile only controls which registries you
+see and what credentials Carton uses to fetch them.
+
+## Strict Integrity Verification
+
+Settings has a **Strict integrity verification** checkbox. When enabled,
+Carton refuses to install any package whose registry entry doesn't carry a
+SHA256, and treats hash mismatches as fatal. Recommended for shared or remote
+registries where you want to be sure nobody has tampered with the bytes
+between publish and install.
 
 ## Registry Structure
 
