@@ -30,17 +30,27 @@ class _ProfileEditDialog(QtWidgets.QDialog):
         super().__init__(parent)
         self._name = name
         self._profile = profile
+        self._new_name = name  # set on successful rename
+        self._is_default = (name == profile_store.DEFAULT_PROFILE_NAME)
         self.setWindowTitle(t("profile_edit_title", name))
-        self.setFixedSize(560, 640)
+        self.setFixedSize(560, 660)
         self.setStyleSheet(theme.dialog_style() + theme.listwidget_style())
 
         root = QtWidgets.QVBoxLayout(self)
         root.setContentsMargins(20, 20, 20, 16)
         root.setSpacing(14)
 
-        title = QtWidgets.QLabel(name)
-        title.setStyleSheet("font-size: 14px; font-weight: 600;")
-        root.addWidget(title)
+        # Name field — disabled for the built-in default profile
+        name_label = QtWidgets.QLabel(t("profile_name_prompt"))
+        name_label.setStyleSheet(theme.LABEL_DIM_BOLD)
+        root.addWidget(name_label)
+        self._name_input = QtWidgets.QLineEdit(name)
+        if self._is_default:
+            self._name_input.setEnabled(False)
+            self._name_input.setToolTip(
+                t("profile_delete_default", profile_store.DEFAULT_PROFILE_NAME)
+            )
+        root.addWidget(self._name_input)
 
         noop = lambda: None
         root.addWidget(LanguageSection(self._profile, noop, apply_live=False))
@@ -60,12 +70,36 @@ class _ProfileEditDialog(QtWidgets.QDialog):
         btn_row.addWidget(cancel_btn)
         root.addLayout(btn_row)
 
+    def new_name(self):
+        return self._new_name
+
     def _on_save(self):
+        new_name = self._name_input.text().strip()
+        if new_name != self._name:
+            if not profile_store.is_valid_name(new_name):
+                QtWidgets.QMessageBox.warning(
+                    self, "Carton", t("profile_name_invalid"),
+                )
+                return
+            if new_name == profile_store.DEFAULT_PROFILE_NAME:
+                QtWidgets.QMessageBox.warning(
+                    self, "Carton",
+                    t("profile_name_reserved", profile_store.DEFAULT_PROFILE_NAME),
+                )
+                return
+            if profile_store.profile_exists(new_name):
+                QtWidgets.QMessageBox.warning(
+                    self, "Carton", t("profile_name_exists", new_name),
+                )
+                return
         try:
-            profile_store.save_profile(self._name, self._profile)
+            profile_store.save_profile(new_name, self._profile)
+            if new_name != self._name:
+                profile_store.delete_profile(self._name)
         except (OSError, InvalidProfileError) as e:
             QtWidgets.QMessageBox.warning(self, "Carton", str(e))
             return
+        self._new_name = new_name
         self.accept()
 
 
@@ -206,6 +240,21 @@ class ProfileManagerDialog(QtWidgets.QDialog):
             return
         dlg = _ProfileEditDialog(name, profile, parent=self)
         if dlg.exec_() == QtWidgets.QDialog.Accepted:
+            new_name = dlg.new_name()
+            if new_name != name:
+                # Mirror the rename into config: ordering, active flag.
+                order = list(self._config.profile_order or [])
+                if name in order:
+                    order[order.index(name)] = new_name
+                else:
+                    order.append(new_name)
+                self._config.profile_order = order
+                if self._config.active_profile == name:
+                    self._config.active_profile = new_name
+                try:
+                    self._config.save()
+                except Exception:
+                    pass
             self._refresh()
 
     def _on_move_up(self):
