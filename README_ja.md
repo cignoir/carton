@@ -336,10 +336,7 @@ tools/
 ```bash
 python -m carton list path/to/registry.json
 python -m carton unpublish --registry path/to/registry.json --id mystudio/rigger
-python -m carton migrate-registry --registry path/to/registry.json --namespace mystudio [--dry-run]
 ```
-
-`migrate-registry` は、旧来の UUID キー方式のレジストリを `namespace/name` 方式へアップグレードするコマンドです。具体的には、`registry.json` のキーを書き換え、保存済みの zip をすべて展開して内部の `package.json` を書き換えてから再 zip し、`packages/<uuid>/...` のディレクトリ構造を `packages/<ns>/<name>/...` に再配置し、最後に `icons.zip` を再構築します。
 
 ## 開発
 

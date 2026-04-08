@@ -82,34 +82,14 @@ def main():
     unpub.add_argument("--force", "-f", action="store_true",
                        help="Skip confirmation prompt")
 
-    # migrate-registry
-    mig = sub.add_parser("migrate-registry",
-                         help="Migrate a UUID-keyed registry to namespace/name keys")
-    mig.add_argument("--registry", required=True, help="Path to registry.json")
-    mig.add_argument("--namespace", required=True,
-                     help="Namespace to assign to all packages in this registry")
-    mig.add_argument("--dry-run", action="store_true",
-                     help="Show what would change without writing")
-
     args = parser.parse_args()
 
     if args.command == "list":
         _list_packages(args)
     elif args.command == "unpublish":
         _unpublish(args)
-    elif args.command == "migrate-registry":
-        _migrate_registry(args)
     else:
         parser.print_help()
-
-
-def _migrate_registry(args):
-    from carton.core.migration import migrate_registry, MigrationError
-    try:
-        migrate_registry(args.registry, args.namespace, dry_run=args.dry_run)
-    except MigrationError as e:
-        print("Error: {}".format(e))
-        sys.exit(1)
 
 
 if __name__ == "__main__":

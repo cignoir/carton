@@ -401,13 +401,7 @@ automatically the first time you publish.
 ```bash
 python -m carton list path/to/registry.json
 python -m carton unpublish --registry path/to/registry.json --id mystudio/rigger
-python -m carton migrate-registry --registry path/to/registry.json --namespace mystudio [--dry-run]
 ```
-
-`migrate-registry` upgrades a legacy UUID-keyed registry to the namespace/name
-model: rewrites `registry.json` keys, repacks every stored zip's inner
-`package.json`, restructures `packages/<uuid>/...` into `packages/<ns>/<name>/...`,
-and rebuilds `icons.zip`.
 
 ## Development
 
