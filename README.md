@@ -125,8 +125,8 @@ From the Profile Manager you can:
   pre-configured with that profile selected.
 
 Switching profiles is instant (no Maya restart). Installed packages are
-shared across all profiles — the profile only controls which registries you
-see and what credentials Carton uses to fetch them.
+shared across all profiles — a profile only swaps Carton-wide settings like
+the registry list, proxy, and language.
 
 ## Strict Integrity Verification
 
