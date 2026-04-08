@@ -243,7 +243,7 @@ SIWeightEditor/
 **追加方法**: フォルダを選択します。Carton はモジュール構造を検知し、次の処理を行います。
 
 - `Contents/scripts` を `sys.path` と `MAYA_SCRIPT_PATH` に追加します。
-- `Contents/plug-ins` を 1 階層分だけ走査し（`plug-ins/<plat>/<ver>/` のような構造を拾うため）、各プラグインディレクトリを `MAYA_PLUG_IN_PATH` に追加します。
+- `Contents/plug-ins` を最大 3 階層まで走査し（`plug-ins/<plat>/<ver>/` のようなネスト構造を拾うため）、プラグインファイルを含む各ディレクトリを `MAYA_PLUG_IN_PATH` に追加します。
 - `Contents/icons` を `XBMLANGPATH` に、`Contents/presets` を `MAYA_PRESET_PATH` に追加します。
 - `userSetup.py` を `maya.utils.executeDeferred` 経由で実行し、モジュール自身のメニュー／シェルフ登録処理を走らせます。
 

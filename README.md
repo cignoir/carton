@@ -275,8 +275,9 @@ SIWeightEditor/
 **Add**: pick the folder. Carton detects the module layout and:
 
 - Adds `Contents/scripts` to `sys.path` and `MAYA_SCRIPT_PATH`
-- Walks `Contents/plug-ins` one level deep (so `plug-ins/<plat>/<ver>/` is
-  picked up) and adds each plug-in directory to `MAYA_PLUG_IN_PATH`
+- Walks `Contents/plug-ins` up to 3 levels deep (so nested layouts like
+  `plug-ins/<plat>/<ver>/` are picked up) and adds every directory containing
+  plug-in files to `MAYA_PLUG_IN_PATH`
 - Adds `Contents/icons` to `XBMLANGPATH`, `Contents/presets` to
   `MAYA_PRESET_PATH`
 - Executes `userSetup.py` deferred via `maya.utils.executeDeferred` so the
