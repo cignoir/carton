@@ -1,15 +1,21 @@
 """Bump the version in package.json and carton/__init__.py.
 
 Usage:
-    python scripts/bump_version.py patch   # 0.1.8 -> 0.1.9
-    python scripts/bump_version.py minor   # 0.1.8 -> 0.2.0
-    python scripts/bump_version.py major   # 0.1.8 -> 1.0.0
-    python scripts/bump_version.py 1.2.3   # set explicit version
+    python scripts/bump_version.py patch              # 0.1.8 -> 0.1.9
+    python scripts/bump_version.py minor              # 0.1.8 -> 0.2.0
+    python scripts/bump_version.py major              # 0.1.8 -> 1.0.0
+    python scripts/bump_version.py 1.2.3              # set explicit version
+
+    # Stage and commit the bump with a Conventional Commits message
+    # (chore(release): bump version to X.Y.Z), and optionally tag it.
+    python scripts/bump_version.py patch --commit
+    python scripts/bump_version.py patch --commit --tag
 """
 
 import json
 import os
 import re
+import subprocess
 import sys
 
 _ROOT = os.path.dirname(os.path.dirname(__file__))
@@ -68,8 +74,33 @@ def bump(kind):
     return new_ver
 
 
+def _git(*args):
+    subprocess.run(["git", *args], cwd=_ROOT, check=True)
+
+
+def commit_bump(new_ver, tag=False):
+    """Stage the bumped files and create a Conventional Commits release commit."""
+    _git("add", _PKG_PATH, _INIT_PATH)
+    msg = "chore(release): bump version to {}".format(new_ver)
+    _git("commit", "-m", msg)
+    if tag:
+        _git("tag", "-a", "v{}".format(new_ver), "-m", "v{}".format(new_ver))
+    print("committed: {}".format(msg))
+
+
 if __name__ == "__main__":
-    if len(sys.argv) < 2:
-        print("Usage: bump_version.py <patch|minor|major|X.Y.Z>")
+    args = sys.argv[1:]
+    if not args:
+        print("Usage: bump_version.py <patch|minor|major|X.Y.Z> [--commit] [--tag]")
         sys.exit(1)
-    bump(sys.argv[1])
+
+    do_commit = "--commit" in args
+    do_tag = "--tag" in args
+    positional = [a for a in args if not a.startswith("--")]
+    if not positional:
+        print("Usage: bump_version.py <patch|minor|major|X.Y.Z> [--commit] [--tag]")
+        sys.exit(1)
+
+    new_ver = bump(positional[0])
+    if do_commit or do_tag:
+        commit_bump(new_ver, tag=do_tag)
