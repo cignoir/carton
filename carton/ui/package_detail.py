@@ -42,8 +42,31 @@ class PackageDetailPanel(QtWidgets.QWidget):
         self._homepage = ""
         self._setup_ui()
 
+    # ── Style constants (kept aligned with theme.py vocabulary) ──
+    _LABEL_STYLE = (
+        "color: {muted}; font-size: 11px; font-weight: 600;"
+        " background: transparent;"
+    ).format(muted=theme.TEXT_MUTED)
+    _VALUE_STYLE = (
+        "color: {dim}; font-size: 12px; background: transparent;"
+    ).format(dim=theme.TEXT_SECONDARY)
+
     def _setup_ui(self):
-        layout = QtWidgets.QVBoxLayout(self)
+        # Outer layout: just hosts a scroll area so the panel can scroll
+        # when its content exceeds the available height.
+        outer = QtWidgets.QVBoxLayout(self)
+        outer.setContentsMargins(0, 0, 0, 0)
+        outer.setSpacing(0)
+
+        scroll = QtWidgets.QScrollArea(self)
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QtWidgets.QFrame.NoFrame)
+        outer.addWidget(scroll)
+
+        inner = QtWidgets.QWidget()
+        scroll.setWidget(inner)
+
+        layout = QtWidgets.QVBoxLayout(inner)
         layout.setContentsMargins(20, 16, 20, 16)
         layout.setSpacing(0)
 
@@ -71,11 +94,11 @@ class PackageDetailPanel(QtWidgets.QWidget):
         self._icon_label.setStyleSheet(
             "QLabel {{ background: {bg}; border-radius: 12px; }}".format(bg=theme.BG_SECONDARY)
         )
-        hero.addWidget(self._icon_label)
+        hero.addWidget(self._icon_label, 0, Qt.AlignTop)
 
         # Title block
         title_block = QtWidgets.QVBoxLayout()
-        title_block.setSpacing(4)
+        title_block.setSpacing(6)
 
         # Name row
         name_row = QtWidgets.QHBoxLayout()
@@ -88,12 +111,15 @@ class PackageDetailPanel(QtWidgets.QWidget):
         name_row.addWidget(self._name_label)
 
         self._badge_container = QtWidgets.QHBoxLayout()
+        self._badge_container.setSpacing(0)
+        self._badge_container.setContentsMargins(0, 0, 0, 0)
         name_row.addLayout(self._badge_container)
         name_row.addStretch()
         title_block.addLayout(name_row)
 
-        # Author + version subtitle
+        # Author + version subtitle (rich text so we can highlight "update available")
         self._subtitle_label = QtWidgets.QLabel()
+        self._subtitle_label.setTextFormat(Qt.RichText)
         self._subtitle_label.setStyleSheet(
             "font-size: 12px; color: {}; background: transparent;".format(theme.TEXT_DIM)
         )
@@ -101,9 +127,10 @@ class PackageDetailPanel(QtWidgets.QWidget):
 
         hero.addLayout(title_block, stretch=1)
 
-        # Action buttons (vertical stack)
+        # Action buttons: primary on top, secondary row below
         action_col = QtWidgets.QVBoxLayout()
-        action_col.setSpacing(6)
+        action_col.setSpacing(8)
+        action_col.setAlignment(Qt.AlignTop)
 
         self._action_btn = QtWidgets.QPushButton()
         self._action_btn.setFixedWidth(120)
@@ -114,7 +141,7 @@ class PackageDetailPanel(QtWidgets.QWidget):
         self._uninstall_btn.setFixedWidth(120)
         self._uninstall_btn.setStyleSheet(
             "QPushButton {{ color: {red}; background: transparent; border: 1px solid {border};"
-            "  border-radius: 6px; padding: 6px; font-size: 11px; }}"
+            "  border-radius: 6px; padding: 6px 4px; font-size: 11px; }}"
             "QPushButton:hover {{ background: {red_bg}; border-color: {red}; }}".format(
                 red=theme.ACCENT_RED, border=theme.BORDER, red_bg=theme.ACCENT_RED_BG)
         )
@@ -128,7 +155,7 @@ class PackageDetailPanel(QtWidgets.QWidget):
         self._history_btn.setStyleSheet(
             "QPushButton {{ color: {dim}; background: transparent;"
             "  border: 1px solid {border}; border-radius: 6px;"
-            "  padding: 6px; font-size: 11px; }}"
+            "  padding: 6px 4px; font-size: 11px; }}"
             "QPushButton:hover {{ color: {text}; border-color: {border_h}; }}".format(
                 dim=theme.TEXT_SECONDARY, text=theme.TEXT_PRIMARY,
                 border=theme.BORDER, border_h=theme.BORDER_HOVER)
@@ -169,59 +196,141 @@ class PackageDetailPanel(QtWidgets.QWidget):
         sep.setStyleSheet("background: {};".format(theme.BORDER))
         layout.addWidget(sep)
 
-        layout.addSpacing(12)
+        layout.addSpacing(16)
 
-        # ── Info grid ──
+        # ── Info grid: 2 columns of stacked label/value blocks ──
         info_grid = QtWidgets.QGridLayout()
-        info_grid.setHorizontalSpacing(24)
-        info_grid.setVerticalSpacing(8)
+        info_grid.setHorizontalSpacing(32)
+        info_grid.setVerticalSpacing(14)
+        info_grid.setContentsMargins(0, 0, 0, 0)
 
-        label_style = "color: {muted}; font-size: 11px; font-weight: 600; background: transparent;".format(
-            muted=theme.TEXT_MUTED)
-        value_style = "color: {dim}; font-size: 12px; background: transparent;".format(
-            dim=theme.TEXT_SECONDARY)
+        self._type_val = self._make_value_label()
+        info_grid.addLayout(
+            self._make_field(t("label_type"), self._type_val), 0, 0)
 
-        # Row 0: Type | Maya
-        info_grid.addWidget(self._make_label(t("label_type"), label_style), 0, 0)
-        self._type_val = QtWidgets.QLabel()
-        self._type_val.setStyleSheet(value_style)
-        info_grid.addWidget(self._type_val, 0, 1)
+        self._maya_val = self._make_value_label()
+        info_grid.addLayout(
+            self._make_field(t("label_maya"), self._maya_val), 0, 1)
 
-        info_grid.addWidget(self._make_label(t("label_maya"), label_style), 0, 2)
-        self._maya_val = QtWidgets.QLabel()
-        self._maya_val.setStyleSheet(value_style)
-        info_grid.addWidget(self._maya_val, 0, 3)
+        self._size_val = self._make_value_label()
+        info_grid.addLayout(
+            self._make_field(t("label_size"), self._size_val), 1, 0)
 
-        # Row 1: Size | Released
-        info_grid.addWidget(self._make_label(t("label_size"), label_style), 1, 0)
-        self._size_val = QtWidgets.QLabel()
-        self._size_val.setStyleSheet(value_style)
-        info_grid.addWidget(self._size_val, 1, 1)
+        self._released_val = self._make_value_label()
+        info_grid.addLayout(
+            self._make_field(t("label_released"), self._released_val), 1, 1)
 
-        info_grid.addWidget(self._make_label(t("label_released"), label_style), 1, 2)
-        self._released_val = QtWidgets.QLabel()
-        self._released_val.setStyleSheet(value_style)
-        info_grid.addWidget(self._released_val, 1, 3)
-
-        # Row 2: Tags (full width)
-        info_grid.addWidget(self._make_label(t("label_tags"), label_style), 2, 0)
-        self._tags_val = QtWidgets.QLabel()
-        self._tags_val.setStyleSheet(value_style)
-        self._tags_val.setWordWrap(True)
-        info_grid.addWidget(self._tags_val, 2, 1, 1, 3)
-
-        # Row 3: Changelog (full width)
-        info_grid.addWidget(self._make_label(t("label_changelog"), label_style), 3, 0, Qt.AlignTop)
-        self._changelog_val = QtWidgets.QLabel()
-        self._changelog_val.setStyleSheet(value_style)
-        self._changelog_val.setWordWrap(True)
-        info_grid.addWidget(self._changelog_val, 3, 1, 1, 3)
-
+        info_grid.setColumnStretch(0, 1)
         info_grid.setColumnStretch(1, 1)
-        info_grid.setColumnStretch(3, 1)
 
         layout.addLayout(info_grid)
+
+        # ── Tags section ──
+        layout.addSpacing(16)
+        self._tags_section = QtWidgets.QWidget()
+        tags_layout = QtWidgets.QVBoxLayout(self._tags_section)
+        tags_layout.setContentsMargins(0, 0, 0, 0)
+        tags_layout.setSpacing(6)
+        tags_layout.addWidget(self._make_label(t("label_tags"), self._LABEL_STYLE))
+        self._tags_container = QtWidgets.QWidget()
+        self._tags_layout = QtWidgets.QVBoxLayout(self._tags_container)
+        self._tags_layout.setContentsMargins(0, 0, 0, 0)
+        self._tags_layout.setSpacing(4)
+        tags_layout.addWidget(self._tags_container)
+        layout.addWidget(self._tags_section)
+
+        # ── Changelog section ──
+        layout.addSpacing(16)
+        self._changelog_section = QtWidgets.QWidget()
+        cl_layout = QtWidgets.QVBoxLayout(self._changelog_section)
+        cl_layout.setContentsMargins(0, 0, 0, 0)
+        cl_layout.setSpacing(6)
+        cl_layout.addWidget(self._make_label(t("label_changelog"), self._LABEL_STYLE))
+        self._changelog_val = QtWidgets.QLabel()
+        self._changelog_val.setStyleSheet(self._VALUE_STYLE)
+        self._changelog_val.setWordWrap(True)
+        cl_layout.addWidget(self._changelog_val)
+        layout.addWidget(self._changelog_section)
+
         layout.addStretch()
+
+    def _make_value_label(self):
+        lbl = QtWidgets.QLabel()
+        lbl.setStyleSheet(self._VALUE_STYLE)
+        lbl.setWordWrap(True)
+        return lbl
+
+    def _make_field(self, label_text, value_widget):
+        """Stack a small label above its value."""
+        col = QtWidgets.QVBoxLayout()
+        col.setContentsMargins(0, 0, 0, 0)
+        col.setSpacing(2)
+        col.addWidget(self._make_label(label_text, self._LABEL_STYLE))
+        col.addWidget(value_widget)
+        return col
+
+    @staticmethod
+    def _make_chip(text):
+        """Pill-shaped tag chip — visual matches package_card.TypeBadge family."""
+        chip = QtWidgets.QLabel(text)
+        chip.setStyleSheet(
+            "QLabel {{"
+            "  background: transparent;"
+            "  color: {color};"
+            "  border: 1px solid {border};"
+            "  border-radius: 9px;"
+            "  padding: 1px 8px;"
+            "  font-size: 10px;"
+            "}}".format(color=theme.TEXT_SECONDARY, border=theme.BORDER)
+        )
+        chip.setAlignment(Qt.AlignCenter)
+        return chip
+
+    def _set_tags(self, tags):
+        # Clear previous rows
+        while self._tags_layout.count():
+            item = self._tags_layout.takeAt(0)
+            w = item.widget()
+            if w is not None:
+                w.deleteLater()
+            else:
+                child = item.layout()
+                if child is not None:
+                    while child.count():
+                        ci = child.takeAt(0)
+                        if ci.widget():
+                            ci.widget().deleteLater()
+                    child.deleteLater()
+
+        if not tags:
+            self._tags_section.setVisible(False)
+            return
+        self._tags_section.setVisible(True)
+
+        # Build rows of chips. We don't have FlowLayout in Qt stdlib,
+        # so we approximate with fixed chips per row based on text length.
+        row = None
+        row_budget = 0
+        max_row_chars = 60
+        for tag in tags:
+            chip_cost = len(tag) + 4
+            if row is None or row_budget + chip_cost > max_row_chars:
+                row = QtWidgets.QHBoxLayout()
+                row.setSpacing(6)
+                row.setContentsMargins(0, 0, 0, 0)
+                self._tags_layout.addLayout(row)
+                row_budget = 0
+                # add stretch at end after we finish populating; instead push items left
+            row.addWidget(self._make_chip(tag))
+            row_budget += chip_cost
+            # ensure trailing stretch on the row
+            # (re-add stretch by appending after last item — Qt allows multiple stretches harmlessly)
+        # Append a stretch to each row so chips left-align
+        for i in range(self._tags_layout.count()):
+            item = self._tags_layout.itemAt(i)
+            lay = item.layout()
+            if lay is not None:
+                lay.addStretch()
 
     @staticmethod
     def _make_label(text, style):
@@ -294,20 +403,23 @@ class PackageDetailPanel(QtWidgets.QWidget):
                 item.widget().deleteLater()
         self._badge_container.addWidget(TypeBadge(pkg_type))
 
-        # Subtitle: author + version
+        # Subtitle: author + version (rich text; highlight "update available")
         author = registry_data.get("author", "")
         if installed_version:
             ver_text = "v{}".format(installed_version)
             if latest and latest != installed_version:
-                ver_text += "  →  v{} available".format(latest)
+                ver_text += (
+                    '  &rarr;  <span style="color:{c};">v{v} available</span>'
+                ).format(c=theme.ACCENT_ORANGE, v=latest)
         else:
             ver_text = "v{}".format(latest) if latest else ""
         subtitle_parts = []
         if author:
-            subtitle_parts.append(author)
+            from html import escape as _esc
+            subtitle_parts.append(_esc(author))
         if ver_text:
             subtitle_parts.append(ver_text)
-        self._subtitle_label.setText("  ·  ".join(subtitle_parts))
+        self._subtitle_label.setText("  &middot;  ".join(subtitle_parts))
 
         # Description
         self._desc_label.setText(registry_data.get("description", ""))
@@ -330,8 +442,13 @@ class PackageDetailPanel(QtWidgets.QWidget):
         self._maya_val.setText(", ".join(version_info.get("maya_versions", [])))
         self._size_val.setText(_format_size(version_info.get("size_bytes")))
         self._released_val.setText(_format_date(version_info.get("released_at", "")))
-        self._tags_val.setText(", ".join(registry_data.get("tags", [])))
-        self._changelog_val.setText(version_info.get("changelog", "") or "—")
+        self._set_tags(registry_data.get("tags", []) or [])
+        changelog_text = version_info.get("changelog", "") or ""
+        if changelog_text.strip():
+            self._changelog_val.setText(changelog_text)
+            self._changelog_section.setVisible(True)
+        else:
+            self._changelog_section.setVisible(False)
 
         # Action button
         # Safely reconnect action button
