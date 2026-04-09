@@ -9,15 +9,15 @@ BG_SIDEBAR = "#21252b"
 BG_HOVER = "#2c313a"
 BG_CARD_HOVER = "#2c313a"
 
-TEXT_PRIMARY = "#abb2bf"
-TEXT_SECONDARY = "#7f848e"
-TEXT_DIM = "#5c6370"
-TEXT_HEADING = "#d7dae0"
-TEXT_MUTED = "#495162"
+TEXT_PRIMARY = "#c8cdd6"
+TEXT_SECONDARY = "#9098a5"
+TEXT_DIM = "#7a8290"
+TEXT_HEADING = "#e6e9ef"
+TEXT_MUTED = "#5c6370"
 
-BORDER = "#3e4452"
-BORDER_LIGHT = "#353b45"
-BORDER_HOVER = "#4e5666"
+BORDER = "#4a5160"
+BORDER_LIGHT = "#3e4452"
+BORDER_HOVER = "#6b7585"
 
 ACCENT_BLUE = "#4d78cc"
 ACCENT_BLUE_HOVER = "#5a8ae6"
@@ -156,13 +156,19 @@ def groupbox_style():
 
 # ── Button styles ──
 
+_DISABLED_RULE = (
+    "QPushButton:disabled {{ background: transparent; color: {muted};"
+    "  border: 1px solid {border_light}; }}"
+).format(muted=TEXT_MUTED, border_light=BORDER_LIGHT)
+
+
 def btn_primary():
     """Blue primary action button."""
     return (
         "QPushButton {{ background: {bg}; color: white;"
         "  border: none; border-radius: 4px; padding: 6px 16px; }}"
         "QPushButton:hover {{ background: {hover}; }}"
-    ).format(bg=ACCENT_BLUE, hover=ACCENT_BLUE_HOVER)
+    ).format(bg=ACCENT_BLUE, hover=ACCENT_BLUE_HOVER) + _DISABLED_RULE
 
 
 def btn_success():
@@ -171,7 +177,7 @@ def btn_success():
         "QPushButton {{ background: {bg}; color: white;"
         "  border: none; border-radius: 4px; padding: 6px 16px; }}"
         "QPushButton:hover {{ background: {hover}; }}"
-    ).format(bg=ACCENT_GREEN, hover=ACCENT_GREEN_HOVER)
+    ).format(bg=ACCENT_GREEN, hover=ACCENT_GREEN_HOVER) + _DISABLED_RULE
 
 
 def btn_success_dark():
@@ -180,43 +186,49 @@ def btn_success_dark():
         "QPushButton {{ background: {bg}; color: {dark};"
         "  border: none; border-radius: 4px; padding: 6px 16px; }}"
         "QPushButton:hover {{ background: {hover}; }}"
-    ).format(bg=ACCENT_GREEN, dark=BG_PRIMARY, hover=ACCENT_GREEN_HOVER)
+    ).format(bg=ACCENT_GREEN, dark=BG_PRIMARY, hover=ACCENT_GREEN_HOVER) + _DISABLED_RULE
 
 
 def btn_danger():
-    """Red danger/remove button (outlined)."""
+    """Red danger/remove button (subtle filled)."""
     return (
-        "QPushButton {{ color: {red}; background: transparent;"
+        "QPushButton {{ color: {red}; background: {red_bg};"
         "  border: 1px solid {red}; border-radius: 4px; padding: 6px 12px; }}"
-        "QPushButton:hover {{ background: {red_bg}; }}"
-    ).format(red=ACCENT_RED, red_bg=ACCENT_RED_BG)
+        "QPushButton:hover {{ background: #4a262d; color: #ff8a92; }}"
+    ).format(red=ACCENT_RED, red_bg=ACCENT_RED_BG) + _DISABLED_RULE
 
 
 def btn_warning():
-    """Orange warning button (outlined)."""
+    """Orange warning button (subtle filled)."""
     return (
-        "QPushButton {{ color: {orange}; background: transparent;"
+        "QPushButton {{ color: {orange}; background: #2e2117;"
         "  border: 1px solid {orange}; border-radius: 4px; padding: 6px 12px; }}"
-        "QPushButton:hover {{ background: #382517; }}"
-    ).format(orange=ACCENT_ORANGE)
+        "QPushButton:hover {{ background: #4a3320; color: #e8b988; }}"
+    ).format(orange=ACCENT_ORANGE) + _DISABLED_RULE
 
 
 def btn_ghost():
-    """Transparent ghost button with border."""
+    """Ghost button with subtle fill — distinguishable from disabled."""
     return (
-        "QPushButton {{ background: transparent; color: {dim};"
+        "QPushButton {{ background: {bg2}; color: {text};"
         "  border: 1px solid {border}; border-radius: 4px; padding: 6px 16px; }}"
-        "QPushButton:hover {{ background: {bg2}; }}"
-    ).format(dim=TEXT_DIM, border=BORDER, bg2=BG_SECONDARY)
+        "QPushButton:hover {{ background: {hover}; color: {heading};"
+        "  border-color: {border_hover}; }}"
+        "QPushButton:pressed {{ background: {bg}; }}"
+    ).format(bg=BG_PRIMARY, bg2=BG_SECONDARY, hover=BG_HOVER,
+             text=TEXT_PRIMARY, heading=TEXT_HEADING,
+             border=BORDER, border_hover=BORDER_HOVER) + _DISABLED_RULE
 
 
 def btn_ghost_text():
-    """Transparent ghost button with text color."""
+    """Ghost button with primary text color and subtle fill."""
     return (
-        "QPushButton {{ background: transparent; color: {text};"
+        "QPushButton {{ background: {bg2}; color: {text};"
         "  border: 1px solid {border}; border-radius: 4px; padding: 6px 12px; }}"
-        "QPushButton:hover {{ background: {bg2}; }}"
-    ).format(text=TEXT_PRIMARY, border=BORDER, bg2=BG_SECONDARY)
+        "QPushButton:hover {{ background: {hover}; color: {heading};"
+        "  border-color: {border_hover}; }}"
+    ).format(bg2=BG_SECONDARY, hover=BG_HOVER, text=TEXT_PRIMARY,
+             heading=TEXT_HEADING, border=BORDER, border_hover=BORDER_HOVER) + _DISABLED_RULE
 
 
 def btn_muted():
@@ -224,17 +236,18 @@ def btn_muted():
     return (
         "QPushButton {{ background: {border}; color: {text}; border: none;"
         "  border-radius: 4px; padding: 6px 10px; }}"
-        "QPushButton:hover {{ background: {border}; }}"
-    ).format(border=BORDER, text=TEXT_PRIMARY)
+        "QPushButton:hover {{ background: {border_hover}; }}"
+    ).format(border=BORDER, border_hover=BORDER_HOVER, text=TEXT_PRIMARY) + _DISABLED_RULE
 
 
 def btn_small_browse():
     """Small browse file button."""
     return (
-        "QPushButton {{ background: {bg2}; color: {dim};"
+        "QPushButton {{ background: {bg2}; color: {text};"
         "  border: 1px solid {border}; border-radius: 4px; padding: 4px; font-size: 12px; }}"
-        "QPushButton:hover {{ background: {border}; }}"
-    ).format(bg2=BG_SECONDARY, dim=TEXT_SECONDARY, border=BORDER)
+        "QPushButton:hover {{ background: {hover}; border-color: {border_hover}; }}"
+    ).format(bg2=BG_SECONDARY, hover=BG_HOVER, text=TEXT_PRIMARY,
+             border=BORDER, border_hover=BORDER_HOVER) + _DISABLED_RULE
 
 
 def btn_link():
@@ -283,5 +296,5 @@ def btn_card_outlined(color, border_color, hover_bg, font_size=11):
 
 # ── Label style helpers ──
 
-LABEL_DIM = "color: {dim}; font-size: 12px;".format(dim=TEXT_DIM)
-LABEL_DIM_BOLD = "color: {dim}; font-size: 12px; font-weight: bold;".format(dim=TEXT_DIM)
+LABEL_DIM = "color: {dim}; font-size: 12px;".format(dim=TEXT_SECONDARY)
+LABEL_DIM_BOLD = "color: {dim}; font-size: 12px; font-weight: bold;".format(dim=TEXT_SECONDARY)
