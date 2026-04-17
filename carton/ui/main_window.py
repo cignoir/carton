@@ -5,6 +5,8 @@ import os
 from collections import OrderedDict
 
 from carton.compat_urllib import urlopen, Request, URLError, urljoin
+from carton.core.display_name_resolver import resolve_display_name
+from carton.core.install_state import is_my_tools, is_pure_local
 from carton.ui.compat import QtWidgets, QtCore, Qt, wrapInstance
 from carton.ui.i18n import t
 from carton.ui import theme
@@ -26,13 +28,13 @@ def _icon_filename(pkg_data):
       1. If ``icon`` is a string ending in an image extension, treat it as the
          filename and return its basename verbatim — this preserves whatever
          the package author chose, including PascalCase / non-ASCII names.
-      2. If ``icon`` is ``True`` (legacy), fall back to ``<name>.png``.
+      2. If ``icon`` is the literal ``"@auto"``, fall back to ``<name>.png``.
       3. Otherwise return None.
     """
     icon_value = pkg_data.get("icon", "")
     if isinstance(icon_value, str) and icon_value.endswith((".png", ".jpg", ".svg")):
         return os.path.basename(icon_value)
-    if isinstance(icon_value, bool) and icon_value:
+    if icon_value == "@auto":
         name = pkg_data.get("name", "")
         if name:
             return "{}.png".format(name)
@@ -863,10 +865,7 @@ class CartonWindow(QtWidgets.QDialog):
                 self._registry_list.addItem(item)
 
         # My Tools — All + namespace children
-        my_pkgs = [
-            p for p in installed.values()
-            if p.get("source") in ("local_script", "published")
-        ]
+        my_pkgs = [p for p in installed.values() if is_my_tools(p)]
         my_count = len(my_pkgs)
         all_item = QtWidgets.QListWidgetItem("{} ({})".format(t("my_tools_all"), my_count))
         all_item.setData(Qt.UserRole, self._MYTOOLS_KEY)
@@ -1100,9 +1099,12 @@ class CartonWindow(QtWidgets.QDialog):
     def _collect_mytools_items(self, installed, selection):
         """Return ``[(pkg_id, view_data)]`` for the My Tools view, sorted by ns."""
         ns_filter = self._mytools_ns_filter(selection)
+        registry_packages = (
+            self._registry_client.get_packages() if self._registry_client else {}
+        )
         items = []
         for pkg_id, pkg_data in installed.items():
-            if pkg_data.get("source") not in ("local_script", "published"):
+            if not is_my_tools(pkg_data):
                 continue
             if ns_filter is not None:
                 pkg_ns = (pkg_data.get("namespace") or "").lower()
@@ -1111,6 +1113,11 @@ class CartonWindow(QtWidgets.QDialog):
             item = dict(pkg_data)
             item["_installed_ver"] = pkg_data.get("version")
             item["_local_script"] = True
+            # registry SoT for display_name on registry-side entries; My Tools
+            # rows already carry their own display_name.
+            item["display_name"] = resolve_display_name(
+                pkg_id, pkg_data, registry_packages.get(pkg_id),
+            )
             items.append((pkg_id, item))
         items.sort(key=lambda x: (
             (x[1].get("namespace") or "~").lower(),
@@ -1127,25 +1134,27 @@ class CartonWindow(QtWidgets.QDialog):
                 continue
             item = dict(pkg_data)
             # A demoted (uninstalled-from-registry) entry stays in
-            # installed.json with source=local_script so it remains in
-            # My Tools, but the registry view should show it as
-            # not-installed so the user can re-install if they want.
+            # installed.json as source="local" so it remains in My Tools,
+            # but the registry view should show it as not-installed so
+            # the user can re-install if they want.
             inst_entry = installed.get(pkg_id, {})
             is_installed = (
                 pkg_id in installed
-                and inst_entry.get("source") != "local_script"
+                and not is_pure_local(inst_entry)
             )
             if is_installed:
                 inst = installed[pkg_id]
                 item["_installed_ver"] = inst.get("version")
-                # Surface the recorded sha256 so the card can render
-                # the verified badge — registry view shows it from the
-                # installed.json snapshot, not from the live registry.
-                if inst.get("sha256"):
-                    item["sha256"] = inst.get("sha256")
+                # Verified badge: read sha256 from the registry's
+                # version_entry for the version we actually installed.
+                # installed.json no longer carries a sha256 of its own.
+                inst_ver = inst.get("version", "")
+                ver_info = pkg_data.get("versions", {}).get(inst_ver, {})
+                if ver_info.get("sha256"):
+                    item["sha256"] = ver_info["sha256"]
                 if inst.get("pinned"):
                     item["pinned"] = True
-                if inst.get("source") in ("local_script", "published") and inst.get("local_path"):
+                if is_my_tools(inst):
                     item["_local_script"] = True
             if self._current_tab == "installed" and not is_installed:
                 continue
@@ -1554,13 +1563,9 @@ class CartonWindow(QtWidgets.QDialog):
         fields = {
             "namespace": result["namespace"],
             "name": result["name"],
-            "source": "published",
         }
         if not pkg_data.get("home_registry"):
-            home_meta = {"name": written_entry.name}
-            if getattr(written_entry, "registry_id", ""):
-                home_meta["registry_id"] = written_entry.registry_id
-            fields["home_registry"] = home_meta
+            fields["home_registry"] = written_entry.to_home_meta()
         self._install_manager.rekey_package(pkg_id, result["id"], fields)
 
         display = pkg_data.get("display_name", pkg_id)
@@ -1683,13 +1688,13 @@ class CartonWindow(QtWidgets.QDialog):
             )
             return
 
-        # Prefer the installed display_name when we have it; otherwise fall
-        # back to whatever the registry knows.
+        # Resolve display via the standard resolver: registry SoT for
+        # registry-side entries, installed.json for My Tools.
         installed = self._install_manager.get_installed_packages() if self._install_manager else {}
-        display = installed.get(pkg_id, {}).get("display_name")
-        if not display:
-            packages = self._registry_client.get_packages() if self._registry_client else {}
-            display = packages.get(pkg_id, {}).get("display_name", pkg_id)
+        packages = self._registry_client.get_packages() if self._registry_client else {}
+        display = resolve_display_name(
+            pkg_id, installed.get(pkg_id), packages.get(pkg_id),
+        )
 
         reply = QtWidgets.QMessageBox.question(
             self, t("unpublish"),
@@ -1707,14 +1712,16 @@ class CartonWindow(QtWidgets.QDialog):
 
         installed = self._install_manager.get_installed_packages()
         pkg_data = installed.get(pkg_id, {})
-        display = pkg_data.get("display_name", pkg_id)
+        packages = self._registry_client.get_packages() if self._registry_client else {}
+        display = resolve_display_name(pkg_id, pkg_data, packages.get(pkg_id))
 
         try:
             self._publisher.unpublish(pkg_id, registry_entry)
 
-            # Revert source back to local_script
+            # Demote double-bound entries to pure My Tools — the registry
+            # bytes are gone but the user's local registration survives.
             self._install_manager.update_package_fields(
-                pkg_id, {"source": "local_script"}
+                pkg_id, {"source": "local"}
             )
 
             QtWidgets.QMessageBox.information(
@@ -1915,9 +1922,6 @@ class CartonWindow(QtWidgets.QDialog):
                 "name": pkg_name,
                 "version": target_version,
                 "type": pkg_data.get("type", "python_package"),
-                "display_name": pkg_data.get("display_name", pkg_name),
-                "entry_point": {},
-                "sha256": version_info.get("sha256", ""),
                 "pinned": bool(pinned),
                 # Resolved absolute icon path so a relinked My Tools
                 # entry can render its custom icon without re-fetching.
@@ -1977,11 +1981,31 @@ class CartonWindow(QtWidgets.QDialog):
             self._stack.setCurrentIndex(0)
 
     def _on_launch(self, pkg_id):
+        from carton.core.entry_point_resolver import resolve_entry_point
+
         installed = self._install_manager.get_installed_packages()
         pkg_data = installed.get(pkg_id, {})
-        entry_point = pkg_data.get("entry_point", {})
+        # Resolve entry_point: zip's inner package.json is SoT for registry
+        # installs; installed.json carries it for My Tools only.
+        package_dir = ""
+        rel = pkg_data.get("path", "")
+        if rel and self._install_manager:
+            package_dir = os.path.join(
+                self._install_manager._config.install_dir, rel,
+            )
+        registry_packages = (
+            self._registry_client.get_packages() if self._registry_client else {}
+        )
+        entry_point = resolve_entry_point(
+            pkg_data, package_dir=package_dir,
+            registry_data=registry_packages.get(pkg_id),
+        )
+        # Inject the resolved entry_point back into pkg_data so handlers /
+        # script_manager that read meta["entry_point"] still get a value.
+        pkg_data = dict(pkg_data)
+        pkg_data["entry_point"] = entry_point
         try:
-            if pkg_data.get("source") in ("local_script", "published") and self._script_manager:
+            if is_my_tools(pkg_data) and self._script_manager:
                 self._script_manager.launch(pkg_data)
                 # Maya modules without an explicit launch command have no
                 # visible feedback (userSetup.py runs deferred), so show a

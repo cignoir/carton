@@ -1,0 +1,115 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://carton.dev/schemas/installed.schema.json",
+  "title": "Carton Installed Packages",
+  "description": "Carton ローカルインストール状態 (v4.0). entry_point / sha256 / display_name (My Tools 以外) は registry または zip 内 package.json から動的解決される — ここには持たない",
+  "type": "object",
+  "required": ["schema_version", "packages"],
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "enum": ["4.0"]
+    },
+    "packages": {
+      "type": "object",
+      "description": "キーは \"<namespace>/<name>\" 形式、または My Tools 用の bare <name>",
+      "additionalProperties": {
+        "$ref": "#/$defs/installed_package"
+      }
+    }
+  },
+  "$defs": {
+    "installed_package": {
+      "type": "object",
+      "required": ["namespace", "name", "version", "type", "installed_at", "source"],
+      "properties": {
+        "namespace": {
+          "type": "string",
+          "description": "パッケージ名前空間。My Tools (source=local) では空可"
+        },
+        "name": {
+          "type": "string"
+        },
+        "version": {
+          "type": "string",
+          "pattern": "^\\d+\\.\\d+\\.\\d+$"
+        },
+        "type": {
+          "type": "string",
+          "enum": ["python_package", "mel_script", "plugin", "maya_module"]
+        },
+        "installed_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "source": {
+          "type": "string",
+          "enum": ["registry", "local"],
+          "description": "registry: レジストリから install. local: My Tools として登録のみ. 双方向リンク (registry-installed + My Tools 登録) は source=registry + local_path を持つ"
+        },
+        "path": {
+          "type": "string",
+          "description": "packages/<namespace>/<name> への install_dir 相対パス. source=local では空"
+        },
+        "local_path": {
+          "type": "string",
+          "description": "My Tools の参照パス. source=registry でも併用可 (双方向リンク)"
+        },
+        "is_folder": {
+          "type": "boolean",
+          "description": "My Tools (source=local) の場合、参照先がフォルダかファイルかの区別"
+        },
+        "home_registry": {
+          "type": "object",
+          "properties": {
+            "name": { "type": "string" },
+            "registry_id": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+            },
+            "hint": { "type": "string" }
+          }
+        },
+        "activated_paths": {
+          "type": "object",
+          "description": "{env_var: [path, ...]}. install 時に追加された env entries の順序付きリスト. uninstall で順序通り取り除く",
+          "additionalProperties": {
+            "type": "array",
+            "items": { "type": "string" }
+          }
+        },
+        "pinned": {
+          "type": "boolean",
+          "description": "true: rollback 後など意図的にバージョン固定。auto-update が skip する"
+        },
+        "display_name": {
+          "type": "string",
+          "description": "My Tools (source=local) のみ. registry 由来の場合は registry を SoT とし、ここには書かない"
+        },
+        "icon": {
+          "type": "string",
+          "description": "My Tools (source=local) のみ. 絶対パスを保存して再フェッチ不要にする"
+        },
+        "description": {
+          "type": "string",
+          "description": "My Tools (source=local) のみ"
+        },
+        "author": {
+          "type": "string",
+          "description": "My Tools (source=local) のみ"
+        },
+        "homepage": {
+          "type": "string"
+        },
+        "include_compiled": {
+          "type": "boolean",
+          "description": "publish 時に .pyc を必ず含めるか"
+        },
+        "entry_point": {
+          "type": "object",
+          "description": "My Tools (source=local) のみ. registry-installed パッケージは zip 内 package.json から動的解決される"
+        }
+      }
+    }
+  }
+}

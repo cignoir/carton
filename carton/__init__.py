@@ -5,7 +5,7 @@ Usage:
     carton.show()
 """
 
-__version__ = "0.3.13"
+__version__ = "0.4.0"
 
 _window = None
 _initialized = False
@@ -57,8 +57,9 @@ def startup():
 
     # Activate installed packages
     _install_mgr.activate_all()
+    from carton.core.install_state import is_my_tools
     for pid, pdata in _install_mgr.get_installed_packages().items():
-        if pdata.get("source") in ("local_script", "published"):
+        if is_my_tools(pdata):
             _script_mgr.activate(pid)
     _env_mgr.flush()
 

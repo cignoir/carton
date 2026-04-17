@@ -75,14 +75,15 @@ def _registry_id(args):
         stamp_registry_id,
     )
 
+    from carton.core.migrations import REGISTRY_SCHEMA_VERSION, migrate_registry_data
+
     registry, path = _load_registry(args.registry)
+    registry, _ = migrate_registry_data(registry)
     current = read_registry_id(registry)
     if args.stamp:
         rid, was_new = stamp_registry_id(registry)
-        if was_new:
-            registry.setdefault("schema_version", "3.1")
-            if registry.get("schema_version") in ("2.0", "3.0"):
-                registry["schema_version"] = "3.1"
+        registry["schema_version"] = REGISTRY_SCHEMA_VERSION
+        if was_new or current != rid:
             with open(path, "w", encoding="utf-8") as f:
                 json.dump(registry, f, indent=2, ensure_ascii=False)
             print("Stamped: {}".format(rid))

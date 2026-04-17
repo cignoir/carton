@@ -63,10 +63,10 @@ class TestPublishInstallRoundtrip:
     def test_publish_then_install_from_separate_config(self):
         with tempfile.TemporaryDirectory() as tmp:
             # Layout:
-            #   tmp/source/hello_tool/      -- raw source folder
-            #   tmp/registry/registry.json  -- shared local registry
-            #   tmp/publisher_home/         -- publisher-side Config.install_dir
-            #   tmp/consumer_home/          -- consumer-side Config.install_dir
+            #   tmp/source/hello_proj/hello_tool/  -- nested project
+            #   tmp/registry/registry.json         -- shared local registry
+            #   tmp/publisher_home/                -- publisher-side Config.install_dir
+            #   tmp/consumer_home/                 -- consumer-side Config.install_dir
             source_root = os.path.join(tmp, "source")
             registry_root = os.path.join(tmp, "registry")
             publisher_home = os.path.join(tmp, "publisher_home")
@@ -74,7 +74,7 @@ class TestPublishInstallRoundtrip:
             os.makedirs(source_root)
             os.makedirs(registry_root)
 
-            src_pkg = _make_source_package(source_root)
+            src_pkg = _make_nested_source_package(source_root)
             registry_path = os.path.join(registry_root, "registry.json")
             registry_entry = RegistryEntry("e2e-local", registry_path)
 
@@ -115,10 +115,14 @@ class TestPublishInstallRoundtrip:
             assert os.path.isfile(zip_abs)
             with zipfile.ZipFile(zip_abs, "r") as zf:
                 names = zf.namelist()
-                # Publisher zips the folder's CONTENTS (so the target
-                # extract dir itself becomes the Python package).
+                # Publisher zips the project root's CONTENTS — the nested
+                # ``hello_tool/`` folder shows up as a subdirectory inside
+                # the zip (this is what makes ``import hello_tool`` work
+                # after install).
                 assert "package.json" in names
-                assert "__init__.py" in names
+                assert any(n.endswith("hello_tool/__init__.py")
+                           or n.endswith("hello_tool\\__init__.py")
+                           for n in names)
                 inner_meta = json.loads(zf.read("package.json").decode("utf-8"))
                 assert inner_meta["namespace"] == "e2e"
                 assert inner_meta["name"] == "hello_tool"
@@ -171,9 +175,6 @@ class TestPublishInstallRoundtrip:
                 "name": pkg_entry["name"],
                 "version": latest,
                 "type": pkg_entry.get("type", "python_package"),
-                "display_name": pkg_entry.get("display_name", pkg_entry["name"]),
-                "entry_point": {},
-                "sha256": version_info.get("sha256", ""),
             }
             install_mgr.install_package(staged_zip, meta)
 
@@ -184,17 +185,29 @@ class TestPublishInstallRoundtrip:
             installed_entry = install_mgr.get_installed_packages()[pkg_id]
             assert installed_entry["namespace"] == "e2e"
             assert installed_entry["name"] == "hello_tool"
-            # SHA256 from the registry should be persisted into installed.json
-            assert installed_entry.get("sha256") == version_info["sha256"]
-            assert len(installed_entry["sha256"]) == 64
-            # entry_point should have been sourced from the inner package.json
-            # (we deliberately passed an empty dict in meta to prove it).
-            assert installed_entry["entry_point"]["module"] == "hello_tool"
-            assert installed_entry["entry_point"]["function"] == "show"
+            # v4.0: sha256 / entry_point / display_name are no longer
+            # duplicated into installed.json. The registry version_entry
+            # is the SoT for sha256, the inner package.json for entry_point.
+            assert "sha256" not in installed_entry
+            assert "entry_point" not in installed_entry
+            assert "display_name" not in installed_entry
 
-            # Extracted content is present and runnable as Python source
+            # entry_point still resolves correctly via the resolver, which
+            # reads the zip's inner package.json from the install dir.
+            from carton.core.entry_point_resolver import resolve_entry_point
+            pkg_dir_abs = os.path.join(
+                consumer_home, "packages", "e2e", "hello_tool",
+            )
+            ep = resolve_entry_point({}, package_dir=pkg_dir_abs)
+            assert ep["module"] == "hello_tool"
+            assert ep["function"] == "show"
+
+            # Extracted content is present and runnable as Python source.
+            # The nested project layout means the importable module sits
+            # one level under the package dir.
             extracted_init = os.path.join(
-                consumer_home, "packages", "e2e", "hello_tool", "__init__.py",
+                consumer_home, "packages", "e2e", "hello_tool",
+                "hello_tool", "__init__.py",
             )
             assert os.path.isfile(extracted_init)
             with open(extracted_init, "r", encoding="utf-8") as f:
@@ -261,7 +274,7 @@ class TestPublishViaRemoteMirror:
             shared_uuid = "77777777-8888-4999-8aaa-bbbbbbbbbbbb"
             with open(mirror_path, "w", encoding="utf-8") as f:
                 json.dump({
-                    "schema_version": "3.1",
+                    "schema_version": "4.0",
                     "registry_id": shared_uuid,
                     "packages": {},
                 }, f)

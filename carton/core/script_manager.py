@@ -67,8 +67,7 @@ class ScriptManager:
             "type": pkg_type,
             "installed_at": now,
             "entry_point": entry_point,
-            "path": "",
-            "source": "local_script",
+            "source": "local",
             "local_path": stored_path,
             "is_folder": is_folder,
             "icon": icon,
@@ -102,10 +101,17 @@ class ScriptManager:
         self._install_mgr._save_installed()
 
     def activate(self, pkg_id):
-        """Activate a script at Maya startup."""
+        """Activate a My Tools entry at Maya startup.
+
+        Activates both pure My Tools (``source="local"``) and double-bound
+        registry installs (``source="registry"`` with ``local_path``) so the
+        original source path keeps participating in import resolution.
+        """
+        from carton.core.install_state import is_my_tools
+
         installed = self._install_mgr._installed
         pkg_data = installed["packages"].get(pkg_id)
-        if not pkg_data or pkg_data.get("source") != "local_script":
+        if not pkg_data or not is_my_tools(pkg_data):
             return
 
         local_path = resolve_local_path(pkg_data.get("local_path", ""))
@@ -236,8 +242,9 @@ class ScriptManager:
             else:
                 targets.append(path)
             if pkg_type == "python_package":
-                for target in targets:
-                    self._env_mgr.add_python_path(target)
+                # Use bulk extend so the activation order of ``targets``
+                # is preserved on sys.path (loop+insert(0) would reverse it).
+                self._env_mgr.extend_python_path(targets)
             elif pkg_type == "mel_script":
                 scripts_dir = os.path.join(path, "scripts")
                 self._env_mgr.add_env_path("MAYA_SCRIPT_PATH",

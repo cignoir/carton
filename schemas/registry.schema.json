@@ -2,13 +2,13 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://carton.dev/schemas/registry.schema.json",
   "title": "Carton Registry",
-  "description": "Carton パッケージレジストリ (v3.0/3.1 — namespace/name キー, 3.1 で registry_id 追加)",
+  "description": "Carton パッケージレジストリ (v4.0). registry_id 必須、entry_point は preview hint、icon は string|null",
   "type": "object",
-  "required": ["schema_version", "packages"],
+  "required": ["schema_version", "registry_id", "packages"],
   "properties": {
     "schema_version": {
       "type": "string",
-      "enum": ["3.0", "3.1"]
+      "enum": ["4.0"]
     },
     "registry_id": {
       "type": "string",
@@ -61,6 +61,7 @@
         },
         "platform": {
           "type": "array",
+          "description": "パッケージ全体のデフォルト対応プラットフォーム。version_entry.platform で version 単位に override 可能",
           "items": {
             "type": "string",
             "enum": ["win64", "linux", "mac"]
@@ -71,15 +72,12 @@
           "items": { "type": "string" }
         },
         "icon": {
-          "description": "true なら icons/<name>.png を参照、文字列なら絵文字または直接パス",
-          "oneOf": [
-            { "type": "boolean" },
-            { "type": "string" }
-          ]
+          "description": "アイコン。文字列 (絵文字またはファイル名) または null。'@auto' は icons/<name>.png を意味する",
+          "type": ["string", "null"]
         },
         "entry_point": {
           "type": "object",
-          "description": "起動時の挙動を決めるエントリポイント。カード UI が Launch/Activate を判定するためにレジストリレベルにも保持される。"
+          "description": "Preview hint — カード UI が install 前に Launch/Activate を判定するためのコピー。SoT は zip 内の package.json。publisher により latest_version の package.json から自動転写される。"
         },
         "latest_version": {
           "type": "string",
@@ -100,7 +98,8 @@
         "maya_versions": {
           "type": "array",
           "items": { "type": "string" },
-          "minItems": 1
+          "minItems": 1,
+          "description": "このバージョンが対応する Maya バージョン。package.json の maya_versions が SoT"
         },
         "download_url": {
           "type": "string",
@@ -109,7 +108,7 @@
         "sha256": {
           "type": "string",
           "pattern": "^[a-f0-9]{64}$",
-          "description": "非プラグインパッケージ用のSHA256ハッシュ"
+          "description": "非プラグインパッケージ用のSHA256ハッシュ (verified badge の SoT)"
         },
         "size_bytes": {
           "type": "integer",
@@ -117,7 +116,11 @@
         },
         "platform": {
           "type": "array",
-          "items": { "type": "string" }
+          "description": "version 単位の override。指定がなければ registry_package.platform を継承",
+          "items": {
+            "type": "string",
+            "enum": ["win64", "linux", "mac"]
+          }
         },
         "artifacts": {
           "type": "object",

@@ -193,6 +193,17 @@ class TestRegistryEntryRegistryId:
         e = RegistryEntry.from_dict(src)
         assert e.registry_id == self._UUID
 
+    def test_to_home_meta_minimal(self):
+        e = RegistryEntry("solo", "")
+        assert e.to_home_meta() == {"name": "solo"}
+
+    def test_to_home_meta_includes_id_and_hint(self):
+        e = RegistryEntry("studio", "/p/registry.json", registry_id=self._UUID)
+        meta = e.to_home_meta()
+        assert meta["name"] == "studio"
+        assert meta["registry_id"] == self._UUID
+        assert meta["hint"] == os.path.normpath("/p/registry.json")
+
 
 class TestConfigRegistryIdLookup:
     _UUID_A = "aaaaaaaa-1111-4111-8111-aaaaaaaaaaaa"

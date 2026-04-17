@@ -129,6 +129,40 @@ class TestRemoveTracked:
         env.remove_tracked({})
 
 
+class TestExtendPythonPath:
+    def test_preserves_input_order_at_front(self, clean_state):
+        env = MayaEnvManager()
+        a = os.path.normpath("/tmp/extend_a")
+        b = os.path.normpath("/tmp/extend_b")
+        c = os.path.normpath("/tmp/extend_c")
+        env.extend_python_path([a, b, c])
+
+        # Result on sys.path: a first, then b, then c, then whatever else
+        idx_a = sys.path.index(a)
+        idx_b = sys.path.index(b)
+        idx_c = sys.path.index(c)
+        assert idx_a < idx_b < idx_c
+
+    def test_skips_already_present_paths(self, clean_state):
+        env = MayaEnvManager()
+        a = os.path.normpath("/tmp/already_there")
+        sys.path.insert(0, a)
+        b = os.path.normpath("/tmp/extend_only_b")
+        env.extend_python_path([a, b])
+        # ``a`` was already on sys.path — no duplicate add
+        assert sys.path.count(a) == 1
+        # ``b`` is newly added and tracked
+        assert b in sys.path
+        assert env._added_paths.get("sys.path") == [b]
+
+    def test_back_position_appends(self, clean_state):
+        env = MayaEnvManager()
+        a = os.path.normpath("/tmp/back_a")
+        b = os.path.normpath("/tmp/back_b")
+        env.extend_python_path([a, b], position="back")
+        assert sys.path[-2:] == [a, b]
+
+
 class TestCleanupAll:
     def test_removes_every_tracked_entry(self, clean_state):
         env = MayaEnvManager()

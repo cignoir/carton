@@ -67,11 +67,13 @@ def stamp_local_registry_with_prompt(parent, path, data):
     )
     if reply != QtWidgets.QMessageBox.Yes:
         return ""
+    from carton.core.migrations import REGISTRY_SCHEMA_VERSION, migrate_registry_data
+    # Migrate to the current schema so the stamp is paired with a v4.0
+    # write — leaving an old schema_version in place would re-trigger
+    # migration on the next read for no benefit.
+    data, _ = migrate_registry_data(data)
     rid, _ = stamp_registry_id(data)
-    data.setdefault("schema_version", "3.1")
-    # Preserve newer schema if the file was already 3.1+.
-    if data.get("schema_version", "") in ("2.0", "3.0"):
-        data["schema_version"] = "3.1"
+    data["schema_version"] = REGISTRY_SCHEMA_VERSION
     try:
         with open(path, "w", encoding="utf-8") as f:
             json.dump(data, f, indent=2, ensure_ascii=False)

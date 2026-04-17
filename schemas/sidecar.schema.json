@@ -2,6 +2,6 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://carton.dev/schemas/sidecar.schema.json",
   "title": "Carton Single-File Sidecar",
-  "description": "単体ファイルスクリプト用のサイドカー <filename>.carton.json (v3.0)。フォルダパッケージの package.json と同じスキーマ",
+  "description": "単体ファイルスクリプト用のサイドカー <filename>.carton.json (v4.0). フォルダパッケージの package.json と同じスキーマ",
   "$ref": "https://carton.dev/schemas/package.schema.json"
 }

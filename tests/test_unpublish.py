@@ -12,10 +12,15 @@ from carton.core.script_manager import ScriptManager
 
 
 def _make_tool_folder(tmpdir, version="1.0.0"):
-    """Create a minimal tool folder with package.json."""
-    tool_dir = os.path.join(tmpdir, "my_tool")
-    os.makedirs(tool_dir, exist_ok=True)
-    with open(os.path.join(tool_dir, "__init__.py"), "w") as f:
+    """Create a properly-nested project folder for publishing.
+
+    Layout: ``<tmpdir>/my_tool_proj/{package.json, my_tool/__init__.py}`` —
+    the layout the publisher's flat-layout validator accepts.
+    """
+    project_root = os.path.join(tmpdir, "my_tool_proj")
+    module_dir = os.path.join(project_root, "my_tool")
+    os.makedirs(module_dir, exist_ok=True)
+    with open(os.path.join(module_dir, "__init__.py"), "w") as f:
         f.write("def show(): pass\n")
     pkg = {
         "namespace": "mystudio",
@@ -25,9 +30,9 @@ def _make_tool_folder(tmpdir, version="1.0.0"):
         "type": "python_package",
         "entry_point": {"type": "python", "module": "my_tool", "function": "show"},
     }
-    with open(os.path.join(tool_dir, "package.json"), "w") as f:
+    with open(os.path.join(project_root, "package.json"), "w") as f:
         json.dump(pkg, f)
-    return tool_dir
+    return project_root
 
 
 def _setup_env(tmpdir):
@@ -125,10 +130,11 @@ class TestUnpublish:
                 _register_and_publish(tmpdir)
             )
 
-            # Publish a second package
-            tool_dir_2 = os.path.join(tmpdir, "other_tool")
-            os.makedirs(tool_dir_2, exist_ok=True)
-            with open(os.path.join(tool_dir_2, "__init__.py"), "w") as f:
+            # Publish a second package (nested layout for the validator)
+            tool_dir_2 = os.path.join(tmpdir, "other_proj")
+            module_dir_2 = os.path.join(tool_dir_2, "other_tool")
+            os.makedirs(module_dir_2, exist_ok=True)
+            with open(os.path.join(module_dir_2, "__init__.py"), "w") as f:
                 f.write("def show(): pass\n")
             with open(os.path.join(tool_dir_2, "package.json"), "w") as f:
                 json.dump({

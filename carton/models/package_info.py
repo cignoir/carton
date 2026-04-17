@@ -1,6 +1,6 @@
 """Package information model."""
 
-from carton.core.identity import make_pkg_id, split_pkg_id
+from carton.core.identity import split_pkg_id
 
 
 class PackageInfo:
@@ -9,6 +9,14 @@ class PackageInfo:
     Identity model: ``id == "<namespace>/<name>"``. Both are required for any
     package that participates in a registry; locally-registered tools that the
     user has not yet decided to publish may have an empty namespace.
+
+    v4.0 source-of-truth split:
+      * ``entry_point`` lives in the inner ``package.json`` for registry
+        installs, and in this object only for My Tools (``source="local"``).
+      * ``display_name`` lives on the registry for registry installs, and
+        on this object only for My Tools.
+      * ``sha256`` lives only on the registry — never persisted in
+        installed.json.
     """
 
     def __init__(
@@ -31,7 +39,6 @@ class PackageInfo:
         local_path="",
         home_registry=None,
         activated_paths=None,
-        sha256="",
         pinned=False,
     ):
         # Resolve identity. If pkg_id is given, prefer it; otherwise derive from ns/name.
@@ -64,11 +71,6 @@ class PackageInfo:
         # uninstall to restore the env to its pre-install state even if
         # the handler's uninstall logic is incomplete.
         self.activated_paths = activated_paths or {}
-        # SHA256 of the source zip recorded at install time. Empty string
-        # for legacy installs and locally-registered scripts (no zip).
-        # Stored so the package can be re-verified later and so the UI
-        # can show a "verified" badge for registry-sourced installs.
-        self.sha256 = sha256 or ""
         # When True, this version is intentionally held — usually after a
         # rollback. Auto-update flows must skip pinned packages so the
         # user's choice isn't immediately undone.
@@ -76,9 +78,17 @@ class PackageInfo:
 
     @classmethod
     def from_registry_entry(cls, pkg_id, pkg_data, version_key=None):
-        """Create from a registry.json entry. Key is '<namespace>/<name>'."""
+        """Create from a registry.json entry. Key is '<namespace>/<name>'.
+
+        ``platform`` follows the v4.0 override rule: the version-level
+        platform (if present) wins, otherwise the package-level platform
+        is inherited.
+        """
         version_key = version_key or pkg_data.get("latest_version", "0.0.0")
         version_info = pkg_data.get("versions", {}).get(version_key, {})
+        platform = version_info.get("platform")
+        if not platform:
+            platform = pkg_data.get("platform", [])
         return cls(
             pkg_id=pkg_id,
             namespace=pkg_data.get("namespace", ""),
@@ -89,7 +99,7 @@ class PackageInfo:
             description=pkg_data.get("description", ""),
             author=pkg_data.get("author", ""),
             maya_versions=version_info.get("maya_versions", []),
-            platform=pkg_data.get("platform", []),
+            platform=platform,
             tags=pkg_data.get("tags", []),
         )
 
@@ -110,32 +120,39 @@ class PackageInfo:
             local_path=data.get("local_path", ""),
             home_registry=data.get("home_registry", {}),
             activated_paths=data.get("activated_paths", {}),
-            sha256=data.get("sha256", ""),
             pinned=data.get("pinned", False),
         )
 
     def to_installed_dict(self):
-        """Dictionary for writing to installed.json."""
+        """Dictionary for writing to installed.json (v4.0 shape).
+
+        ``entry_point`` and ``display_name`` are only emitted for My Tools
+        (``source="local"``); registry-installed packages defer to the inner
+        package.json and the registry respectively. ``sha256`` is never
+        emitted — the registry is the SoT.
+        """
         d = {
             "namespace": self.namespace,
             "name": self.name,
             "version": self.version,
             "type": self.type,
             "installed_at": self.installed_at,
-            "entry_point": self.entry_point,
-            "path": self.path,
             "source": self.source,
         }
-        if self.display_name:
-            d["display_name"] = self.display_name
+        if self.path:
+            d["path"] = self.path
+        if self.source == "local":
+            # My Tools only — registry SoT for registry installs.
+            if self.entry_point:
+                d["entry_point"] = self.entry_point
+            if self.display_name:
+                d["display_name"] = self.display_name
         if self.local_path:
             d["local_path"] = self.local_path
         if self.home_registry:
             d["home_registry"] = self.home_registry
         if self.activated_paths:
             d["activated_paths"] = self.activated_paths
-        if self.sha256:
-            d["sha256"] = self.sha256
         if self.pinned:
             d["pinned"] = True
         return d

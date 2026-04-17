@@ -75,11 +75,13 @@ class TestNamespaceRegistration:
 class TestPublishPersistence:
     def test_publish_writes_namespace_to_package_json(self):
         with tempfile.TemporaryDirectory() as tmpdir:
-            tool_dir = _make_folder(tmpdir)
+            # Use the nested project layout so the publisher's flat-layout
+            # validator passes.
+            project_root = _make_project(tmpdir, namespace=None)
             config, install_mgr, script_mgr = _make_env(tmpdir)
 
             pkg_id = script_mgr.register(
-                file_path=tool_dir, name="my_tool", display_name="My Tool",
+                file_path=project_root, name="my_tool", display_name="My Tool",
                 icon="🔧", description="t", pkg_type="python_package",
                 entry_point={"type": "python", "module": "my_tool", "function": "show"},
                 is_folder=True, namespace="mystudio",
@@ -94,7 +96,7 @@ class TestPublishPersistence:
 
             assert result["id"] == "mystudio/my_tool"
 
-            with open(os.path.join(tool_dir, "package.json"), "r") as f:
+            with open(os.path.join(project_root, "package.json"), "r") as f:
                 data = json.load(f)
             assert data["namespace"] == "mystudio"
             assert "id" not in data
@@ -181,7 +183,7 @@ class TestRegistryIdStamping:
             with open(reg_path, "r", encoding="utf-8") as f:
                 registry = json.load(f)
             assert is_valid_registry_id(registry.get("registry_id", ""))
-            assert registry["schema_version"] == "3.1"
+            assert registry["schema_version"] == "4.0"
             # The RegistryEntry is updated in-memory to match the stamp.
             assert config.registries[0].registry_id == registry["registry_id"]
 

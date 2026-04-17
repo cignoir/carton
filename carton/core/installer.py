@@ -8,6 +8,11 @@ import zipfile
 from datetime import datetime, timezone
 
 from carton.core.handlers import get_handler
+from carton.core.install_state import is_my_tools
+from carton.core.migrations import (
+    INSTALLED_SCHEMA_VERSION,
+    migrate_installed_data,
+)
 from carton.models.package_info import PackageInfo
 
 
@@ -34,13 +39,22 @@ class InstallManager:
         self._installed = self._load_installed()
 
     def _load_installed(self):
-        """Load installed.json."""
+        """Load installed.json. Auto-migrates pre-v4.0 files in place."""
         path = self._config.installed_json_path
-        if os.path.exists(path):
-            with open(path, "r", encoding="utf-8") as f:
-                data = json.load(f)
-            return data
-        return {"schema_version": "3.0", "packages": {}}
+        if not os.path.exists(path):
+            return {"schema_version": INSTALLED_SCHEMA_VERSION, "packages": {}}
+        with open(path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        migrated, was_migrated = migrate_installed_data(data)
+        if was_migrated:
+            # Persist on disk now (with backup) so subsequent reads are
+            # already in the new shape and external tools see the new
+            # schema_version.
+            from carton.core.migrations import make_backup
+            make_backup(path)
+            with open(path, "w", encoding="utf-8") as f:
+                json.dump(migrated, f, indent=2, ensure_ascii=False)
+        return migrated
 
     def _save_installed(self, data=None):
         """Save installed.json."""
@@ -73,17 +87,21 @@ class InstallManager:
             self._extract_zip(zip_path, package_dir)
             inner = self._read_inner_package_json(package_dir)
 
-            entry_point = inner.get("entry_point") or meta.get("entry_point", {}) or {}
+            # entry_point is no longer persisted in installed.json — it's
+            # resolved from the inner package.json at launch time. We still
+            # need ``pkg_type`` and the My Tools relink hint here.
             pkg_type = inner.get("type") or meta.get("type", "python_package")
             inner_source_path = inner.get("source_path", "") or ""
             inner_is_folder = inner.get("is_folder")
             inner_home_registry = inner.get("home_registry")
 
             # If the publisher stamped the source path AND the same path
-            # exists on this machine, treat the install as a "published"
-            # entry that doubles as a My Tools registration. This lets a
-            # user reinstall Carton (or move to a fresh install_dir) and
-            # get their My Tools entries back automatically.
+            # exists on this machine, treat the install as also a My Tools
+            # registration: keep ``source="registry"`` (the bytes still
+            # come from the registry) but record ``local_path`` so the UI
+            # presents the entry as double-bound. This lets a user
+            # reinstall Carton (or move to a fresh install_dir) and get
+            # their My Tools entries back automatically.
             relink_local_path = ""
             if inner_source_path and os.path.exists(inner_source_path):
                 relink_local_path = inner_source_path
@@ -95,7 +113,7 @@ class InstallManager:
             )
 
             entry_dict = self._build_install_entry(
-                meta, pkg_type, entry_point, rel_path,
+                meta, pkg_type, rel_path,
                 activated_paths, relink_local_path,
                 inner_is_folder, inner_home_registry,
             )
@@ -196,7 +214,7 @@ class InstallManager:
             raise InstallError("Handler install failed: {}".format(e))
         return self._env_manager.diff_since(env_before)
 
-    def _build_install_entry(self, meta, pkg_type, entry_point, rel_path,
+    def _build_install_entry(self, meta, pkg_type, rel_path,
                               activated_paths, relink_local_path,
                               inner_is_folder, inner_home_registry):
         """Construct the installed.json entry dict for a successful install."""
@@ -204,15 +222,12 @@ class InstallManager:
             pkg_id=meta["id"],
             namespace=meta.get("namespace", ""),
             name=meta["name"],
-            display_name=meta.get("display_name", meta["name"]),
             version=meta["version"],
             pkg_type=pkg_type,
-            entry_point=entry_point,
             path=rel_path,
-            source="published" if relink_local_path else "registry",
+            source="registry",
             installed_at=datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
             activated_paths=activated_paths,
-            sha256=meta.get("sha256", ""),
             pinned=meta.get("pinned", False),
             local_path=relink_local_path,
             home_registry=inner_home_registry or {},
@@ -262,13 +277,11 @@ class InstallManager:
     def uninstall_package(self, pkg_id):
         """Uninstall a package.
 
-        If the package originated from a local My Tools registration that
-        was later published (``source == "published"`` with a stored
-        ``local_path``), the uninstall is treated as "revert to My Tools
-        only": the registry-side env wiring is undone but the entry
-        stays in installed.json with ``source = "local_script"`` so the
-        user keeps their registration. Otherwise the entry is removed
-        completely as before.
+        Double-bound entries (registry-installed AND My Tools-registered,
+        identified by ``source="registry"`` plus a non-empty ``local_path``)
+        are demoted to pure My Tools (``source="local"``) instead of being
+        removed — the registration is the user's data and shouldn't get
+        wiped along with the registry bytes.
         """
         pkg_data = self._installed["packages"].get(pkg_id)
         if not pkg_data:
@@ -288,15 +301,12 @@ class InstallManager:
         if activated:
             self._env_manager.remove_tracked(activated)
 
-        # Demote published-from-local entries back to plain My Tools
-        # registrations instead of dropping them. Registration state is
-        # the user's data; uninstalling from a registry view shouldn't
-        # erase it.
-        if pkg_data.get("source") == "published" and pkg_data.get("local_path"):
-            pkg_data["source"] = "local_script"
+        # Demote double-bound entries back to plain My Tools instead of
+        # dropping them.
+        if pkg_data.get("source") == "registry" and pkg_data.get("local_path"):
+            pkg_data["source"] = "local"
             pkg_data["activated_paths"] = {}
             pkg_data.pop("path", None)
-            pkg_data.pop("sha256", None)
             self._save_installed()
             return
 
@@ -361,12 +371,11 @@ class InstallManager:
     def is_installed(self, pkg_id):
         """True if a package has registry-installed bytes on disk.
 
-        A package whose entry has been demoted to ``source == local_script``
-        (after the user uninstalled it from the registry view but kept the
-        My Tools registration) is reported as NOT installed — the registry
-        bytes are gone and only the local reference survives.
+        Pure My Tools entries (``source="local"``) are reported as NOT
+        installed — they reference original files in place and have no
+        registry-managed bytes.
         """
         entry = self._installed.get("packages", {}).get(pkg_id)
         if not entry:
             return False
-        return entry.get("source") != "local_script"
+        return entry.get("source") == "registry"

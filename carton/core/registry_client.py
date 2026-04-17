@@ -5,6 +5,7 @@ import os
 import zipfile
 
 from carton.compat_urllib import urlopen, Request, URLError, urljoin, BytesIO
+from carton.core.migrations import make_backup, migrate_registry_data
 from carton.core.registry_id import read_registry_id
 
 
@@ -46,6 +47,20 @@ class RegistryClient:
             print("[Carton] Registry read failed: {} ({})".format(entry.name, e))
             return
 
+        # Auto-migrate pre-v4.0 registries on read. We persist the result
+        # so subsequent reads, the publisher, and admin CLIs all see the
+        # new shape immediately.
+        migrated, was_migrated = migrate_registry_data(data)
+        if was_migrated:
+            try:
+                make_backup(path)
+                with open(path, "w", encoding="utf-8") as f:
+                    json.dump(migrated, f, indent=2, ensure_ascii=False)
+            except OSError as e:
+                print("[Carton] Registry migration write failed: {} ({})".format(
+                    entry.name, e))
+            data = migrated
+
         self._cache_registry_id(entry, data)
         self._merge_packages(entry, data)
 
@@ -59,6 +74,19 @@ class RegistryClient:
         except (URLError, OSError, ValueError) as e:
             print("[Carton] Remote registry failed: {} ({})".format(entry.name, e))
             return
+
+        # Migrate in memory — we can't write back to a remote URL. Skip
+        # the auto-stamp so a missing registry_id stays missing instead of
+        # rotating through a fresh UUID on every fetch (which would break
+        # mirror matching). Surface a warning so admins know to stamp the
+        # canonical file.
+        data, _ = migrate_registry_data(data, stamp_id=False)
+        if not data.get("registry_id"):
+            print(
+                "[Carton] Remote registry {!r} has no registry_id — "
+                "ask the maintainer to run `carton registry id <path> --stamp` "
+                "so mirror matching can work.".format(entry.name)
+            )
 
         self._cache_registry_id(entry, data)
         self._merge_packages(entry, data)

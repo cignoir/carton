@@ -78,6 +78,22 @@ class RegistryEntry:
             registry_id=d.get("registry_id", ""),
         )
 
+    def to_home_meta(self):
+        """Build a ``home_registry`` payload for embedding in package metadata.
+
+        Single source of truth so publisher / script_manager / UI never
+        construct home_registry dicts ad hoc — that's how the
+        ``registry_id`` field used to drift between encode sites.
+        """
+        meta = {"name": self.name}
+        if self.registry_id:
+            meta["registry_id"] = self.registry_id
+        # An empty path normalises to "." via os.path.normpath in __init__;
+        # treat that as "no hint" so the meta dict stays minimal.
+        if self.path and self.path != ".":
+            meta["hint"] = self.path
+        return meta
+
     def __str__(self):
         return "{} — {}".format(self.name, self.path)
 

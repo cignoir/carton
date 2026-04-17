@@ -21,9 +21,16 @@ from carton.core.identity import (
     validate_namespace,
     validate_name,
 )
+from carton.core.migrations import (
+    REGISTRY_SCHEMA_VERSION,
+    migrate_registry_data,
+)
 from carton.core.path_utils import resolve_local_path
 from carton.core.registry_id import read_registry_id, stamp_registry_id
 from carton.core.sidecar import write_sidecar, read_sidecar
+
+
+_DEFAULT_MAYA_VERSIONS = ["2024", "2025", "2026", "2027"]
 
 
 class VersionConflictError(RuntimeError):
@@ -147,6 +154,11 @@ class Publisher:
         is_folder = pkg_data.get("is_folder", False)
         author = pkg_data.get("author", "")
 
+        # maya_versions: SoT is package.json. Fall back to inner package.json
+        # if the in-memory pkg_data didn't carry the field, and finally to a
+        # studio-default tuple.
+        maya_versions = self._resolve_maya_versions(pkg_data, local_path, is_folder)
+
         # Check for same version conflict
         self._check_version_conflict(pkg_id, version, target_entry)
 
@@ -158,6 +170,7 @@ class Publisher:
         zip_path = self._create_zip(
             local_path, ns, name, version, is_folder,
             entry_point, display_name, icon, description, pkg_type, author,
+            maya_versions=maya_versions,
             home_registry=pkg_data.get("home_registry"),
             include_compiled=include_compiled,
             embed_source_path=embed_source_path,
@@ -203,16 +216,15 @@ class Publisher:
             sha256=sha256,
             size_bytes=size_bytes,
             entry_point=entry_point,
+            maya_versions=maya_versions,
             tags=pkg_data.get("tags", []),
             release_notes=release_notes,
         )
 
         # 5. Persist namespace/name back into source so the next user converges.
-        # Stamp the UUID alongside the name so other machines can resolve the
-        # home registry even when it's registered under a different alias.
-        home_meta = {"name": target_entry.name}
-        if target_entry.registry_id:
-            home_meta["registry_id"] = target_entry.registry_id
+        # Use the canonical to_home_meta() builder so the embedded UUID
+        # stays consistent with anything else encoded by the UI / config.
+        home_meta = target_entry.to_home_meta()
         self._persist_identity_to_source(
             local_path, ns, name, is_folder,
             home_registry=pkg_data.get("home_registry") or home_meta,
@@ -283,6 +295,42 @@ class Publisher:
         if os.path.isfile(os.path.join(local_path, "__init__.py")):
             raise InvalidPythonPackageLayoutError(local_path, name)
 
+    def _resolve_maya_versions(self, pkg_data, local_path, is_folder):
+        """Return the maya_versions list to embed in the zip and registry.
+
+        Lookup order: in-memory ``pkg_data`` → existing inner
+        ``package.json`` / sidecar → process-wide default. Hardcoded Maya
+        versions in publisher code are gone — package.json is the SoT.
+        """
+        versions = pkg_data.get("maya_versions")
+        if versions:
+            return list(versions)
+
+        existing = self._read_existing_metadata(local_path, is_folder)
+        if existing:
+            versions = existing.get("maya_versions")
+            if versions:
+                return list(versions)
+
+        return list(_DEFAULT_MAYA_VERSIONS)
+
+    @staticmethod
+    def _read_existing_metadata(local_path, is_folder):
+        """Peek at the existing package.json / sidecar next to the source."""
+        try:
+            if is_folder:
+                pkg_json = os.path.join(local_path, "package.json")
+                if os.path.exists(pkg_json):
+                    with open(pkg_json, "r", encoding="utf-8") as f:
+                        return json.load(f)
+            else:
+                data = read_sidecar(local_path)
+                if data:
+                    return data
+        except (OSError, ValueError):
+            pass
+        return None
+
     def _check_version_conflict(self, pkg_id, version, registry_entry):
         """Check if the same version has already been published."""
         reg_path = os.path.normpath(registry_entry.path)
@@ -296,6 +344,7 @@ class Publisher:
 
     def _create_zip(self, local_path, namespace, name, version, is_folder,
                     entry_point, display_name, icon, description, pkg_type, author,
+                    maya_versions=None,
                     home_registry=None, include_compiled=False,
                     embed_source_path=True):
         """Create a zip file in the staging directory."""
@@ -304,6 +353,7 @@ class Publisher:
         zip_path = os.path.join(staging, "{}-{}.zip".format(name, version))
 
         pkg_json = {
+            "schema_version": "4.0",
             "namespace": namespace,
             "name": name,
             "display_name": display_name,
@@ -311,9 +361,9 @@ class Publisher:
             "type": pkg_type,
             "description": description,
             "author": author,
-            "maya_versions": ["2024", "2025", "2026", "2027"],
+            "maya_versions": list(maya_versions) if maya_versions else list(_DEFAULT_MAYA_VERSIONS),
             "entry_point": entry_point,
-            "icon": os.path.basename(icon) if self._is_icon_file(icon) else icon,
+            "icon": self._normalise_icon_for_storage(icon),
         }
         if embed_source_path:
             # Absolute path of the source files at publish time. The
@@ -364,20 +414,26 @@ class Publisher:
 
     def _update_registry(self, registry_entry, pkg_id, namespace, name, display_name,
                          version, pkg_type, description, icon, author,
-                         sha256, size_bytes, entry_point, tags, release_notes=""):
+                         sha256, size_bytes, entry_point, maya_versions,
+                         tags, release_notes=""):
         """Update registry.json. Returns a list of warning strings (may be empty)."""
         reg_path = os.path.normpath(registry_entry.path)
 
         if os.path.exists(reg_path):
             with open(reg_path, "r", encoding="utf-8") as f:
                 registry = json.load(f)
+            # Auto-migrate legacy registries on touch so the schema_version,
+            # registry_id, and icon shape are all already at v4.0 by the
+            # time we write back.
+            registry, _ = migrate_registry_data(registry)
         else:
-            registry = {"schema_version": "3.1", "packages": {}}
+            registry = {
+                "schema_version": REGISTRY_SCHEMA_VERSION,
+                "registry_id": "",
+                "packages": {},
+            }
 
-        # Auto-upgrade older schema_version on touch and stamp a UUID so
-        # duplicate detection & mirror resolution can recognise the registry
-        # across future publish/fetch cycles.
-        registry["schema_version"] = "3.1"
+        registry["schema_version"] = REGISTRY_SCHEMA_VERSION
         registry_id, _ = stamp_registry_id(registry)
         registry_entry.registry_id = registry_id
 
@@ -410,19 +466,21 @@ class Publisher:
         entry["author"] = author
         entry["tags"] = tags
         entry["latest_version"] = version
-        # Carry entry_point at the registry level so the card UI can decide
-        # between Launch / Activate without having to install the package
-        # first. The inner zip's package.json is still the source of truth at
-        # install time.
+        # Mirror entry_point as a preview hint so the card UI can show
+        # Launch / Activate without installing first. The inner zip's
+        # package.json remains the runtime SoT.
         if entry_point:
             entry["entry_point"] = entry_point
 
-        if icon:
-            entry["icon"] = icon
+        normalised_icon = self._normalise_icon_for_storage(icon)
+        if normalised_icon is not None and normalised_icon != "":
+            entry["icon"] = normalised_icon
+        else:
+            entry.pop("icon", None)
 
         rel_path = "packages/{}/{}/{}/{}-{}.zip".format(namespace, name, version, name, version)
         entry["versions"][version] = {
-            "maya_versions": ["2024", "2025", "2026", "2027"],
+            "maya_versions": list(maya_versions) if maya_versions else list(_DEFAULT_MAYA_VERSIONS),
             "download_url": rel_path,
             "sha256": sha256,
             "size_bytes": size_bytes,
@@ -485,6 +543,7 @@ class Publisher:
 
         with open(reg_path, "r", encoding="utf-8") as f:
             registry = json.load(f)
+        registry, _ = migrate_registry_data(registry)
 
         packages = registry.get("packages", {})
         if pkg_id not in packages:
@@ -544,6 +603,21 @@ class Publisher:
                 and icon.endswith((".png", ".jpg", ".svg"))
                 and os.path.isabs(icon)
                 and os.path.exists(icon))
+
+    @staticmethod
+    def _normalise_icon_for_storage(icon):
+        """Coerce an icon value into the on-disk shape (string | null).
+
+        * Empty string / None → ``None`` (omit field).
+        * File path → basename (the publisher copies the file to the
+          registry's ``icons/`` directory verbatim).
+        * Anything else (emoji, ``"@auto"``, bare filename) → as-is.
+        """
+        if icon is None or icon == "":
+            return None
+        if Publisher._is_icon_file(icon):
+            return os.path.basename(icon)
+        return icon
 
     @staticmethod
     def _copy_icon_to_registry(icon_path, dest_filename, registry_base):

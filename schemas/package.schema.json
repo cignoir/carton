@@ -2,10 +2,15 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://carton.dev/schemas/package.schema.json",
   "title": "Carton Package Metadata",
-  "description": "Carton パッケージの package.json スキーマ (v3.0 — namespace/name identity)",
+  "description": "Carton パッケージの package.json スキーマ (v4.0). この package.json が entry_point / maya_versions / icon の SoT",
   "type": "object",
   "required": ["name", "display_name", "version", "description", "author", "maya_versions", "entry_point"],
   "properties": {
+    "schema_version": {
+      "type": "string",
+      "enum": ["4.0"],
+      "description": "スキーマバージョン。省略可 (Carton が読むときに 4.0 を仮定)"
+    },
     "namespace": {
       "type": "string",
       "pattern": "^[a-z0-9][a-z0-9-]{1,31}$",
@@ -28,7 +33,7 @@
     },
     "type": {
       "type": "string",
-      "enum": ["python_package", "mel_script", "plugin", "maya_module", "local"],
+      "enum": ["python_package", "mel_script", "plugin", "maya_module"],
       "default": "python_package",
       "description": "パッケージタイプ。省略時は python_package"
     },
@@ -47,7 +52,7 @@
         "pattern": "^\\d{4}$"
       },
       "minItems": 1,
-      "description": "対応Mayaバージョン（例: [\"2024\", \"2025\", \"2026\"]）"
+      "description": "対応Mayaバージョン（例: [\"2024\", \"2025\", \"2026\"]）。Source of Truth — publish 時に registry にコピーされる"
     },
     "entry_point": {
       "oneOf": [
@@ -60,7 +65,7 @@
           "description": "後方互換: \"module:function\" 形式（内部で python 形式に変換）"
         }
       ],
-      "description": "タイプ別エントリポイント"
+      "description": "タイプ別エントリポイント。Source of Truth — registry にも preview としてコピーされるが、起動時は zip 内 package.json が優先される"
     },
     "platform": {
       "type": "array",
@@ -71,8 +76,8 @@
       "description": "対応プラットフォーム（plugin 時に必要）"
     },
     "icon": {
-      "type": "string",
-      "description": "アイコン。画像ファイルの相対パス (例: resources/icon.png) または絵文字 (例: 📷)"
+      "type": ["string", "null"],
+      "description": "アイコン。画像ファイルの相対パス (例: resources/icon.png)、絵文字 (例: 📷)、'@auto' (icons/<name>.png 自動解決)、null (アイコン無し)"
     },
     "home_registry": {
       "type": "object",
@@ -82,12 +87,25 @@
           "type": "string",
           "description": "Carton 内で登録されているレジストリ名"
         },
+        "registry_id": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+          "description": "本籍レジストリの UUID。Config 層で自動付与される"
+        },
         "hint": {
           "type": "string",
           "description": "レジストリの場所ヒント（パス または URL）。Add 時のレジストリ追加誘導に使う"
         }
       },
       "additionalProperties": false
+    },
+    "source_path": {
+      "type": "string",
+      "description": "publish 時の source ディレクトリ絶対パス。同じマシンで再 install したときに My Tools 双方向リンクを自動復帰するためのヒント"
+    },
+    "is_folder": {
+      "type": "boolean",
+      "description": "publish 時に記録される、source がフォルダかファイルかの区別"
     },
     "dependencies": {
       "type": "array",

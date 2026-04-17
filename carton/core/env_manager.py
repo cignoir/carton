@@ -19,13 +19,23 @@ class MayaEnvManager:
         self._added_paths = {}  # {"MAYA_SCRIPT_PATH": [path1, ...], ...}
         self._rehash_pending = False
 
-    def add_python_path(self, path):
-        """Add a path to sys.path."""
+    def add_python_path(self, path, position="front"):
+        """Add a path to sys.path.
+
+        ``position`` controls placement: ``"front"`` (default) inserts at
+        index 0 so the new path wins resolution conflicts; ``"back"``
+        appends so existing entries take precedence. Use
+        :meth:`extend_python_path` for batch adds where the *order* of
+        the new paths matters relative to each other.
+        """
         # Normalise so the dedup check survives mixed-separator entries
         # (Windows ``\\`` vs ``/``) coming from os.path.join shenanigans.
         path = os.path.normpath(path)
         if path not in sys.path:
-            sys.path.insert(0, path)
+            if position == "back":
+                sys.path.append(path)
+            else:
+                sys.path.insert(0, path)
             self._added_paths.setdefault("sys.path", []).append(path)
             # Drop the path importer cache so finders pick up the new
             # directory's contents on the next import attempt. Without
@@ -33,6 +43,28 @@ class MayaEnvManager:
             # for files that exist on disk in the freshly added path.
             import importlib
             importlib.invalidate_caches()
+
+    def extend_python_path(self, paths, position="front"):
+        """Add multiple paths to sys.path while preserving the input order.
+
+        Calling :meth:`add_python_path` in a loop with ``position="front"``
+        reverses the caller's intended order (each insert pushes the
+        previous one down). This helper inserts in reverse so the final
+        sys.path slice mirrors ``paths`` from index 0 onward.
+        """
+        normalised = [os.path.normpath(p) for p in paths if p]
+        new_paths = [p for p in normalised if p not in sys.path]
+        if not new_paths:
+            return
+        if position == "back":
+            for p in new_paths:
+                sys.path.append(p)
+        else:
+            for p in reversed(new_paths):
+                sys.path.insert(0, p)
+        self._added_paths.setdefault("sys.path", []).extend(new_paths)
+        import importlib
+        importlib.invalidate_caches()
 
     def remove_python_path(self, path):
         """Remove a path from sys.path and drop it from the tracking book."""

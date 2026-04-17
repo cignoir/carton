@@ -63,8 +63,11 @@ class EditDialog(QtWidgets.QDialog):
         self._namespace_input = QtWidgets.QLineEdit(self._pkg_data.get("namespace", ""))
         self._namespace_input.setPlaceholderText(t("namespace_placeholder"))
         self._namespace_input.textChanged.connect(self._update_namespace_preview)
-        is_published = (self._pkg_data.get("source") == "published"
-                        or bool(self._published_registries))
+        # "Published" for namespace-lock purposes: known to live in any
+        # writable registry. The publisher resolves the "is it actually
+        # there" question for us via published_registries; we don't need
+        # to second-guess based on installed.json source flags.
+        is_published = bool(self._published_registries)
         if is_published:
             self._namespace_input.setReadOnly(True)
             self._namespace_input.setToolTip(

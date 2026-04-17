@@ -42,7 +42,7 @@ def resolve_icon(icon_label, icon_value, resolved_path, size=40,
         return
 
     if (isinstance(icon_value, str) and icon_value
-            and icon_value not in ("true", "false")
+            and icon_value != "@auto"
             and not icon_value.endswith((".png", ".jpg", ".svg"))):
         # Emoji icon
         icon_label.setText(icon_value)

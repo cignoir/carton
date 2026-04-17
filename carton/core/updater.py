@@ -32,6 +32,9 @@ class Updater:
         installed = self._install_mgr.get_installed_packages()
 
         for pkg_id, pkg_data in installed.items():
+            # Pure My Tools entries don't have a registry version to
+            # compare against — skip. Double-bound registry installs
+            # (source=registry + local_path) still get update checks.
             if pkg_data.get("source") == "local":
                 continue
 

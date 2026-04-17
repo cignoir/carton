@@ -385,7 +385,7 @@ class PackageDetailPanel(QtWidgets.QWidget):
                     bg=theme.BG_SECONDARY)
             )
         elif (isinstance(icon_value, str) and icon_value
-                and icon_value not in ("true", "false")
+                and icon_value != "@auto"
                 and not icon_value.endswith((".png", ".jpg", ".svg"))):
             self._icon_label.setText(icon_value)
             self._icon_label.setStyleSheet(_detail_icon_style)

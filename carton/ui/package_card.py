@@ -97,11 +97,17 @@ class PackageCard(QtWidgets.QFrame):
         self._icon_label.setAlignment(Qt.AlignCenter)
         icon_value = self._pkg_data.get("icon", "")
 
-        # Resolve icon source: icon_path (from registry), direct file path, emoji, or default
+        # Resolve icon source: icon_path (from registry), direct file path, emoji, or default.
+        # ``"@auto"`` is the explicit "registry resolved <name>.png" marker
+        # — main_window's _icon_filename / _resolve_icon_path produced
+        # icon_path already in that case, so we don't render the literal
+        # string at this layer.
         resolved_path = self._icon_path
         if not resolved_path and isinstance(icon_value, str) and icon_value.endswith((".png", ".jpg", ".svg")):
             if os.path.isabs(icon_value) and os.path.exists(icon_value):
                 resolved_path = icon_value
+        if icon_value == "@auto":
+            icon_value = ""
 
         resolve_icon(self._icon_label, icon_value, resolved_path,
                      size=40, default_icon_path=_get_default_icon_path())
