@@ -488,7 +488,7 @@ class RegistriesSection(QtWidgets.QWidget):
     def _finish_add(self, path, default_name="", registry_id=""):
         from carton.ui._registry_pairing import (
             DuplicateRegistryChoice,
-            normalize_registry_path,
+            find_duplicate_entry,
             resolve_duplicate_registry,
         )
 
@@ -496,19 +496,16 @@ class RegistriesSection(QtWidgets.QWidget):
         # different alias" before asking the user for a name. Falls back
         # silently when neither side has a registry_id — the legacy
         # name-based check below still guards.
-        if registry_id:
-            for r in self._target.registries:
-                if getattr(r, "registry_id", "") != registry_id:
-                    continue
-                if r.path == normalize_registry_path(path):
-                    continue
-                choice = resolve_duplicate_registry(self, r)
-                if choice == DuplicateRegistryChoice.CANCEL:
-                    return
-                if choice == DuplicateRegistryChoice.USE_EXISTING:
-                    return
-                # ADD_ALIAS → fall through to the name prompt.
-                break
+        existing = find_duplicate_entry(
+            self._target.registries, registry_id, path,
+        )
+        if existing is not None:
+            choice = resolve_duplicate_registry(self, existing)
+            if choice == DuplicateRegistryChoice.CANCEL:
+                return
+            if choice == DuplicateRegistryChoice.USE_EXISTING:
+                return
+            # ADD_ALIAS → fall through to the name prompt.
 
         name, ok = wide_input(
             self, "Registry Name", t("settings_registry_name"), text=default_name,

@@ -630,7 +630,7 @@ class CartonWindow(QtWidgets.QDialog):
         """Browse for an existing registry.json. Returns the RegistryEntry or None."""
         from carton.ui._registry_pairing import (
             DuplicateRegistryChoice,
-            normalize_registry_path,
+            find_duplicate_entry,
             read_local_registry_id,
             resolve_duplicate_registry,
             stamp_local_registry_with_prompt,
@@ -647,19 +647,22 @@ class CartonWindow(QtWidgets.QDialog):
         if not rid and data is not None:
             rid = stamp_local_registry_with_prompt(self, path, data)
 
-        # Duplicate detection — skip self (same normalized path).
-        normalized = normalize_registry_path(path)
-        if rid:
-            existing = self._config.find_registry_by_id(rid)
-            if existing is not None and existing.path != normalized:
-                choice = resolve_duplicate_registry(self, existing)
-                if choice == DuplicateRegistryChoice.CANCEL:
-                    return None
-                if choice == DuplicateRegistryChoice.USE_EXISTING:
-                    if paired_remote is not None and not paired_remote.registry_id:
-                        paired_remote.registry_id = rid
-                        self._config.save()
-                    return existing
+        # Duplicate detection — skip the paired remote itself, because a
+        # pairing flow is supposed to land on the same UUID (that's the
+        # whole point). Also skip the same normalised path.
+        existing = find_duplicate_entry(
+            self._config.registries, rid, path,
+            ignore=[paired_remote] if paired_remote is not None else None,
+        )
+        if existing is not None:
+            choice = resolve_duplicate_registry(self, existing)
+            if choice == DuplicateRegistryChoice.CANCEL:
+                return None
+            if choice == DuplicateRegistryChoice.USE_EXISTING:
+                if paired_remote is not None and not paired_remote.registry_id:
+                    paired_remote.registry_id = rid
+                    self._config.save()
+                return existing
 
         base = os.path.basename(os.path.dirname(path))
         name, ok = QtWidgets.QInputDialog.getText(

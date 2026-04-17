@@ -87,6 +87,32 @@ class DuplicateRegistryChoice:
     ADD_ALIAS = "add_alias"
 
 
+def find_duplicate_entry(registries, rid, new_path, ignore=None):
+    """Return the first registry that collides with ``(rid, new_path)``, or None.
+
+    * Entries with a different ``registry_id`` (or none) never collide.
+    * The entry located at the same normalised path as ``new_path`` is not a
+      collision — it's the user re-selecting a registry that's already in
+      the list verbatim.
+    * Any entry in ``ignore`` is skipped. Used by the pairing flow to pass
+      the remote that *should* share the UUID with the new local mirror —
+      that's the whole point of pairing, so flagging it would be wrong.
+    """
+    if not rid:
+        return None
+    ignore_set = set(id(e) for e in (ignore or []) if e is not None)
+    normalized = normalize_registry_path(new_path) if new_path else ""
+    for entry in registries:
+        if id(entry) in ignore_set:
+            continue
+        if normalized and entry.path == normalized:
+            continue
+        entry_rid = getattr(entry, "registry_id", "")
+        if entry_rid and entry_rid == rid:
+            return entry
+    return None
+
+
 def resolve_duplicate_registry(parent, existing_entry):
     """Ask the user what to do when a registry is already known.
 
