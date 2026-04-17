@@ -6,13 +6,10 @@ Usage:
     python scripts/bump_version.py major              # 0.1.8 -> 1.0.0
     python scripts/bump_version.py 1.2.3              # set explicit version
 
-By default the bump is committed with a Conventional Commits message
-(``chore(release): bump version to X.Y.Z``). Add ``--tag`` to also tag
-the commit. Pass ``--no-commit`` to leave the changes staged for a
-manual commit (e.g. when bundling with other release prep).
-
-    python scripts/bump_version.py patch --tag        # commit + tag
-    python scripts/bump_version.py patch --no-commit  # write files only
+    # Stage and commit the bump with a Conventional Commits message
+    # (chore(release): bump version to X.Y.Z), and optionally tag it.
+    python scripts/bump_version.py patch --commit
+    python scripts/bump_version.py patch --commit --tag
 """
 
 import json
@@ -93,27 +90,17 @@ def commit_bump(new_ver, tag=False):
 
 if __name__ == "__main__":
     args = sys.argv[1:]
-    usage = (
-        "Usage: bump_version.py <patch|minor|major|X.Y.Z> "
-        "[--no-commit] [--tag]"
-    )
     if not args:
-        print(usage)
+        print("Usage: bump_version.py <patch|minor|major|X.Y.Z> [--commit] [--tag]")
         sys.exit(1)
 
-    no_commit = "--no-commit" in args
+    do_commit = "--commit" in args
     do_tag = "--tag" in args
-    # ``--commit`` is the default now; accept the flag silently so older
-    # invocations keep working.
     positional = [a for a in args if not a.startswith("--")]
     if not positional:
-        print(usage)
+        print("Usage: bump_version.py <patch|minor|major|X.Y.Z> [--commit] [--tag]")
         sys.exit(1)
 
-    if no_commit and do_tag:
-        print("--no-commit and --tag are mutually exclusive (a tag needs a commit).")
-        sys.exit(2)
-
     new_ver = bump(positional[0])
-    if not no_commit:
+    if do_commit or do_tag:
         commit_bump(new_ver, tag=do_tag)
