@@ -785,6 +785,37 @@ class CartonWindow(QtWidgets.QDialog):
             return key[len(self._MYTOOLS_NS_PREFIX):]
         return None
 
+    def _resolve_registry_selection(self, selection):
+        """Map a sidebar selection (registry name) to its config entry.
+
+        Returns the entry, or None if the selection doesn't match any
+        registry (e.g. ``self._MYTOOLS_KEY`` or a stale value).
+        """
+        if not selection or not self._config:
+            return None
+        for entry in self._config.registries:
+            if entry.name == selection:
+                return entry
+        return None
+
+    def _pkg_belongs_to_entry(self, pkg_data, entry):
+        """True if ``pkg_data`` belongs to ``entry`` (id-aware, name-fallback).
+
+        Packages get attributed to whichever registry loaded first when two
+        share a ``registry_id`` (local mirror + paired remote). A naive
+        name match would miss them on the *other* side; matching by
+        ``registry_id`` keeps the sidebar selection honest regardless of
+        load order. Falls back to the alias name when neither side has a
+        UUID yet (legacy/unstamped registries).
+        """
+        if entry is None:
+            return False
+        entry_rid = getattr(entry, "registry_id", "")
+        pkg_rid = pkg_data.get("_registry_id", "")
+        if entry_rid and pkg_rid and entry_rid == pkg_rid:
+            return True
+        return pkg_data.get("_registry_name", "") == entry.name
+
     def _rebuild_sidebar(self):
         """Rebuild sidebar items from config registries + My Tools."""
         prev = self._sidebar_selection
@@ -795,16 +826,38 @@ class CartonWindow(QtWidgets.QDialog):
         packages = self._registry_client.get_packages() if self._registry_client else {}
         installed = self._install_manager.get_installed_packages() if self._install_manager else {}
 
-        # Count packages per registry
-        reg_counts = {}
+        # Count packages two ways: by alias name (legacy / unstamped
+        # registries) and by registry_id (canonical, survives the local↔
+        # remote mirror dedup that drops one side's _registry_name).
+        reg_counts_by_name = {}
+        reg_counts_by_id = {}
         for pkg_data in packages.values():
             rn = pkg_data.get("_registry_name", "")
-            reg_counts[rn] = reg_counts.get(rn, 0) + 1
+            reg_counts_by_name[rn] = reg_counts_by_name.get(rn, 0) + 1
+            rid = pkg_data.get("_registry_id", "")
+            if rid:
+                reg_counts_by_id[rid] = reg_counts_by_id.get(rid, 0) + 1
+
+        # Hide local mirrors from the sidebar when a remote entry shares
+        # their registry_id — the remote is the canonical "consumer"
+        # face, the local is just the publish-side write target. Both
+        # remain accessible from Settings → Registries for management.
+        remote_ids = {
+            e.registry_id for e in (self._config.registries if self._config else [])
+            if e.is_remote and e.registry_id
+        }
 
         # Registries
         if self._config:
             for entry in self._config.registries:
-                count = reg_counts.get(entry.name, 0)
+                if (not entry.is_remote
+                        and entry.registry_id
+                        and entry.registry_id in remote_ids):
+                    continue
+                if entry.registry_id and entry.registry_id in reg_counts_by_id:
+                    count = reg_counts_by_id[entry.registry_id]
+                else:
+                    count = reg_counts_by_name.get(entry.name, 0)
                 item = QtWidgets.QListWidgetItem("{} ({})".format(entry.name, count))
                 item.setData(Qt.UserRole, entry.name)
                 self._registry_list.addItem(item)
@@ -894,10 +947,11 @@ class CartonWindow(QtWidgets.QDialog):
             # Default to "installed", fall back to "all" if none installed
             packages = self._registry_client.get_packages() if self._registry_client else {}
             installed = self._install_manager.get_installed_packages() if self._install_manager else {}
+            sel_entry = self._resolve_registry_selection(self._sidebar_selection)
             has_installed = any(
                 pkg_id in installed
                 for pkg_id, pkg_data in packages.items()
-                if pkg_data.get("_registry_name") == self._sidebar_selection
+                if self._pkg_belongs_to_entry(pkg_data, sel_entry)
             )
             self._current_tab = "installed" if has_installed else "all"
             self._tab_installed.setChecked(self._current_tab == "installed")
@@ -1066,9 +1120,10 @@ class CartonWindow(QtWidgets.QDialog):
 
     def _collect_registry_items(self, packages, installed, selection):
         """Return ``[(pkg_id, view_data)]`` for the selected registry view."""
+        sel_entry = self._resolve_registry_selection(selection)
         items = []
         for pkg_id, pkg_data in packages.items():
-            if pkg_data.get("_registry_name") != selection:
+            if not self._pkg_belongs_to_entry(pkg_data, sel_entry):
                 continue
             item = dict(pkg_data)
             # A demoted (uninstalled-from-registry) entry stays in

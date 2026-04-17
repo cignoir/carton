@@ -88,6 +88,7 @@ class RegistryClient:
                 continue
             item = dict(pkg_data)
             item["_registry_name"] = entry.name
+            item["_registry_id"] = getattr(entry, "registry_id", "")
             item["_registry_base_dir"] = base_dir
             item["_registry_remote"] = is_remote
 
