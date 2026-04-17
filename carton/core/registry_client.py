@@ -5,6 +5,7 @@ import os
 import zipfile
 
 from carton.compat_urllib import urlopen, Request, URLError, urljoin, BytesIO
+from carton.core.registry_id import read_registry_id
 
 
 class RegistryClient:
@@ -45,6 +46,7 @@ class RegistryClient:
             print("[Carton] Registry read failed: {} ({})".format(entry.name, e))
             return
 
+        self._cache_registry_id(entry, data)
         self._merge_packages(entry, data)
 
     def _load_remote_registry(self, entry):
@@ -58,8 +60,21 @@ class RegistryClient:
             print("[Carton] Remote registry failed: {} ({})".format(entry.name, e))
             return
 
+        self._cache_registry_id(entry, data)
         self._merge_packages(entry, data)
         self._fetch_icons_archive(entry)
+
+    @staticmethod
+    def _cache_registry_id(entry, data):
+        """Copy ``registry_id`` from the loaded registry onto the entry.
+
+        In-memory only — persistence happens via an explicit ``Config.save()``
+        triggered by user actions (add/remove/edit). This way a failed or
+        missing id doesn't silently clobber what's in config.json.
+        """
+        rid = read_registry_id(data)
+        if rid:
+            entry.registry_id = rid
 
     def _merge_packages(self, entry, data):
         """Merge packages from a loaded registry into the package dict."""

@@ -121,18 +121,26 @@ class _SelfUpdateCheckWorker(QtCore.QThread):
 
 
 class _PublishTargetDialog(QtWidgets.QDialog):
-    """Dialog to choose a publish target registry."""
+    """Dialog to choose a publish target registry.
 
-    def __init__(self, registries, parent=None):
+    Accepts both local and remote entries. Remote rows annotate the mirror
+    mapping so the user can see at a glance which local registry the
+    remote will actually write to.
+    """
+
+    def __init__(self, config, parent=None):
         super().__init__(parent)
         self.setWindowTitle(t("publish"))
         self.setMinimumWidth(360)
         self._result_registry = None
+        self._config = config
 
         layout = QtWidgets.QVBoxLayout(self)
         layout.setSpacing(12)
 
-        # Dropdown for existing local registries
+        registries = list(config.registries)
+
+        # Dropdown for existing registries (local + remote, annotated)
         if registries:
             label = QtWidgets.QLabel(t("publish_select_registry"))
             label.setStyleSheet("font-weight: 600;")
@@ -140,7 +148,11 @@ class _PublishTargetDialog(QtWidgets.QDialog):
 
             self._combo = QtWidgets.QComboBox()
             for r in registries:
-                self._combo.addItem(r.name, r)
+                label_text, tooltip = self._describe_target(r)
+                self._combo.addItem(label_text, r)
+                idx = self._combo.count() - 1
+                if tooltip:
+                    self._combo.setItemData(idx, tooltip, Qt.ToolTipRole)
             layout.addWidget(self._combo)
 
             select_btn = QtWidgets.QPushButton(t("publish"))
@@ -180,6 +192,19 @@ class _PublishTargetDialog(QtWidgets.QDialog):
     @property
     def selected_registry(self):
         return self._result_registry
+
+    def _describe_target(self, entry):
+        """Return ``(label, tooltip)`` for a registry row in the combo."""
+        if not entry.is_remote:
+            return entry.name, entry.path
+        mirror = None
+        if entry.registry_id:
+            mirror = self._config.find_local_mirror(entry.registry_id)
+        if mirror is not None:
+            label = "{} → {}".format(entry.name, mirror.name)
+            return label, t("publish_mirrors_to", mirror.name, mirror.path)
+        label = "{}  ({})".format(entry.name, t("publish_no_mirror"))
+        return label, t("publish_no_mirror_hint")
 
 
 
@@ -525,8 +550,13 @@ class CartonWindow(QtWidgets.QDialog):
         self.refresh()
         self._loading_label.setVisible(False)
 
-    def _create_new_registry(self):
-        """Create a new empty registry directory. Returns the RegistryEntry or None."""
+    def _create_new_registry(self, paired_remote=None):
+        """Create a new empty registry directory. Returns the RegistryEntry or None.
+
+        If ``paired_remote`` is given, the new registry inherits its
+        ``registry_id`` so that publishes to the remote route here via
+        :meth:`Config.find_local_mirror`.
+        """
         folder = QtWidgets.QFileDialog.getExistingDirectory(
             self, t("setup_select_folder"),
         )
@@ -542,26 +572,94 @@ class CartonWindow(QtWidgets.QDialog):
             return None
 
         import json
+        from carton.core.registry_id import new_registry_id
+        from carton.ui._registry_pairing import probe_remote_registry_id
+
         reg_path = os.path.join(folder, "registry.json")
+        if paired_remote is not None:
+            rid = paired_remote.registry_id or probe_remote_registry_id(paired_remote.path)
+            if rid:
+                paired_remote.registry_id = rid
+            else:
+                rid = new_registry_id()
+                # Remote doesn't expose an id — the user will need to
+                # re-upload this registry.json before the remote can
+                # resolve back.
+        else:
+            rid = new_registry_id()
+
         if not os.path.exists(reg_path):
             os.makedirs(folder, exist_ok=True)
             with open(reg_path, "w", encoding="utf-8") as f:
-                json.dump({"schema_version": "2.0", "packages": {}}, f, indent=2)
+                json.dump({
+                    "schema_version": "3.1",
+                    "registry_id": rid,
+                    "packages": {},
+                }, f, indent=2, ensure_ascii=False)
             os.makedirs(os.path.join(folder, "packages"), exist_ok=True)
+        else:
+            # Folder already has a registry.json — stamp if missing so the
+            # pairing still works.
+            from carton.core.registry_id import stamp_registry_id
+            try:
+                with open(reg_path, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+            except (OSError, json.JSONDecodeError):
+                data = {"schema_version": "3.1", "packages": {}}
+            # If we're pairing with a remote and the existing file has a
+            # different id, prefer the remote's (so the pair works).
+            current = data.get("registry_id", "")
+            if paired_remote is not None and rid and current != rid:
+                data["registry_id"] = rid
+                data["schema_version"] = "3.1"
+                with open(reg_path, "w", encoding="utf-8") as f:
+                    json.dump(data, f, indent=2, ensure_ascii=False)
+            else:
+                stamp_registry_id(data)
+                rid = data["registry_id"]
+                data.setdefault("schema_version", "3.1")
+                with open(reg_path, "w", encoding="utf-8") as f:
+                    json.dump(data, f, indent=2, ensure_ascii=False)
 
-        self._config.add_registry(name, reg_path)
+        self._config.add_registry(name, reg_path, registry_id=rid)
         self._config.save()
         # Return the newly added entry
         return self._config.registries[-1]
 
-    def _add_existing_registry(self):
+    def _add_existing_registry(self, paired_remote=None):
         """Browse for an existing registry.json. Returns the RegistryEntry or None."""
+        from carton.ui._registry_pairing import (
+            DuplicateRegistryChoice,
+            normalize_registry_path,
+            read_local_registry_id,
+            resolve_duplicate_registry,
+            stamp_local_registry_with_prompt,
+        )
+
         path = QtWidgets.QFileDialog.getOpenFileName(
             self, t("settings_select_registry"), "",
             "Registry (registry.json);;JSON (*.json)",
         )[0]
         if not path:
             return None
+
+        rid, data = read_local_registry_id(path)
+        if not rid and data is not None:
+            rid = stamp_local_registry_with_prompt(self, path, data)
+
+        # Duplicate detection — skip self (same normalized path).
+        normalized = normalize_registry_path(path)
+        if rid:
+            existing = self._config.find_registry_by_id(rid)
+            if existing is not None and existing.path != normalized:
+                choice = resolve_duplicate_registry(self, existing)
+                if choice == DuplicateRegistryChoice.CANCEL:
+                    return None
+                if choice == DuplicateRegistryChoice.USE_EXISTING:
+                    if paired_remote is not None and not paired_remote.registry_id:
+                        paired_remote.registry_id = rid
+                        self._config.save()
+                    return existing
 
         base = os.path.basename(os.path.dirname(path))
         name, ok = QtWidgets.QInputDialog.getText(
@@ -572,7 +670,9 @@ class CartonWindow(QtWidgets.QDialog):
         if not ok or not name:
             return None
 
-        self._config.add_registry(name, path)
+        self._config.add_registry(name, path, registry_id=rid)
+        if paired_remote is not None and rid and not paired_remote.registry_id:
+            paired_remote.registry_id = rid
         self._config.save()
         return self._config.registries[-1]
 
@@ -1284,8 +1384,7 @@ class CartonWindow(QtWidgets.QDialog):
 
     def _pick_publish_target_registry(self):
         """Show the publish-target dialog and return a registry, or None."""
-        registries = [r for r in self._config.registries if not r.is_remote]
-        dlg = _PublishTargetDialog(registries, parent=self)
+        dlg = _PublishTargetDialog(self._config, parent=self)
         result = dlg.exec_()
         if result == 1:  # Selected from dropdown
             return dlg.selected_registry
@@ -1298,14 +1397,30 @@ class CartonWindow(QtWidgets.QDialog):
     def _confirm_home_registry_mismatch(self, pkg_data, target_registry):
         """Warn if publishing to a different registry than the home one.
 
+        Compares by ``registry_id`` when both sides have one so that a
+        registry known under different names on different machines still
+        passes without a prompt. Falls back to name equality for legacy
+        entries that pre-date UUID stamping.
+
         Returns True to proceed, False if the user cancelled.
         """
-        home_name = (pkg_data.get("home_registry") or {}).get("name", "")
-        if not home_name or home_name == target_registry.name:
+        home_meta = pkg_data.get("home_registry") or {}
+        home_name = home_meta.get("name", "")
+        home_id = home_meta.get("registry_id", "")
+        target_id = getattr(target_registry, "registry_id", "")
+
+        if home_id and target_id:
+            if home_id == target_id:
+                return True
+        elif home_name and home_name == target_registry.name:
             return True
+        elif not home_name and not home_id:
+            return True
+
         reply = QtWidgets.QMessageBox.question(
             self, t("publish"),
-            t("publish_home_registry_mismatch", home_name, target_registry.name),
+            t("publish_home_registry_mismatch",
+              home_name or home_id, target_registry.name),
             QtWidgets.QMessageBox.Yes | QtWidgets.QMessageBox.No,
         )
         return reply == QtWidgets.QMessageBox.Yes
@@ -1350,6 +1465,8 @@ class CartonWindow(QtWidgets.QDialog):
     def _run_publish(self, pkg_id, pkg_data, target_registry,
                      namespace, release_notes, embed_source_path):
         """Execute the publish call and reflect the result in installed.json."""
+        from carton.core.publisher import RemoteMirrorMissingError
+
         self._set_publish_button_state(pkg_id, busy=True)
         QtWidgets.QApplication.processEvents()
 
@@ -1359,28 +1476,95 @@ class CartonWindow(QtWidgets.QDialog):
                 release_notes=release_notes,
                 embed_source_path=embed_source_path,
             )
+        except RemoteMirrorMissingError as e:
+            self._set_publish_button_state(pkg_id, busy=False)
+            self._handle_missing_mirror(
+                pkg_id, pkg_data, e, namespace,
+                release_notes, embed_source_path,
+            )
+            return
         except Exception as e:
             self._set_publish_button_state(pkg_id, busy=False)
             self._show_publish_error(e)
             return
 
-        # Re-key the installed entry under the canonical namespace/name
+        # Re-key the installed entry under the canonical namespace/name.
+        # The local path we actually wrote to may differ from the user's
+        # selection (remote → mirror), so resolve the name via the result.
+        written_name = result.get("published_via") or target_registry.name
+        written_entry = self._find_registry_by_name(written_name) or target_registry
         fields = {
             "namespace": result["namespace"],
             "name": result["name"],
             "source": "published",
         }
         if not pkg_data.get("home_registry"):
-            fields["home_registry"] = {"name": target_registry.name}
+            home_meta = {"name": written_entry.name}
+            if getattr(written_entry, "registry_id", ""):
+                home_meta["registry_id"] = written_entry.registry_id
+            fields["home_registry"] = home_meta
         self._install_manager.rekey_package(pkg_id, result["id"], fields)
 
         display = pkg_data.get("display_name", pkg_id)
         warnings = result.get("warnings") or []
         msg = t("publish_success", display)
+        via = result.get("published_via")
+        if via:
+            msg += "\n\n" + t("publish_remote_sync_reminder", via)
         if warnings:
             msg += "\n\nWarnings:\n  - " + "\n  - ".join(warnings)
         QtWidgets.QMessageBox.information(self, t("publish"), msg)
         self.refresh()
+
+    def _find_registry_by_name(self, name):
+        for entry in self._config.registries:
+            if entry.name == name:
+                return entry
+        return None
+
+    def _handle_missing_mirror(self, pkg_id, pkg_data, err, namespace,
+                               release_notes, embed_source_path):
+        """Walk the user through pairing a local mirror with a remote entry.
+
+        ``err.reason`` is one of ``"no_remote_id"`` / ``"no_local_mirror"``
+        (see :class:`carton.core.publisher.RemoteMirrorMissingError`).
+        """
+        remote = err.remote_entry
+        if err.reason == "no_remote_id":
+            QtWidgets.QMessageBox.warning(
+                self, t("publish"),
+                t("publish_no_remote_id", remote.name),
+            )
+            return
+
+        box = QtWidgets.QMessageBox(self)
+        box.setIcon(QtWidgets.QMessageBox.Question)
+        box.setWindowTitle(t("publish"))
+        box.setText(t("publish_no_mirror_prompt", remote.name))
+        create_btn = box.addButton(
+            t("publish_create_mirror"), QtWidgets.QMessageBox.AcceptRole,
+        )
+        pair_btn = box.addButton(
+            t("publish_pair_existing"), QtWidgets.QMessageBox.AcceptRole,
+        )
+        box.addButton(t("cancel"), QtWidgets.QMessageBox.RejectRole)
+        box.exec_()
+        clicked = box.clickedButton()
+
+        mirror = None
+        if clicked is create_btn:
+            mirror = self._create_new_registry(paired_remote=remote)
+        elif clicked is pair_btn:
+            mirror = self._add_existing_registry(paired_remote=remote)
+
+        if mirror is None:
+            return
+        # Retry publish against the original remote — the publisher will now
+        # find the mirror via the shared registry_id.
+        self._run_publish(
+            pkg_id, pkg_data, remote, namespace,
+            release_notes, embed_source_path,
+        )
 
     def _show_publish_error(self, exc):
         """Display a publish-error dialog mapped to a friendly message."""

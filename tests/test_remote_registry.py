@@ -4,8 +4,10 @@ import json
 import os
 import tempfile
 
+import pytest
+
 from carton.core.config import Config, RegistryEntry, _is_url
-from carton.core.publisher import Publisher
+from carton.core.publisher import Publisher, RemoteMirrorMissingError
 from carton.core.registry_client import RegistryClient
 
 
@@ -55,29 +57,45 @@ class TestRegistryEntryRemote:
 
 
 class TestPublisherRemoteGuard:
-    """Publisher should reject write operations on remote registries."""
+    """Publisher rejects remote publishes that have no local mirror to route to."""
 
     def _make_publisher(self):
         config = Config(install_dir=tempfile.mkdtemp())
         return Publisher(config)
 
-    def test_publish_to_remote_raises(self):
+    def test_publish_to_remote_without_id_raises_mirror_missing(self, monkeypatch):
+        """A remote without an exposed ``registry_id`` cannot be mirrored."""
         publisher = self._make_publisher()
+        # Prevent the probe from making a real network call.
+        monkeypatch.setattr(
+            Publisher, "_probe_remote_registry_id", staticmethod(lambda e: ""),
+        )
         remote_entry = RegistryEntry("remote", "https://example.com/registry.json")
-        try:
+        with pytest.raises(RemoteMirrorMissingError) as excinfo:
             publisher.publish({}, remote_entry)
-            assert False, "Should have raised RuntimeError"
-        except RuntimeError as e:
-            assert "remote" in str(e).lower()
+        assert excinfo.value.reason == "no_remote_id"
 
-    def test_unpublish_from_remote_raises(self):
+    def test_publish_to_remote_without_mirror_raises_mirror_missing(self, monkeypatch):
+        """Known remote id, but no local entry shares it."""
         publisher = self._make_publisher()
+        rid = "11111111-2222-4333-8444-555555555555"
+        monkeypatch.setattr(
+            Publisher, "_probe_remote_registry_id", staticmethod(lambda e: rid),
+        )
         remote_entry = RegistryEntry("remote", "https://example.com/registry.json")
-        try:
+        with pytest.raises(RemoteMirrorMissingError) as excinfo:
+            publisher.publish({}, remote_entry)
+        assert excinfo.value.reason == "no_local_mirror"
+        assert excinfo.value.remote_id == rid
+
+    def test_unpublish_from_remote_without_mirror_raises(self, monkeypatch):
+        publisher = self._make_publisher()
+        monkeypatch.setattr(
+            Publisher, "_probe_remote_registry_id", staticmethod(lambda e: ""),
+        )
+        remote_entry = RegistryEntry("remote", "https://example.com/registry.json")
+        with pytest.raises(RemoteMirrorMissingError):
             publisher.unpublish("fake-id", remote_entry)
-            assert False, "Should have raised RuntimeError"
-        except RuntimeError as e:
-            assert "remote" in str(e).lower()
 
     def test_find_published_skips_remote(self):
         """find_published_registries should skip remote registries."""

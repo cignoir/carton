@@ -215,3 +215,103 @@ class TestPublishInstallRoundtrip:
             )
             assert not os.path.isdir(pkg_dir), \
                 "Package directory should be removed after uninstall"
+
+
+def _make_nested_source_package(root):
+    """Create a properly-nested Python project (project_root/hello_tool/).
+
+    ``root`` is the parent; the returned path is the project root that
+    ``local_path`` should point at. This layout passes the publisher's
+    post-3.0 flat-layout validator.
+    """
+    project_root = os.path.join(root, "hello_proj")
+    module_dir = os.path.join(project_root, "hello_tool")
+    os.makedirs(module_dir, exist_ok=True)
+    with open(os.path.join(module_dir, "__init__.py"), "w", encoding="utf-8") as f:
+        f.write(
+            '"""hello_tool — E2E fixture."""\n'
+            '__version__ = "1.0.0"\n'
+            'def show():\n'
+            '    return "hello from e2e"\n'
+        )
+    return project_root
+
+
+class TestPublishViaRemoteMirror:
+    """Publishing through a remote entry routes the write to its local mirror.
+
+    Simulates the "ぐるぐる (remote S3) → carton-guru2 (local source)" flow
+    without actually going over HTTP — the publisher's probe for the
+    remote's UUID is monkeypatched so we can avoid the network.
+    """
+
+    def test_remote_entry_routes_to_local_mirror(self, monkeypatch):
+        with tempfile.TemporaryDirectory() as tmp:
+            source_root = os.path.join(tmp, "source")
+            mirror_root = os.path.join(tmp, "mirror")
+            publisher_home = os.path.join(tmp, "pub_home")
+            os.makedirs(source_root)
+            os.makedirs(mirror_root)
+
+            src_pkg = _make_nested_source_package(source_root)
+            mirror_path = os.path.join(mirror_root, "registry.json")
+
+            # Pre-seed the mirror with a registry_id so the publisher can
+            # match the remote against it on the first call.
+            shared_uuid = "77777777-8888-4999-8aaa-bbbbbbbbbbbb"
+            with open(mirror_path, "w", encoding="utf-8") as f:
+                json.dump({
+                    "schema_version": "3.1",
+                    "registry_id": shared_uuid,
+                    "packages": {},
+                }, f)
+            os.makedirs(os.path.join(mirror_root, "packages"))
+
+            mirror_entry = RegistryEntry(
+                "carton-guru2", mirror_path, registry_id=shared_uuid,
+            )
+            remote_entry = RegistryEntry(
+                "ぐるぐる",
+                "https://example.com/guru2/registry.json",
+            )
+            # The remote exposes the same UUID via the probe path.
+            from carton.core.publisher import Publisher as PubCls
+            monkeypatch.setattr(
+                PubCls, "_probe_remote_registry_id",
+                staticmethod(lambda e: shared_uuid),
+            )
+
+            pub_config = Config(
+                install_dir=publisher_home,
+                registries=[mirror_entry, remote_entry],
+            )
+            publisher = Publisher(pub_config)
+
+            pkg_data = _make_pkg_data(src_pkg)
+            result = publisher.publish(
+                pkg_data, remote_entry, namespace="e2e",
+            )
+
+            # Confirm the publish landed in the LOCAL mirror, not anywhere
+            # near the URL.
+            with open(mirror_path, "r", encoding="utf-8") as f:
+                reg_json = json.load(f)
+            assert result["id"] in reg_json["packages"]
+            assert reg_json["registry_id"] == shared_uuid
+            # ``published_via`` signals the user-visible remote entry.
+            assert result["published_via"] == "ぐるぐる"
+
+            zip_abs = os.path.join(
+                mirror_root, "packages", "e2e", "hello_tool", "1.0.0",
+                "hello_tool-1.0.0.zip",
+            )
+            assert os.path.isfile(zip_abs)
+
+            # Source-side package.json records the home registry as the
+            # LOCAL mirror (the writable one) plus the shared UUID so
+            # machines under different aliases converge.
+            persisted = os.path.join(src_pkg, "package.json")
+            with open(persisted, "r", encoding="utf-8") as f:
+                persisted_meta = json.load(f)
+            assert persisted_meta["home_registry"]["name"] == "carton-guru2"
+            assert persisted_meta["home_registry"]["registry_id"] == shared_uuid

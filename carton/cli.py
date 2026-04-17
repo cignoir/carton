@@ -63,6 +63,39 @@ def _unpublish(args):
     print("Unpublished: {}".format(result["name"]))
 
 
+def _registry_id(args):
+    """Show or stamp a registry's ``registry_id``.
+
+    Vendor-neutral: only reads/writes the local registry.json. Useful for
+    admins migrating pre-UUID registries (e.g. ones already mirrored to a
+    remote host) — stamp locally, then re-upload the file.
+    """
+    from carton.core.registry_id import (
+        read_registry_id,
+        stamp_registry_id,
+    )
+
+    registry, path = _load_registry(args.registry)
+    current = read_registry_id(registry)
+    if args.stamp:
+        rid, was_new = stamp_registry_id(registry)
+        if was_new:
+            registry.setdefault("schema_version", "3.1")
+            if registry.get("schema_version") in ("2.0", "3.0"):
+                registry["schema_version"] = "3.1"
+            with open(path, "w", encoding="utf-8") as f:
+                json.dump(registry, f, indent=2, ensure_ascii=False)
+            print("Stamped: {}".format(rid))
+        else:
+            print("Already has registry_id: {}".format(rid))
+        return
+    if current:
+        print(current)
+    else:
+        print("(no registry_id)")
+        sys.exit(2)
+
+
 def main():
     parser = argparse.ArgumentParser(
         prog="carton",
@@ -82,12 +115,26 @@ def main():
     unpub.add_argument("--force", "-f", action="store_true",
                        help="Skip confirmation prompt")
 
+    # registry subgroup
+    reg = sub.add_parser("registry", help="Registry inspection utilities")
+    reg_sub = reg.add_subparsers(dest="registry_command")
+    rid_p = reg_sub.add_parser(
+        "id", help="Print or stamp a registry's registry_id (UUID)",
+    )
+    rid_p.add_argument("registry", help="Path to registry.json")
+    rid_p.add_argument(
+        "--stamp", action="store_true",
+        help="Write a fresh UUID into the file if it doesn't already have one",
+    )
+
     args = parser.parse_args()
 
     if args.command == "list":
         _list_packages(args)
     elif args.command == "unpublish":
         _unpublish(args)
+    elif args.command == "registry" and getattr(args, "registry_command", None) == "id":
+        _registry_id(args)
     else:
         parser.print_help()
 

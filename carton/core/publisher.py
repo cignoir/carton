@@ -14,6 +14,7 @@ import shutil
 import zipfile
 from datetime import datetime, timezone
 
+from carton.compat_urllib import urlopen, Request, URLError
 from carton.core.identity import (
     InvalidIdentityError,
     make_pkg_id,
@@ -21,6 +22,7 @@ from carton.core.identity import (
     validate_name,
 )
 from carton.core.path_utils import resolve_local_path
+from carton.core.registry_id import read_registry_id, stamp_registry_id
 from carton.core.sidecar import write_sidecar, read_sidecar
 
 
@@ -34,6 +36,27 @@ class VersionConflictError(RuntimeError):
 
 class MissingNamespaceError(RuntimeError):
     """Raised when a publish is attempted without a namespace."""
+
+
+class RemoteMirrorMissingError(RuntimeError):
+    """Raised when a publish targets a remote entry that has no local mirror.
+
+    ``reason`` is one of:
+      * ``"no_remote_id"`` — the remote registry itself does not expose a
+        ``registry_id`` (so we can't match any local mirror to it).
+      * ``"no_local_mirror"`` — the remote has an id but no local entry in
+        the current config shares it.
+    """
+
+    def __init__(self, remote_entry, reason, remote_id=""):
+        self.remote_entry = remote_entry
+        self.reason = reason
+        self.remote_id = remote_id
+        super().__init__(
+            "Cannot publish to remote {!r}: {}".format(
+                getattr(remote_entry, "name", "<unknown>"), reason,
+            )
+        )
 
 
 class InvalidPythonPackageLayoutError(RuntimeError):
@@ -80,16 +103,20 @@ class Publisher:
         Args:
             pkg_data: Entry from installed.json. May or may not already carry
                 a ``namespace`` field.
-            registry_entry: Target RegistryEntry to publish to (must be local).
+            registry_entry: Target RegistryEntry to publish to. Local entries
+                are written to directly; remote entries are redirected to
+                their same-``registry_id`` local mirror (raises
+                :class:`RemoteMirrorMissingError` if no mirror exists).
             namespace: Optional override; if given, takes precedence over
                 ``pkg_data['namespace']``. Required if neither is set.
 
         Returns:
             dict with ``id``, ``namespace``, ``name``, ``version`` and an
-            optional ``warnings`` list (e.g. author mismatch).
+            optional ``warnings`` list (e.g. author mismatch). When the user
+            selected a remote entry, ``published_via`` carries its name.
         """
-        if registry_entry.is_remote:
-            raise RuntimeError("Cannot publish to a remote registry: {}".format(registry_entry.name))
+        requested_entry = registry_entry
+        target_entry = self._resolve_publish_target(registry_entry)
 
         # Stored local_path may be a portable form like ``~/tools/foo.py``;
         # expand before touching the filesystem.
@@ -121,7 +148,7 @@ class Publisher:
         author = pkg_data.get("author", "")
 
         # Check for same version conflict
-        self._check_version_conflict(pkg_id, version, registry_entry)
+        self._check_version_conflict(pkg_id, version, target_entry)
 
         # Reject the "flat" python_package layout before we waste cycles
         # zipping something that will ModuleNotFoundError at import time.
@@ -140,7 +167,7 @@ class Publisher:
         size_bytes = os.path.getsize(zip_path)
 
         # 2. Copy zip to registry directory: packages/<namespace>/<name>/<version>/
-        registry_base = registry_entry.base_dir
+        registry_base = target_entry.base_dir
         dest_dir = os.path.join(registry_base, "packages", ns, name, version)
         os.makedirs(dest_dir, exist_ok=True)
 
@@ -163,7 +190,7 @@ class Publisher:
 
         # 4. Update registry.json + rebuild icons.zip
         warnings = self._update_registry(
-            registry_entry=registry_entry,
+            registry_entry=target_entry,
             pkg_id=pkg_id,
             namespace=ns,
             name=name,
@@ -180,16 +207,68 @@ class Publisher:
             release_notes=release_notes,
         )
 
-        # 5. Persist namespace/name back into source so the next user converges
+        # 5. Persist namespace/name back into source so the next user converges.
+        # Stamp the UUID alongside the name so other machines can resolve the
+        # home registry even when it's registered under a different alias.
+        home_meta = {"name": target_entry.name}
+        if target_entry.registry_id:
+            home_meta["registry_id"] = target_entry.registry_id
         self._persist_identity_to_source(
             local_path, ns, name, is_folder,
-            home_registry=pkg_data.get("home_registry") or {"name": registry_entry.name},
+            home_registry=pkg_data.get("home_registry") or home_meta,
         )
 
         result = {"id": pkg_id, "namespace": ns, "name": name, "version": version}
+        if requested_entry is not target_entry:
+            result["published_via"] = requested_entry.name
         if warnings:
             result["warnings"] = warnings
         return result
+
+    def _resolve_publish_target(self, registry_entry):
+        """Return a writable LOCAL RegistryEntry to write into.
+
+        Local entries pass through unchanged. Remote entries are resolved by
+        ``registry_id`` to a same-id local mirror from ``self._config``. If
+        the remote has no usable id, or no local mirror matches, raise
+        :class:`RemoteMirrorMissingError` so the UI layer can guide the user
+        through pairing.
+        """
+        if not registry_entry.is_remote:
+            return registry_entry
+
+        remote_id = registry_entry.registry_id
+        if not remote_id:
+            remote_id = self._probe_remote_registry_id(registry_entry)
+            if remote_id:
+                # Cache on the live entry so subsequent calls don't re-probe.
+                registry_entry.registry_id = remote_id
+
+        if not remote_id:
+            raise RemoteMirrorMissingError(registry_entry, reason="no_remote_id")
+
+        mirror = self._config.find_local_mirror(remote_id)
+        if mirror is None:
+            raise RemoteMirrorMissingError(
+                registry_entry, reason="no_local_mirror", remote_id=remote_id,
+            )
+        return mirror
+
+    @staticmethod
+    def _probe_remote_registry_id(registry_entry):
+        """One-off HTTP GET to read ``registry_id`` from a remote registry.
+
+        Returns ``""`` on any failure (network, parse, missing field) — the
+        caller treats that as ``no_remote_id``.
+        """
+        try:
+            req = Request(registry_entry.path)
+            req.add_header("Accept", "application/json")
+            resp = urlopen(req, timeout=15)
+            data = json.loads(resp.read().decode("utf-8"))
+        except (URLError, OSError, ValueError):
+            return ""
+        return read_registry_id(data)
 
     def _validate_python_package_layout(self, local_path, pkg_type, is_folder, name):
         """Reject python_packages where ``local_path`` is the module folder.
@@ -293,10 +372,14 @@ class Publisher:
             with open(reg_path, "r", encoding="utf-8") as f:
                 registry = json.load(f)
         else:
-            registry = {"schema_version": "3.0", "packages": {}}
+            registry = {"schema_version": "3.1", "packages": {}}
 
-        # Auto-upgrade older schema_version on touch
-        registry["schema_version"] = "3.0"
+        # Auto-upgrade older schema_version on touch and stamp a UUID so
+        # duplicate detection & mirror resolution can recognise the registry
+        # across future publish/fetch cycles.
+        registry["schema_version"] = "3.1"
+        registry_id, _ = stamp_registry_id(registry)
+        registry_entry.registry_id = registry_id
 
         now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
         warnings = []
@@ -389,10 +472,12 @@ class Publisher:
     def unpublish(self, pkg_id, registry_entry):
         """Remove a package from a registry.
 
-        ``pkg_id`` is the canonical ``"<namespace>/<name>"``.
+        ``pkg_id`` is the canonical ``"<namespace>/<name>"``. A remote entry
+        is redirected to its same-id local mirror; raises
+        :class:`RemoteMirrorMissingError` if no mirror exists.
         """
-        if registry_entry.is_remote:
-            raise RuntimeError("Cannot unpublish from a remote registry: {}".format(registry_entry.name))
+        target_entry = self._resolve_publish_target(registry_entry)
+        registry_entry = target_entry
 
         reg_path = os.path.normpath(registry_entry.path)
         if not os.path.exists(reg_path):

@@ -49,18 +49,34 @@ class InstallDirChangeError(RuntimeError):
 
 
 class RegistryEntry:
-    """Registry configuration entry."""
+    """Registry configuration entry.
 
-    def __init__(self, name, path):
+    ``registry_id`` is a client-side cache of the UUID stored inside the
+    registry's ``registry.json``. It is populated on fetch (see
+    :class:`carton.core.registry_client.RegistryClient`) and persisted
+    alongside ``name`` / ``path`` so duplicate detection can work before the
+    first network round trip. Empty means "not yet known" — registry.json is
+    always the source of truth.
+    """
+
+    def __init__(self, name, path, registry_id=""):
         self.name = name
         self.path = path if _is_url(path) else os.path.normpath(path)
+        self.registry_id = (registry_id or "").strip().lower()
 
     def to_dict(self):
-        return {"name": self.name, "path": self.path}
+        d = {"name": self.name, "path": self.path}
+        if self.registry_id:
+            d["registry_id"] = self.registry_id
+        return d
 
     @classmethod
     def from_dict(cls, d):
-        return cls(name=d.get("name", ""), path=d.get("path", ""))
+        return cls(
+            name=d.get("name", ""),
+            path=d.get("path", ""),
+            registry_id=d.get("registry_id", ""),
+        )
 
     def __str__(self):
         return "{} — {}".format(self.name, self.path)
@@ -361,7 +377,11 @@ class Config:
         profiles via the UI.
         """
         self.registries = [
-            RegistryEntry(name=r.name, path=r.path) for r in profile.registries
+            RegistryEntry(
+                name=r.name, path=r.path,
+                registry_id=getattr(r, "registry_id", ""),
+            )
+            for r in profile.registries
         ]
         self.language = profile.language
         self.auto_check_updates = profile.auto_check_updates
@@ -385,13 +405,43 @@ class Config:
         os.environ["http_proxy"] = self.proxy
         os.environ["https_proxy"] = self.proxy
 
-    def add_registry(self, name, path):
+    def add_registry(self, name, path, registry_id=""):
         """Add a registry."""
-        self.registries.append(RegistryEntry(name, path))
+        self.registries.append(RegistryEntry(name, path, registry_id))
 
     def remove_registry(self, name):
         """Remove a registry by name."""
         self.registries = [r for r in self.registries if r.name != name]
+
+    def find_registry_by_id(self, registry_id):
+        """Return the first RegistryEntry whose ``registry_id`` matches, or None.
+
+        Matches local and remote entries alike — callers that need a
+        writable target should use :meth:`find_local_mirror` instead.
+        """
+        if not registry_id:
+            return None
+        rid = registry_id.strip().lower()
+        for entry in self.registries:
+            if entry.registry_id and entry.registry_id == rid:
+                return entry
+        return None
+
+    def find_local_mirror(self, registry_id):
+        """Return the first LOCAL RegistryEntry with the given id, or None.
+
+        Used by :class:`carton.core.publisher.Publisher` to route a publish
+        against a remote entry to its writable local counterpart.
+        """
+        if not registry_id:
+            return None
+        rid = registry_id.strip().lower()
+        for entry in self.registries:
+            if entry.is_remote:
+                continue
+            if entry.registry_id and entry.registry_id == rid:
+                return entry
+        return None
 
     @property
     def packages_dir(self):

@@ -2,13 +2,18 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://carton.dev/schemas/registry.schema.json",
   "title": "Carton Registry",
-  "description": "Carton パッケージレジストリ (v3.0 — namespace/name キー)",
+  "description": "Carton パッケージレジストリ (v3.0/3.1 — namespace/name キー, 3.1 で registry_id 追加)",
   "type": "object",
   "required": ["schema_version", "packages"],
   "properties": {
     "schema_version": {
       "type": "string",
-      "const": "3.0"
+      "enum": ["3.0", "3.1"]
+    },
+    "registry_id": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+      "description": "レジストリの不変識別子 (UUID v4)。ローカルとリモートミラーの同一性判定に使用"
     },
     "last_updated": {
       "type": "string",

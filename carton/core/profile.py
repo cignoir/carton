@@ -23,6 +23,7 @@ import json
 import os
 
 from carton.core.config import RegistryEntry
+from carton.core.registry_id import is_valid_registry_id
 
 
 class InvalidProfileError(ValueError):
@@ -65,7 +66,9 @@ class InstallerProfile:
                 self.registries.append(r)
             else:
                 self.registries.append(RegistryEntry(
-                    name=r.get("name", ""), path=r.get("path", ""),
+                    name=r.get("name", ""),
+                    path=r.get("path", ""),
+                    registry_id=r.get("registry_id", ""),
                 ))
         self.language = language
         self.auto_check_updates = bool(auto_check_updates)
@@ -74,8 +77,8 @@ class InstallerProfile:
 
     # ---- mutation helpers (mirror Config so widgets can call either) ----
 
-    def add_registry(self, name, path):
-        self.registries.append(RegistryEntry(name, path))
+    def add_registry(self, name, path, registry_id=""):
+        self.registries.append(RegistryEntry(name, path, registry_id))
 
     def remove_registry(self, name):
         self.registries = [r for r in self.registries if r.name != name]
@@ -96,7 +99,10 @@ class InstallerProfile:
         """
         return cls(
             registries=[
-                RegistryEntry(name=r.name, path=r.path)
+                RegistryEntry(
+                    name=r.name, path=r.path,
+                    registry_id=getattr(r, "registry_id", ""),
+                )
                 for r in getattr(config, "registries", []) or []
             ],
             language=getattr(config, "language", "auto"),
@@ -149,7 +155,20 @@ class InstallerProfile:
                 raise InvalidProfileError(
                     "registries[{}].path is required".format(i)
                 )
-            normalized.append({"name": name, "path": path})
+            registry_id = entry.get("registry_id", "")
+            if registry_id:
+                if not isinstance(registry_id, str):
+                    raise InvalidProfileError(
+                        "registries[{}].registry_id must be a string".format(i)
+                    )
+                if not is_valid_registry_id(registry_id):
+                    raise InvalidProfileError(
+                        "registries[{}].registry_id must be a UUID".format(i)
+                    )
+                registry_id = registry_id.strip().lower()
+            normalized.append({
+                "name": name, "path": path, "registry_id": registry_id,
+            })
 
         language = data.get("language", "auto")
         if language not in _VALID_LANGUAGES:

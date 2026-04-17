@@ -382,32 +382,48 @@ class RegistriesSection(QtWidgets.QWidget):
             self._add_local()
 
     def _create_new_local(self):
+        from carton.core.registry_id import new_registry_id
+
         folder = QtWidgets.QFileDialog.getExistingDirectory(
             self, t("setup_select_folder"),
         )
         if not folder:
             return
         reg_path = os.path.join(folder, "registry.json")
+        rid = ""
         if not os.path.exists(reg_path):
             try:
+                rid = new_registry_id()
                 os.makedirs(folder, exist_ok=True)
                 with open(reg_path, "w", encoding="utf-8") as f:
-                    json.dump({"schema_version": "2.0", "packages": {}}, f, indent=2)
+                    json.dump({
+                        "schema_version": "3.1",
+                        "registry_id": rid,
+                        "packages": {},
+                    }, f, indent=2, ensure_ascii=False)
                 os.makedirs(os.path.join(folder, "packages"), exist_ok=True)
             except Exception as e:
                 QtWidgets.QMessageBox.warning(self, "Carton", str(e))
                 return
-        self._finish_add(reg_path, os.path.basename(folder))
+        self._finish_add(reg_path, os.path.basename(folder), registry_id=rid)
 
     def _add_local(self):
+        from carton.ui._registry_pairing import (
+            read_local_registry_id,
+            stamp_local_registry_with_prompt,
+        )
+
         path = QtWidgets.QFileDialog.getOpenFileName(
             self, t("settings_select_registry"), "",
             "Registry (registry.json);;JSON (*.json)",
         )[0]
         if not path:
             return
+        rid, data = read_local_registry_id(path)
+        if not rid and data is not None:
+            rid = stamp_local_registry_with_prompt(self, path, data)
         default_name = os.path.basename(os.path.dirname(path))
-        self._finish_add(path, default_name)
+        self._finish_add(path, default_name, registry_id=rid)
 
     def _add_github(self):
         repo, ok = wide_input(self, "GitHub", t("settings_github_placeholder"))
@@ -446,9 +462,13 @@ class RegistriesSection(QtWidgets.QWidget):
                 self, "Carton", t("settings_github_no_registry", repo),
             )
             return
-        self._finish_add(resolved, repo.split("/")[1])
+        from carton.ui._registry_pairing import probe_remote_registry_id
+        rid = probe_remote_registry_id(resolved)
+        self._finish_add(resolved, repo.split("/")[1], registry_id=rid)
 
     def _add_remote(self):
+        from carton.ui._registry_pairing import probe_remote_registry_id
+
         url, ok = wide_input(
             self, t("settings_add_url"), t("settings_url_placeholder"), width=560,
         )
@@ -462,9 +482,34 @@ class RegistriesSection(QtWidgets.QWidget):
         default_name = parts[-2] if len(parts) >= 2 else "remote"
         if default_name in ("raw", "main", "master"):
             default_name = parts[-3] if len(parts) >= 3 else "remote"
-        self._finish_add(url, default_name)
+        rid = probe_remote_registry_id(url)
+        self._finish_add(url, default_name, registry_id=rid)
 
-    def _finish_add(self, path, default_name=""):
+    def _finish_add(self, path, default_name="", registry_id=""):
+        from carton.ui._registry_pairing import (
+            DuplicateRegistryChoice,
+            normalize_registry_path,
+            resolve_duplicate_registry,
+        )
+
+        # UUID-based duplicate detection: catches "same registry under a
+        # different alias" before asking the user for a name. Falls back
+        # silently when neither side has a registry_id — the legacy
+        # name-based check below still guards.
+        if registry_id:
+            for r in self._target.registries:
+                if getattr(r, "registry_id", "") != registry_id:
+                    continue
+                if r.path == normalize_registry_path(path):
+                    continue
+                choice = resolve_duplicate_registry(self, r)
+                if choice == DuplicateRegistryChoice.CANCEL:
+                    return
+                if choice == DuplicateRegistryChoice.USE_EXISTING:
+                    return
+                # ADD_ALIAS → fall through to the name prompt.
+                break
+
         name, ok = wide_input(
             self, "Registry Name", t("settings_registry_name"), text=default_name,
         )
@@ -476,7 +521,7 @@ class RegistriesSection(QtWidgets.QWidget):
                     self, "Carton", t("settings_already_exists", name),
                 )
                 return
-        self._target.add_registry(name, path)
+        self._target.add_registry(name, path, registry_id=registry_id)
         self._persist()
         self._list.addItem(str(self._target.registries[-1]))
 
