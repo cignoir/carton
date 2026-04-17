@@ -1384,10 +1384,14 @@ class CartonWindow(QtWidgets.QDialog):
 
     def _show_publish_error(self, exc):
         """Display a publish-error dialog mapped to a friendly message."""
-        from carton.core.publisher import VersionConflictError, MissingNamespaceError
+        from carton.core.publisher import (
+            VersionConflictError,
+            MissingNamespaceError,
+            InvalidPythonPackageLayoutError,
+        )
         if isinstance(exc, VersionConflictError):
             msg = t("publish_already_published", exc.version)
-        elif isinstance(exc, MissingNamespaceError):
+        elif isinstance(exc, (MissingNamespaceError, InvalidPythonPackageLayoutError)):
             msg = str(exc)
         else:
             msg = str(exc)

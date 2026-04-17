@@ -36,6 +36,36 @@ class MissingNamespaceError(RuntimeError):
     """Raised when a publish is attempted without a namespace."""
 
 
+class InvalidPythonPackageLayoutError(RuntimeError):
+    """Raised when a python_package's local_path is the module folder itself.
+
+    Carton expects ``local_path`` to be the *project root* that CONTAINS a
+    nested module folder, not the module folder itself. Publishing a module
+    folder directly produces a zip whose contents sit at the root, so after
+    install ``sys.path`` points at the package dir but ``import <name>``
+    cannot find a nested ``<name>/__init__.py`` and fails with
+    ModuleNotFoundError.
+    """
+
+    def __init__(self, local_path, module_name):
+        self.local_path = local_path
+        self.module_name = module_name
+        super().__init__(
+            "Invalid python_package layout: '{path}' contains __init__.py at its "
+            "root, so the folder is a Python module itself. Carton expects the "
+            "published folder to be a project root that CONTAINS the module as a "
+            "nested subfolder.\n\n"
+            "Expected layout:\n"
+            "  <project>/\n"
+            "    package.json\n"
+            "    {module}/\n"
+            "      __init__.py\n"
+            "      ...\n\n"
+            "Fix: move package.json up to the parent directory and point "
+            "local_path at that parent.".format(path=local_path, module=module_name or "<module_name>")
+        )
+
+
 class Publisher:
     """Publish locally registered scripts to a registry."""
 
@@ -92,6 +122,10 @@ class Publisher:
 
         # Check for same version conflict
         self._check_version_conflict(pkg_id, version, registry_entry)
+
+        # Reject the "flat" python_package layout before we waste cycles
+        # zipping something that will ModuleNotFoundError at import time.
+        self._validate_python_package_layout(local_path, pkg_type, is_folder, name)
 
         # 1. Create zip (in staging)
         zip_path = self._create_zip(
@@ -156,6 +190,19 @@ class Publisher:
         if warnings:
             result["warnings"] = warnings
         return result
+
+    def _validate_python_package_layout(self, local_path, pkg_type, is_folder, name):
+        """Reject python_packages where ``local_path`` is the module folder.
+
+        Only applies to folder-based python_package publishes. Single-file
+        python scripts and other package types are exempt.
+        """
+        if pkg_type != "python_package" or not is_folder:
+            return
+        if not os.path.isdir(local_path):
+            return
+        if os.path.isfile(os.path.join(local_path, "__init__.py")):
+            raise InvalidPythonPackageLayoutError(local_path, name)
 
     def _check_version_conflict(self, pkg_id, version, registry_entry):
         """Check if the same version has already been published."""
