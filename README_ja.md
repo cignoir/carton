@@ -79,7 +79,7 @@ Settings（⚙）> Add > registry.json を選択
 
 Carton を開き、パッケージを選んで **Install** をクリックするだけです。
 
-インストールしたパッケージには、レジストリ側の SHA256 ハッシュが一緒に記録されます。ダウンロード時にハッシュ検証が成功すると、カードに ✔ マークが表示されます。
+ダウンロード時に Carton はレジストリ側の SHA256 と照合し、レジストリエントリにハッシュが記録されていれば、カードに ✔ マークを表示します。ハッシュ自体はレジストリの `version_entry.sha256` のみが正本として保持され（v0.4.0 以降、インストール側に重複保存しなくなりました）、UI はそこを参照します。
 
 詳細パネルから **Version History** を開くと、各バージョンのリリースノートを確認したり、旧バージョンへロールバックしたりできます。ロールバック後のパッケージは自動的に **Pinned（固定）** 扱いとなり、以降の Update プロンプトで対象外になります。これにより、自分で選んだバージョンが意図せず上書きされる心配はありません。
 
@@ -96,6 +96,20 @@ My Tools > + Add > ファイルまたはフォルダを選択
 タイプ別の詳しい登録手順は、後述の [マイツールへの登録](#マイツールへの登録) を参照してください。
 
 なお、レジストリビューから「自分が公開したツール」をアンインストールしても、My Tools 側の登録は**消えません**。Carton は単にエントリを「ローカルスクリプト」状態に戻すだけなので、レジストリからのインストール状態とは独立して、編集や起動の設定を保持し続けられます。
+
+## v0.3 からの移行
+
+v0.4.0 では registry / installed.json のスキーマを **v4.0** に bump しました。旧形式のファイルは初回起動時に自動 migrate され、元ファイルは `installed.json.bak-v0.3.<ms>` / `registry.json.bak-v0.3.<ms>` として同じディレクトリにバックアップされます。
+
+主な変更点：
+
+- **各値の Source of Truth を一箇所に集約**しました。`entry_point` は zip 内 `package.json` のみ、`display_name` はレジストリのみ、`sha256` はレジストリの `version_entry` のみで保持され、インストール側で重複保存しなくなりました。
+- **`source` enum を `["registry","local"]` の 2 値に縮約**しました。旧値（`"published"` / `"local_script"`）は自動変換されます。レジストリインストールと My Tools 登録の両方を持つ「双方向リンク」エントリは、`source="registry"` ＋ `local_path` の有無で表現されます。
+- **`registry_id` (UUID) が `registry.json` の必須フィールド**になりました。最初の publish 時に自動 stamp されます。リモートのみで `registry_id` が無いレジストリには警告が出ます（ミラー判定が機能しないため、メンテナーが正本ファイルに stamp する必要があります）。
+- **`icon` が `string | null` に統一**されました。旧来の `"icon": true`（`<name>.png` を自動解決）は文字列リテラル `"@auto"` に変換されます。
+- **`platform` の override** 仕様: version レベルの `platform` 配列が指定されていればその version では package レベルを上書きし、未指定なら継承します。
+
+レジストリ管理者の方は、migrate 後の `registry.json` をホスト先（S3、GitHub など）に再 upload してください。Carton 0.3.x クライアントも v4.0 のレジストリを引き続き読めますが、新しいフィールドは無視されます。
 
 ## プロファイル
 
@@ -301,6 +315,7 @@ my_plugin/
   "type": "python_package",
   "description": "ツールの説明",
   "author": "your_name",
+  "maya_versions": ["2024", "2025", "2026", "2027"],
   "entry_point": {
     "type": "python",
     "module": "my_tool",
@@ -312,6 +327,15 @@ my_plugin/
 ```
 
 対応タイプ: `python_package`, `mel_script`, `plugin`, `maya_module`
+
+`package.json` は `entry_point`、`maya_versions`、`icon` の **Source of Truth** です。Publisher がこれらを `registry.json`（プレビュー用）とパッケージ zip 内に転写します。インストール後は zip 内の `package.json` を読み直すため、registry や installed.json のキャッシュ値が古くても起動時の挙動には影響しません。
+
+`icon` には次の値を指定できます。
+
+- 絵文字（例: `"🔧"`）
+- 相対ファイルパス（例: `"resources/icon.png"`）
+- 文字列リテラル `"@auto"`（レジストリの `icons/<name>.png` を自動解決）
+- `null`（アイコンなし）
 
 ### 識別子モデル
 
@@ -336,6 +360,10 @@ tools/
 ```bash
 python -m carton list path/to/registry.json
 python -m carton unpublish --registry path/to/registry.json --id mystudio/rigger
+
+# レジストリの UUID を確認・stamp（v4.0 では必須フィールド）
+python -m carton registry id path/to/registry.json
+python -m carton registry id path/to/registry.json --stamp
 ```
 
 ## 開発

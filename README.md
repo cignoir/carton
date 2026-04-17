@@ -79,12 +79,14 @@ Supports four sources:
 
 Open Carton, browse packages, click **Install**.
 
-Installed packages are recorded with their SHA256 from the registry, and the
-card shows a small ✔ when the hash was verified at download time. Browse the
-**Version History** from the package detail panel to see release notes for
-each published version, or roll back to an older one — rolled-back packages
-are **pinned** and skipped by future Update prompts so your manual choice
-isn't undone on the next refresh.
+Carton verifies the package's SHA256 against the registry at download time,
+and the card shows a small ✔ when the registry entry carries a hash. The
+hash itself lives in the registry's `version_entry.sha256` (single source of
+truth — the installed entry no longer duplicates it). Browse the **Version
+History** from the package detail panel to see release notes for each
+published version, or roll back to an older one — rolled-back packages are
+**pinned** and skipped by future Update prompts so your manual choice isn't
+undone on the next refresh.
 
 ### Register & Share Your Script
 
@@ -103,6 +105,36 @@ Uninstalling a tool you previously published from the registry view does **not**
 delete its My Tools registration — Carton just demotes the entry back to a
 local-only registration, so your edit/launch state is independent from whether
 the package is currently installed from the registry.
+
+## Upgrading from v0.3
+
+v0.4.0 bumps the registry / installed.json schemas to **v4.0**. Older files
+are migrated in place on first startup; the original is preserved next to
+the file as `installed.json.bak-v0.3.<ms>` / `registry.json.bak-v0.3.<ms>`.
+
+Key changes:
+
+- **Single source of truth per field.** `entry_point` lives only in the
+  zip's inner `package.json`, `display_name` lives only in the registry,
+  and `sha256` lives only in the registry's `version_entry` — the installed
+  entry no longer duplicates any of them.
+- **`source` enum collapsed** to `["registry","local"]`. Legacy values
+  (`"published"`, `"local_script"`) auto-convert; double-bound entries
+  (registry-installed AND My Tools-registered) are now expressed as
+  `source="registry"` plus a non-empty `local_path`.
+- **`registry_id` (UUID) is now required** on `registry.json` and is
+  auto-stamped on first touch. Remote-only registries that ship without one
+  trigger a warning (mirror matching cannot work until the maintainer
+  stamps the canonical file).
+- **`icon` is now `string | null`.** Legacy `"icon": true` (auto-resolve
+  `<name>.png`) becomes the literal string `"@auto"`.
+- **`platform` override.** A version-level `platform` array now overrides
+  the package-level default; absent means inherit.
+
+Registry maintainers should re-upload the migrated `registry.json` to
+their host (S3, GitHub, etc.) so consumers pick up the new shape. Carton
+0.3.x clients still parse a v4.0 registry — they just ignore the new
+fields.
 
 ## Profiles
 
@@ -360,6 +392,7 @@ Place this in your tool's root to define metadata:
   "type": "python_package",
   "description": "What this tool does",
   "author": "your_name",
+  "maya_versions": ["2024", "2025", "2026", "2027"],
   "entry_point": {
     "type": "python",
     "module": "my_tool",
@@ -371,6 +404,18 @@ Place this in your tool's root to define metadata:
 ```
 
 Supported types: `python_package`, `mel_script`, `plugin`, `maya_module`
+
+`package.json` is the **source of truth** for `entry_point`, `maya_versions`,
+and `icon`. The publisher copies them into `registry.json` (as previews)
+and into the package zip; at install time Carton reads them from the zip's
+inner `package.json` rather than trusting any cached copy.
+
+`icon` accepts:
+
+- An emoji (e.g. `"🔧"`)
+- A relative file path (e.g. `"resources/icon.png"`)
+- The literal `"@auto"` to use `icons/<name>.png` from the registry
+- `null` for no icon
 
 ### Identity model
 
@@ -402,6 +447,10 @@ automatically the first time you publish.
 ```bash
 python -m carton list path/to/registry.json
 python -m carton unpublish --registry path/to/registry.json --id mystudio/rigger
+
+# Inspect or stamp the registry's UUID (required on v4.0 registries)
+python -m carton registry id path/to/registry.json
+python -m carton registry id path/to/registry.json --stamp
 ```
 
 ## Development
