@@ -17,6 +17,13 @@ class PackageInfo:
         on this object only for My Tools.
       * ``sha256`` lives only on the registry — never persisted in
         installed.json.
+
+    v5.0 addition: ``origin`` (optional) is an :class:`Origin` instance
+    describing where this package's bytes live (embedded catalogue, GitHub
+    repo, url, local path). v4.0 flows leave it ``None`` so behaviour is
+    identical; v5.0 catalogue_client attaches it so downstream code can
+    re-resolve artifacts on reinstall / upgrade without re-reading the
+    catalogue.
     """
 
     def __init__(
@@ -40,6 +47,7 @@ class PackageInfo:
         home_registry=None,
         activated_paths=None,
         pinned=False,
+        origin=None,
     ):
         # Resolve identity. If pkg_id is given, prefer it; otherwise derive from ns/name.
         if pkg_id and "/" in pkg_id:
@@ -75,6 +83,7 @@ class PackageInfo:
         # rollback. Auto-update flows must skip pinned packages so the
         # user's choice isn't immediately undone.
         self.pinned = bool(pinned)
+        self.origin = origin
 
     @classmethod
     def from_registry_entry(cls, pkg_id, pkg_data, version_key=None):
@@ -104,8 +113,26 @@ class PackageInfo:
         )
 
     @classmethod
+    def from_origin(cls, pkg_id, pkg_data, version_key=None, origin=None):
+        """Create from a v5.0 catalogue package entry + its resolved Origin.
+
+        ``pkg_data`` is the projected legacy-shape dict produced by
+        :class:`carton.core.catalogue_client.CatalogueClient` — so scalar
+        fields (``namespace``/``name``/``display_name``/...) and the
+        per-version info still live under ``pkg_data["versions"]`` and can
+        be parsed by :meth:`from_registry_entry`. ``origin`` is the
+        :class:`Origin` instance backing the same package, captured here so
+        downstream flows can re-resolve artifacts (reinstall, upgrade,
+        pinned/unpinned check) without re-reading the catalogue.
+        """
+        info = cls.from_registry_entry(pkg_id, pkg_data, version_key=version_key)
+        info.origin = origin
+        return info
+
+    @classmethod
     def from_installed_entry(cls, pkg_id, data):
         """Create from an installed.json entry."""
+        origin = _origin_from_persisted(data.get("origin"))
         return cls(
             pkg_id=pkg_id,
             namespace=data.get("namespace", ""),
@@ -121,6 +148,7 @@ class PackageInfo:
             home_registry=data.get("home_registry", {}),
             activated_paths=data.get("activated_paths", {}),
             pinned=data.get("pinned", False),
+            origin=origin,
         )
 
     def to_installed_dict(self):
@@ -155,4 +183,48 @@ class PackageInfo:
             d["activated_paths"] = self.activated_paths
         if self.pinned:
             d["pinned"] = True
+        if self.origin is not None:
+            origin_dict = _origin_to_persisted(self.origin)
+            if origin_dict:
+                d["origin"] = origin_dict
         return d
+
+
+_ORIGIN_CATALOGUE_ONLY_KEYS = frozenset({"versions", "latest_version"})
+
+
+def _origin_to_persisted(origin):
+    """Serialise an :class:`Origin` for installed.json — identity fields only.
+
+    Catalogue-derived metadata (``versions``, ``latest_version``) is
+    intentionally dropped: keeping it here would shadow the live catalogue
+    with stale values on the next reinstall / upgrade. We persist only the
+    origin's locator ({type, repo, ref, url, ...}) so the re-resolution
+    path knows where to look.
+    """
+    try:
+        raw = origin.to_dict()
+    except AttributeError:
+        return None
+    if not isinstance(raw, dict):
+        return None
+    return {k: v for k, v in raw.items() if k not in _ORIGIN_CATALOGUE_ONLY_KEYS}
+
+
+def _origin_from_persisted(data):
+    """Reconstruct an :class:`Origin` from its installed.json serialisation.
+
+    Lazy import of :mod:`carton.core.origins` avoids a package_info →
+    origins → (future) package_info cycle. Returns ``None`` on any parse
+    failure so a corrupted entry never blocks loading installed.json.
+    """
+    if not isinstance(data, dict) or not data.get("type"):
+        return None
+    try:
+        from carton.core.origins import origin_from_dict, OriginError
+    except ImportError:
+        return None
+    try:
+        return origin_from_dict(data)
+    except OriginError:
+        return None
