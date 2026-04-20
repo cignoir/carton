@@ -131,3 +131,123 @@ class TestConfigCataloguesProperty:
         cfg.add_catalogue("b", "/b.json")
         cfg.remove_catalogue("a")
         assert [r.name for r in cfg.registries] == ["b"]
+
+
+class TestDualEmitOnDisk:
+    """Step 4-A phase 3-b: write-side dual-emit.
+
+    Our writer now emits both the legacy (``registries`` / ``registry_id``)
+    and the v5.0 (``catalogues`` / ``catalogue_id``) shapes into the same
+    config.json, with identical values pointing at the same underlying
+    storage. This lets a v0.4.x reader still resolve the file while a
+    v0.5.x reader (or CatalogueClient once it's wired up) picks up the
+    new vocabulary. Step 4-C (post v0.5.0 rollout) drops the legacy keys.
+    """
+
+    def test_entry_to_dict_emits_both_ids(self):
+        e = RegistryEntry("s", "/tmp/x.json", registry_id="uuid-a")
+        d = e.to_dict()
+        assert d["registry_id"] == "uuid-a"
+        assert d["catalogue_id"] == "uuid-a"
+
+    def test_entry_to_dict_omits_both_when_id_empty(self):
+        """No ghost keys when the registry hasn't been fetched yet."""
+        e = RegistryEntry("s", "/tmp/x.json")
+        d = e.to_dict()
+        assert "registry_id" not in d
+        assert "catalogue_id" not in d
+
+    def test_config_to_dict_emits_both_top_level_keys(self):
+        cfg = Config()
+        cfg.add_registry("a", "/p.json", registry_id="uuid-a")
+        d = cfg.to_dict()
+        assert "registries" in d
+        assert "catalogues" in d
+        assert len(d["registries"]) == 1
+        assert len(d["catalogues"]) == 1
+        # Same entry dict shape on both sides — the lists share the
+        # underlying entry objects, so a mutation on one surfaces on the
+        # other (important for any external tooling that hand-edits the
+        # file after we've written it).
+        assert d["registries"][0]["registry_id"] == "uuid-a"
+        assert d["catalogues"][0]["catalogue_id"] == "uuid-a"
+
+
+class TestLoadAcceptsEitherTopLevelKey:
+    """Post dual-emit, the reader must tolerate a config.json that has
+    only ``catalogues`` (future Step 4-C writers will drop ``registries``)
+    or only ``registries`` (v0.4.x files still on disk). Same precedence
+    as the dict-level rule: legacy wins when both are present."""
+
+    def test_load_reads_catalogues_only(self):
+        import json
+        import os
+        import tempfile
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = os.path.join(tmpdir, "config.json")
+            with open(path, "w", encoding="utf-8") as f:
+                json.dump({
+                    "catalogues": [
+                        {"name": "modern", "path": "/m.json",
+                         "catalogue_id": "uuid-m"}
+                    ],
+                }, f)
+            cfg = Config.load(path)
+            assert len(cfg.registries) == 1
+            assert cfg.registries[0].name == "modern"
+            assert cfg.registries[0].registry_id == "uuid-m"
+
+    def test_load_reads_registries_only(self):
+        """v0.4.x config.json stays readable verbatim."""
+        import json
+        import os
+        import tempfile
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = os.path.join(tmpdir, "config.json")
+            with open(path, "w", encoding="utf-8") as f:
+                json.dump({
+                    "registries": [
+                        {"name": "legacy", "path": "/l.json",
+                         "registry_id": "uuid-l"}
+                    ],
+                }, f)
+            cfg = Config.load(path)
+            assert len(cfg.registries) == 1
+            assert cfg.registries[0].name == "legacy"
+
+    def test_load_when_both_keys_present_prefers_registries(self):
+        """Dual-emit writer produces both — reader must not double-count."""
+        import json
+        import os
+        import tempfile
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = os.path.join(tmpdir, "config.json")
+            with open(path, "w", encoding="utf-8") as f:
+                json.dump({
+                    "registries": [
+                        {"name": "a", "path": "/a.json", "registry_id": "u1"}
+                    ],
+                    "catalogues": [
+                        {"name": "a", "path": "/a.json", "catalogue_id": "u1"}
+                    ],
+                }, f)
+            cfg = Config.load(path)
+            assert len(cfg.registries) == 1
+
+    def test_save_then_load_round_trip(self):
+        """End-to-end: our own writer + our own reader converge cleanly."""
+        import os
+        import tempfile
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = os.path.join(tmpdir, "config.json")
+            cfg = Config()
+            cfg.add_registry("round", "/r.json", registry_id="uuid-r")
+            cfg.save(path)
+            restored = Config.load(path)
+            assert len(restored.registries) == 1
+            assert restored.registries[0].registry_id == "uuid-r"
+            assert restored.registries[0].catalogue_id == "uuid-r"

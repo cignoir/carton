@@ -98,15 +98,21 @@ class RegistryEntry:
     def to_dict(self):
         d = {"name": self.name, "path": self.path}
         if self.registry_id:
+            # v5.0 dual-emit: write both legacy (registry_id) and the
+            # v5.0 key (catalogue_id) so a v0.4.x reader still resolves
+            # identity and a v0.5.x reader sees the new vocabulary. The
+            # values are identical — same underlying storage. Step 4-C
+            # (post v0.5.0 rollout) drops the legacy key.
             d["registry_id"] = self.registry_id
+            d["catalogue_id"] = self.registry_id
         return d
 
     @classmethod
     def from_dict(cls, d):
-        # Accept both key names so a config.json that has already been
-        # rewritten with ``catalogue_id`` deserialises cleanly. The
-        # writer still emits ``registry_id`` — flipping the write side
-        # is a later step once all v0.4 clients are gone.
+        # Accept both key names. Both the pre-v5.0 writer (registry_id
+        # only) and the dual-emit writer (registry_id + catalogue_id
+        # both present) deserialise cleanly — ``registry_id`` wins when
+        # both are there since they point at the same storage anyway.
         return cls(
             name=d.get("name", ""),
             path=d.get("path", ""),
@@ -236,7 +242,17 @@ class Config:
         if os.path.exists(path):
             with open(path, "r", encoding="utf-8") as f:
                 data = json.load(f)
-            registries = [RegistryEntry.from_dict(r) for r in data.get("registries", [])]
+            # v5.0 reader: accept either top-level key. Our own writer
+            # dual-emits both, but a future Step 4-C writer may drop the
+            # legacy ``registries`` in favour of ``catalogues`` only, and
+            # we want today's reader to already handle that file. Same
+            # precedence as the dict-level rule in
+            # :meth:`RegistryEntry.from_dict` — legacy wins when both
+            # are present, since they point at the same list anyway.
+            entries_raw = data.get("registries")
+            if entries_raw is None:
+                entries_raw = data.get("catalogues", [])
+            registries = [RegistryEntry.from_dict(r) for r in entries_raw]
             cfg = cls(
                 registries=registries,
                 install_dir=data.get("install_dir", _DEFAULT_INSTALL_DIR),
@@ -441,8 +457,16 @@ class Config:
             )
 
     def to_dict(self):
+        # v5.0 dual-emit: write both the legacy ``registries`` array and
+        # the v5.0 ``catalogues`` array (same dicts), so a v0.4.x reader
+        # finds the old key and a v0.5.x reader sees the new name. Both
+        # lists share entry dicts that themselves carry ``registry_id``
+        # and ``catalogue_id`` via :meth:`RegistryEntry.to_dict`. Step
+        # 4-C (post v0.5.0 rollout) drops the legacy ``registries`` key.
+        entries = [r.to_dict() for r in self.registries]
         return {
-            "registries": [r.to_dict() for r in self.registries],
+            "registries": entries,
+            "catalogues": entries,
             "install_dir": self.install_dir,
             "auto_check_updates": self.auto_check_updates,
             "github_repo": self.github_repo,
