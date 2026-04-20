@@ -167,12 +167,21 @@ class Publisher:
         # zipping something that will ModuleNotFoundError at import time.
         self._validate_python_package_layout(local_path, pkg_type, is_folder, name)
 
+        # Build the v5.0 home_origin payload for this embedded publish.
+        # pkg_data wins if the caller already carries one (e.g. a tool
+        # whose home is elsewhere being published into a mirror), otherwise
+        # we stamp the target catalogue's embedded variant. Parallel to
+        # the existing home_registry precedence a few lines below.
+        home_origin_meta = target_entry.to_home_origin_meta()
+        home_origin = pkg_data.get("home_origin") or home_origin_meta
+
         # 1. Create zip (in staging)
         zip_path = self._create_zip(
             local_path, ns, name, version, is_folder,
             entry_point, display_name, icon, description, pkg_type, author,
             maya_versions=maya_versions,
             home_registry=pkg_data.get("home_registry"),
+            home_origin=home_origin,
             include_compiled=include_compiled,
             embed_source_path=embed_source_path,
         )
@@ -226,9 +235,16 @@ class Publisher:
         # Use the canonical to_home_meta() builder so the embedded UUID
         # stays consistent with anything else encoded by the UI / config.
         home_meta = target_entry.to_home_meta()
+        # Re-build home_origin *after* _update_registry so the stamped
+        # registry_id (now on target_entry) propagates into catalogue_id.
+        # The earlier ``home_origin`` was handed to the zip when the
+        # registry_id may still have been blank — same asymmetry as
+        # home_registry, mirrored intentionally.
+        home_origin_source = pkg_data.get("home_origin") or target_entry.to_home_origin_meta()
         self._persist_identity_to_source(
             local_path, ns, name, is_folder,
             home_registry=pkg_data.get("home_registry") or home_meta,
+            home_origin=home_origin_source,
         )
 
         result = {"id": pkg_id, "namespace": ns, "name": name, "version": version}
@@ -346,7 +362,8 @@ class Publisher:
     def _create_zip(self, local_path, namespace, name, version, is_folder,
                     entry_point, display_name, icon, description, pkg_type, author,
                     maya_versions=None,
-                    home_registry=None, include_compiled=False,
+                    home_registry=None, home_origin=None,
+                    include_compiled=False,
                     embed_source_path=True):
         """Create a zip file in the staging directory."""
         staging = self._config.staging_dir
@@ -376,6 +393,12 @@ class Publisher:
             pkg_json["source_path"] = os.path.abspath(local_path)
         if home_registry:
             pkg_json["home_registry"] = home_registry
+        if home_origin:
+            # v5.0: stamp the generalised home pointer alongside the legacy
+            # ``home_registry`` so consumers that have already migrated to
+            # the ``home_origin`` field don't have to guess the variant
+            # (embedded / github / url / local).
+            pkg_json["home_origin"] = home_origin
 
         _EXCLUDE_DIRS = {"__pycache__", ".git", ".svn", ".hg", "tests", "test", "dist", "build", ".vscode", ".idea"}
         _EXCLUDE_FILES = {".gitignore", ".gitattributes", ".DS_Store", "Thumbs.db"}
@@ -499,7 +522,7 @@ class Publisher:
         return warnings
 
     def _persist_identity_to_source(self, local_path, namespace, name, is_folder,
-                                    home_registry=None):
+                                    home_registry=None, home_origin=None):
         """Write namespace/name back into source so other clones converge.
 
         Folder packages: update or create ``<folder>/package.json``.
@@ -508,6 +531,8 @@ class Publisher:
         updates = {"namespace": namespace, "name": name}
         if home_registry:
             updates["home_registry"] = home_registry
+        if home_origin:
+            updates["home_origin"] = home_origin
 
         if is_folder:
             pkg_json_path = os.path.join(local_path, "package.json")
@@ -610,6 +635,15 @@ class Publisher:
         maya_versions = self._resolve_maya_versions(pkg_data, local_path, is_folder)
         self._validate_python_package_layout(local_path, pkg_type, is_folder, name)
 
+        # v5.0: stamp home_origin={type:github,repo:<repo>} so the
+        # published artifact and the source tree agree on where this
+        # package's home is. pkg_data still wins (a publish_github call
+        # that explicitly carries a home_origin — e.g. embedded-but-
+        # mirrored-to-github — keeps the caller's shape).
+        home_origin = pkg_data.get("home_origin") or {
+            "type": "github", "repo": repo,
+        }
+
         # Build the same zip shape as the embedded path so consumers
         # installing from either origin see identical package.json bytes.
         zip_path = self._create_zip(
@@ -617,6 +651,7 @@ class Publisher:
             entry_point, display_name, icon, description, pkg_type, author,
             maya_versions=maya_versions,
             home_registry=pkg_data.get("home_registry"),
+            home_origin=home_origin,
             include_compiled=include_compiled,
             embed_source_path=embed_source_path,
         )
@@ -676,6 +711,7 @@ class Publisher:
         self._persist_identity_to_source(
             local_path, ns, name, is_folder,
             home_registry=pkg_data.get("home_registry"),
+            home_origin=home_origin,
         )
 
         if warnings:
