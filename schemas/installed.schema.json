@@ -71,6 +71,21 @@
             "hint": { "type": "string" }
           }
         },
+        "origin": {
+          "type": "object",
+          "description": "v5.0 inbound origin snapshot. このパッケージをどこから install したかの identity を記録する (catalogue の versions/latest_version は stale になるので含めない、再解決時は origin 経由で最新を取る)",
+          "required": ["type"],
+          "properties": {
+            "type": {
+              "type": "string",
+              "enum": ["embedded", "github", "url", "local"]
+            },
+            "repo": { "type": "string" },
+            "ref": { "type": "string" },
+            "url": { "type": "string" },
+            "path": { "type": "string" }
+          }
+        },
         "home_origin": {
           "type": "object",
           "description": "v5.0 本籍 origin（embedded/github/url/local）。home_registry と並存可",
