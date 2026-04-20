@@ -365,6 +365,7 @@ class RegistriesSection(QtWidgets.QWidget):
             t("settings_add_local"),
             t("settings_add_github"),
             t("settings_add_url"),
+            t("settings_add_package_url"),
             t("settings_add_create_new"),
         ]
         chosen, ok = QtWidgets.QInputDialog.getItem(
@@ -377,6 +378,8 @@ class RegistriesSection(QtWidgets.QWidget):
         elif chosen == choices[2]:
             self._add_remote()
         elif chosen == choices[3]:
+            self._add_package_url()
+        elif chosen == choices[4]:
             self._create_new_local()
         else:
             self._add_local()
@@ -531,6 +534,73 @@ class RegistriesSection(QtWidgets.QWidget):
             t("settings_github_pkg_registered", pkg_id),
         )
         return True
+
+    def _add_package_url(self):
+        """Register a single package by direct ``package.json`` URL.
+
+        Counterpart to ``_add_github`` for repos that aren't on GitHub
+        (or host their ``package.json`` at a non-standard path). Hits
+        the URL, reads ``namespace``/``name`` from the returned JSON,
+        and stores a ``url`` origin in the personal catalogue so the
+        Library view can merge it in alongside subscribed catalogues.
+
+        No ``_target.registries`` mutation — personal catalogue lives
+        under ``~/.carton/`` and is machine-local (plan v5.0 spec).
+        """
+        from carton.core.personal_catalogue import (
+            PersonalCatalogue, derive_pkg_id,
+        )
+
+        url, ok = wide_input(
+            self, t("settings_add_package_url"),
+            t("settings_package_url_placeholder"), width=560,
+        )
+        if not ok or not url.strip():
+            return
+        url = url.strip()
+        if not url.startswith(("http://", "https://")):
+            QtWidgets.QMessageBox.warning(self, "Carton", t("settings_invalid_url"))
+            return
+
+        try:
+            req = Request(url)
+            req.add_header("Accept", "application/json")
+            resp = urlopen(req, timeout=10)
+            pkg_data = json.loads(resp.read().decode("utf-8"))
+        except Exception as e:
+            QtWidgets.QMessageBox.warning(
+                self, "Carton",
+                t("settings_package_url_error", str(e)),
+            )
+            return
+
+        pkg_id = derive_pkg_id(pkg_data)
+        if not pkg_id:
+            QtWidgets.QMessageBox.warning(
+                self, "Carton",
+                t("settings_package_url_invalid_pkg"),
+            )
+            return
+
+        catalogue = PersonalCatalogue.load()
+        if catalogue.contains(pkg_id):
+            QtWidgets.QMessageBox.information(
+                self, "Carton",
+                t("settings_github_pkg_already_added", pkg_id),
+            )
+            return
+        catalogue.add_url_package(pkg_id, url)
+        try:
+            catalogue.save()
+        except OSError as e:
+            QtWidgets.QMessageBox.warning(
+                self, "Carton", t("settings_github_error", str(e)),
+            )
+            return
+        QtWidgets.QMessageBox.information(
+            self, "Carton",
+            t("settings_github_pkg_registered", pkg_id),
+        )
 
     def _add_remote(self):
         from carton.ui._registry_pairing import probe_remote_registry_id

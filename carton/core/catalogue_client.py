@@ -26,6 +26,7 @@ from carton.core.origins import (
     EmbeddedOrigin,
     GithubOrigin,
     OriginError,
+    UrlOrigin,
     origin_from_dict,
 )
 from carton.core.registry_id import read_registry_id
@@ -347,6 +348,17 @@ class CatalogueClient(object):
                 # Pick a stable "latest" by lexicographic order — semver
                 # ordering is the consumer's job.
                 item["latest_version"] = sorted(versions.keys())[-1]
+        elif isinstance(origin, UrlOrigin):
+            versions = self._project_url_versions(origin)
+            item["versions"] = versions
+            # url origin exposes a single "current" version — the one
+            # written in the remote package.json. Take that as latest.
+            if versions:
+                item["latest_version"] = next(iter(versions.keys()))
+            # Display metadata for the card comes from the remote
+            # package.json too; surface them alongside origin so the UI
+            # can render a card without downloading the zip.
+            self._hydrate_url_display(item, origin)
         else:
             item["versions"] = {}
 
@@ -374,6 +386,56 @@ class CatalogueClient(object):
                 pass
             out[ver] = raw
         return out
+
+    @staticmethod
+    def _project_url_versions(origin):
+        """Return a versions dict for a url origin.
+
+        url origins own exactly one version (the one currently in the
+        remote ``package.json``). We project the returned ``ArtifactRef``
+        fields into the same shape embedded / github versions use so
+        consumers can keep reading ``download_url`` / ``sha256`` /
+        ``_pinned`` without knowing the origin type.
+        """
+        out = {}
+        for ver, meta in origin.list_versions().items():
+            entry = meta.to_dict()
+            try:
+                ref = origin.get_artifact(ver)
+                entry["download_url"] = ref.url
+                if ref.sha256:
+                    entry["sha256"] = ref.sha256
+                if ref.size_bytes:
+                    entry["size_bytes"] = ref.size_bytes
+                entry["_pinned"] = ref.is_pinned
+                entry["_source_label"] = ref.source_label
+            except OriginError:
+                continue
+            out[ver] = entry
+        return out
+
+    @staticmethod
+    def _hydrate_url_display(item, origin):
+        """Copy display metadata from the remote package.json into ``item``.
+
+        Personal-catalogue url entries are stored as just
+        ``{"origin": {"type": "url", "url": ...}}`` — they don't repeat
+        display_name / description / icon inline. For the Library card
+        to render something more informative than the raw pkg_id, we
+        reach into the already-fetched package.json (cached on the
+        origin instance) and splat its display fields into ``item``.
+        Package-json fields win over any existing inline values because
+        the remote file is the v5.0 SoT.
+        """
+        data = origin._load_package_json()
+        if not isinstance(data, dict):
+            return
+        for field in (
+            "namespace", "name", "display_name", "description", "type",
+            "author", "icon", "tags", "platform", "entry_point",
+        ):
+            if field in data and data[field] is not None:
+                item[field] = data[field]
 
     @staticmethod
     def _project_github_versions(origin, pkg_id, pkg_data):

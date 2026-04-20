@@ -115,10 +115,12 @@ def origin_from_dict(data, base_dir=""):
     # Lazy imports to avoid base.py ↔ subclass circular import at module load.
     from carton.core.origins.embedded_origin import EmbeddedOrigin
     from carton.core.origins.github_origin import GithubOrigin
+    from carton.core.origins.url_origin import UrlOrigin
 
     registry = {
         EmbeddedOrigin.type: EmbeddedOrigin,
         GithubOrigin.type: GithubOrigin,
+        UrlOrigin.type: UrlOrigin,
     }
     cls = registry.get(type_)
     if cls is None:
