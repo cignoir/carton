@@ -40,9 +40,9 @@ def resolve_origin_verification(pkg_data, installed_version=None):
     """Decide whether and how to show the origin-verification badge.
 
     Args:
-        pkg_data: Legacy-shape dict produced by CatalogueClient /
-            RegistryClient (``versions`` + ``_origin`` + per-version
-            ``_pinned`` mirror flag).
+        pkg_data: Legacy-shape dict produced by CatalogueClient
+            (``versions`` + ``_origin`` + per-version ``_pinned``
+            mirror flag).
         installed_version: The user's installed version, if any. When
             set, we judge that specific version; otherwise we look at
             ``latest_version``.

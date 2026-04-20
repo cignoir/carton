@@ -54,7 +54,6 @@ class RegistryEntry:
     ``registry_id`` is a client-side cache of the UUID stored inside the
     registry's ``registry.json`` (or, under v5.0, the ``catalogue_id`` of
     its ``catalogue.json``). It is populated on fetch (see
-    :class:`carton.core.registry_client.RegistryClient` /
     :class:`carton.core.catalogue_client.CatalogueClient`) and persisted
     alongside ``name`` / ``path`` so duplicate detection can work before
     the first network round trip. Empty means "not yet known" — the

@@ -8,7 +8,6 @@ import pytest
 
 from carton.core.config import Config, RegistryEntry, _is_url
 from carton.core.publisher import Publisher, RemoteMirrorMissingError
-from carton.core.registry_client import RegistryClient
 
 
 class TestIsUrl:
@@ -112,82 +111,14 @@ class TestPublisherRemoteGuard:
             assert results == []
 
 
-class TestRegistryClientMerge:
-    """Test that _merge_packages resolves URLs correctly for remote registries."""
-
-    def test_relative_url_resolution_remote(self):
-        """Relative download_url should be joined with remote base URL."""
-        with tempfile.TemporaryDirectory() as tmpdir:
-            config = Config(install_dir=tmpdir)
-            client = RegistryClient(config)
-
-            entry = RegistryEntry("test", "https://example.com/registry/registry.json")
-            data = {
-                "packages": {
-                    "pkg-1": {
-                        "name": "tool",
-                        "latest_version": "1.0.0",
-                        "versions": {
-                            "1.0.0": {
-                                "download_url": "packages/pkg-1/1.0.0/tool-1.0.0.package",
-                            }
-                        }
-                    }
-                }
-            }
-
-            client._merge_packages(entry, data)
-            pkg = client._packages["pkg-1"]
-            resolved = pkg["versions"]["1.0.0"]["download_url"]
-            assert resolved == "https://example.com/registry/packages/pkg-1/1.0.0/tool-1.0.0.package"
-
-    def test_absolute_url_not_modified(self):
-        """Absolute download_url should not be modified."""
-        with tempfile.TemporaryDirectory() as tmpdir:
-            config = Config(install_dir=tmpdir)
-            client = RegistryClient(config)
-
-            entry = RegistryEntry("test", "https://example.com/registry.json")
-            abs_url = "https://cdn.example.com/packages/tool-1.0.0.package"
-            data = {
-                "packages": {
-                    "pkg-1": {
-                        "name": "tool",
-                        "latest_version": "1.0.0",
-                        "versions": {
-                            "1.0.0": {"download_url": abs_url}
-                        }
-                    }
-                }
-            }
-
-            client._merge_packages(entry, data)
-            resolved = client._packages["pkg-1"]["versions"]["1.0.0"]["download_url"]
-            assert resolved == abs_url
-
-    def test_remote_flag_set(self):
-        """Packages from remote registry should have _registry_remote=True."""
-        with tempfile.TemporaryDirectory() as tmpdir:
-            config = Config(install_dir=tmpdir)
-            client = RegistryClient(config)
-
-            entry = RegistryEntry("test", "https://example.com/registry.json")
-            data = {"packages": {"pkg-1": {"name": "tool", "versions": {}}}}
-
-            client._merge_packages(entry, data)
-            assert client._packages["pkg-1"]["_registry_remote"] is True
-
-    def test_local_flag_set(self):
-        """Packages from local registry should have _registry_remote=False."""
-        with tempfile.TemporaryDirectory() as tmpdir:
-            config = Config(install_dir=tmpdir)
-            client = RegistryClient(config)
-
-            entry = RegistryEntry("test", os.path.join(tmpdir, "registry.json"))
-            data = {"packages": {"pkg-1": {"name": "tool", "versions": {}}}}
-
-            client._merge_packages(entry, data)
-            assert client._packages["pkg-1"]["_registry_remote"] is False
+# URL resolution and remote/local flag attachment used to be covered
+# here by poking RegistryClient._merge_packages directly. CatalogueClient
+# does the same projection via ``_build_legacy_shape`` +
+# ``_project_embedded_versions`` — tests/test_catalogue_client.py covers
+# the local/relative-path side via a live embedded catalogue, and the
+# remote-flag counterpart is exercised indirectly through the fetch +
+# merge path in this file's ``TestConfigRemoteRegistry``. RegistryClient
+# itself is slated for removal once this import is the last holdout.
 
 
 class TestConfigRemoteRegistry:

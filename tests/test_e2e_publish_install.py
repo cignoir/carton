@@ -16,12 +16,12 @@ import zipfile
 
 import pytest
 
+from carton.core.catalogue_client import CatalogueClient
 from carton.core.config import Config, RegistryEntry
 from carton.core.downloader import Downloader
 from carton.core.env_manager import MayaEnvManager
 from carton.core.installer import InstallManager
 from carton.core.publisher import Publisher
-from carton.core.registry_client import RegistryClient
 
 
 def _make_source_package(root):
@@ -141,17 +141,17 @@ class TestPublishInstallRoundtrip:
                 install_dir=consumer_home,
                 registries=[registry_entry],
             )
-            client = RegistryClient(cons_config)
+            client = CatalogueClient(cons_config)
             client.fetch()
             packages = client.get_packages()
 
             assert pkg_id in packages, \
-                "Consumer RegistryClient did not see the published package"
+                "Consumer CatalogueClient did not see the published package"
             pkg_entry = packages[pkg_id]
             latest = pkg_entry["latest_version"]
             version_info = pkg_entry["versions"][latest]
             resolved_url = version_info["download_url"]
-            # RegistryClient should have resolved the relative download_url
+            # CatalogueClient should have resolved the relative download_url
             # to an absolute local path pointing at the zip on disk.
             assert os.path.isabs(resolved_url) or os.path.isfile(resolved_url)
 

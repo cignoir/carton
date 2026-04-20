@@ -1,18 +1,14 @@
 """Catalogue (v5.0) client — load + merge multiple package catalogues.
 
-Coexists with :class:`carton.core.registry_client.RegistryClient` while
-the rest of the codebase migrates over. The two clients can run side by
-side: the registry client serves the legacy v4.0 ``registry.json`` shape
-to consumers that haven't moved yet, while CatalogueClient understands
-both v4.0 (auto-migrating in memory) and v5.0 catalogues with the new
-:class:`Origin` abstraction.
+Supersedes the removed ``registry_client.RegistryClient``. Understands
+both v4.0 registries (auto-migrated in memory on read) and v5.0
+catalogues with the :class:`Origin` abstraction.
 
-Output shape: a dict ``{pkg_id: pkg_data}`` compatible with what the rest
-of Carton already consumes from RegistryClient (``versions``,
-``latest_version``, ``_registry_*`` meta keys). This keeps Phase A
-non-breaking — UI / downloader / installer continue to work unchanged.
-The Origin instances are exposed via ``get_origin(pkg_id)`` for code
-that wants to use them directly.
+Output shape: a dict ``{pkg_id: pkg_data}`` carrying ``versions``,
+``latest_version``, and ``_registry_*`` meta keys so UI / Updater /
+Publisher consume it unchanged. The Origin instance backing each
+package is exposed via ``get_origin(pkg_id)`` for callers that want to
+re-resolve artifacts directly rather than through the projected dict.
 """
 
 import json
@@ -169,20 +165,18 @@ class CatalogueClient(object):
         self._cache_catalogue_id(entry, data)
         base_dir = url.rsplit("/", 1)[0] + "/"
         self._merge_catalogue(entry, data, base_dir=base_dir)
-        # Feature-parity with RegistryClient: remote catalogues get their
-        # icons.zip pulled into the local icon cache on fetch so the UI
-        # can render thumbnails without a per-icon round trip. A missing
-        # icons.zip is fine — individual icons are fetched lazily by the
-        # UI layer as a fallback.
+        # Remote catalogues get their icons.zip pulled into the local
+        # icon cache on fetch so the UI can render thumbnails without a
+        # per-icon round trip. A missing icons.zip is fine — individual
+        # icons are fetched lazily by the UI layer as a fallback.
         self._fetch_icons_archive(entry)
 
     def _fetch_icons_archive(self, entry):
         """Pull ``icons.zip`` next to the remote catalogue, if present.
 
-        Mirrors :meth:`RegistryClient._fetch_icons_archive`. Extracted to
-        ``config.icon_cache_dir`` and bounded by
-        :func:`carton.core.icon_cache.enforce_size_limit` so the cache
-        doesn't grow unbounded across many subscriptions.
+        Extracts to ``config.icon_cache_dir`` and bounds the cache via
+        :func:`carton.core.icon_cache.enforce_size_limit` so repeated
+        fetches across many subscriptions don't blow out the cache.
         """
         cache_dir = self._config.icon_cache_dir
         base = entry.base_dir
@@ -251,7 +245,7 @@ class CatalogueClient(object):
         catalogue_id = getattr(entry, "registry_id", "") or ""
         for pkg_id, pkg_data in (data.get("packages") or {}).items():
             if pkg_id in self._packages:
-                # First catalogue wins. Matches RegistryClient semantics.
+                # First catalogue wins — same dedupe rule as v0.4.
                 continue
             try:
                 origin_dict = pkg_data.get("origin")
@@ -283,9 +277,10 @@ class CatalogueClient(object):
     def _build_legacy_shape(self, entry, pkg_id, pkg_data, origin, base_dir, is_remote):
         """Project a v5.0 package + origin into the dict shape consumers expect.
 
-        Mirrors :meth:`RegistryClient._merge_packages` so the UI / downloader
-        / installer can use either client interchangeably during the
-        migration window.
+        The dict keys match the legacy v0.4 shape the UI / downloader /
+        installer already consume (``_registry_*`` meta plus ``versions``
+        /``latest_version``), so consumers didn't need changes when this
+        client replaced the old one.
         """
         item = {k: v for k, v in pkg_data.items() if k != "origin"}
 
