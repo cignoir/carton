@@ -129,6 +129,30 @@ class RegistryEntry:
             meta["hint"] = self.path
         return meta
 
+    def to_home_origin_meta(self):
+        """Build a v5.0 ``home_origin`` payload (embedded-type) for this entry.
+
+        Counterpart to :meth:`to_home_meta`. Where ``home_registry`` only
+        expressed the legacy ``{name, registry_id, hint}`` shape, the v5.0
+        ``home_origin`` is a tagged union over embedded/github/url/local —
+        a :class:`CatalogueEntry` (=embedded catalogue) always emits the
+        embedded variant, so the payload is
+        ``{"type": "embedded", "catalogue_name": ..., "catalogue_id": ...,
+        "hint": ...}``. Github/url origins construct their own payload at
+        publish time and never go through this helper.
+
+        Kept alongside ``to_home_meta`` for the alias period so consumers
+        migrate one call site at a time; callers that have flipped to the
+        v5.0 vocabulary get the new shape, and older callers keep
+        receiving the legacy one.
+        """
+        meta = {"type": "embedded", "catalogue_name": self.name}
+        if self.registry_id:
+            meta["catalogue_id"] = self.registry_id
+        if self.path and self.path != ".":
+            meta["hint"] = self.path
+        return meta
+
     def __str__(self):
         return "{} — {}".format(self.name, self.path)
 

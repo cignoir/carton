@@ -61,6 +61,7 @@
         },
         "home_registry": {
           "type": "object",
+          "description": "v0.4 本籍情報（embedded カタログ専用）。v5.0 では home_origin が generalised 代替",
           "properties": {
             "name": { "type": "string" },
             "registry_id": {
@@ -68,6 +69,27 @@
               "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
             },
             "hint": { "type": "string" }
+          }
+        },
+        "home_origin": {
+          "type": "object",
+          "description": "v5.0 本籍 origin（embedded/github/url/local）。home_registry と並存可",
+          "required": ["type"],
+          "properties": {
+            "type": {
+              "type": "string",
+              "enum": ["embedded", "github", "url", "local"]
+            },
+            "catalogue_name": { "type": "string" },
+            "catalogue_id": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+            },
+            "hint": { "type": "string" },
+            "repo": { "type": "string" },
+            "ref": { "type": "string" },
+            "url": { "type": "string" },
+            "path": { "type": "string" }
           }
         },
         "activated_paths": {

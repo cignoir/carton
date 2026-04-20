@@ -81,7 +81,7 @@
     },
     "home_registry": {
       "type": "object",
-      "description": "このパッケージの本籍レジストリ。別レジストリに publish しようとすると警告される",
+      "description": "このパッケージの本籍レジストリ（v0.4 形式、embedded カタログ専用）。別レジストリに publish しようとすると警告される。v5.0 では home_origin が generalised 代替。互換のため両方並存可",
       "properties": {
         "name": {
           "type": "string",
@@ -98,6 +98,58 @@
         }
       },
       "additionalProperties": false
+    },
+    "home_origin": {
+      "type": "object",
+      "description": "v5.0 本籍 origin。embedded（従来の registry）/ github / url / local を統一形で表現。home_registry と並存可（alias 期間）",
+      "oneOf": [
+        {
+          "type": "object",
+          "required": ["type"],
+          "properties": {
+            "type": { "const": "embedded" },
+            "catalogue_name": { "type": "string" },
+            "catalogue_id": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+            },
+            "hint": { "type": "string" }
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": ["type", "repo"],
+          "properties": {
+            "type": { "const": "github" },
+            "repo": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]*/[A-Za-z0-9][A-Za-z0-9_.-]*$",
+              "description": "GitHub owner/name"
+            },
+            "ref": { "type": "string", "description": "tag / branch hint (optional)" }
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": ["type", "url"],
+          "properties": {
+            "type": { "const": "url" },
+            "url": { "type": "string", "format": "uri" }
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": ["type", "path"],
+          "properties": {
+            "type": { "const": "local" },
+            "path": { "type": "string" }
+          },
+          "additionalProperties": false
+        }
+      ]
     },
     "source_path": {
       "type": "string",
