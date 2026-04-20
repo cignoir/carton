@@ -49,20 +49,51 @@ class InstallDirChangeError(RuntimeError):
 
 
 class RegistryEntry:
-    """Registry configuration entry.
+    """Registry / catalogue configuration entry.
 
     ``registry_id`` is a client-side cache of the UUID stored inside the
-    registry's ``registry.json``. It is populated on fetch (see
-    :class:`carton.core.registry_client.RegistryClient`) and persisted
-    alongside ``name`` / ``path`` so duplicate detection can work before the
-    first network round trip. Empty means "not yet known" — registry.json is
-    always the source of truth.
+    registry's ``registry.json`` (or, under v5.0, the ``catalogue_id`` of
+    its ``catalogue.json``). It is populated on fetch (see
+    :class:`carton.core.registry_client.RegistryClient` /
+    :class:`carton.core.catalogue_client.CatalogueClient`) and persisted
+    alongside ``name`` / ``path`` so duplicate detection can work before
+    the first network round trip. Empty means "not yet known" — the
+    hosted file is always the source of truth.
+
+    v5.0 transition: the class is additionally exposed at module scope
+    as :class:`CatalogueEntry`, and carries a :attr:`catalogue_id`
+    property that mirrors :attr:`registry_id`. Both names refer to the
+    same underlying storage — callers can migrate to the new vocabulary
+    at their own pace without breaking the old one. The ``catalogue_id``
+    kwarg on :meth:`from_dict` is accepted too so config.json files
+    written by a future v0.5+ UI already round-trip cleanly through an
+    older reader.
     """
 
-    def __init__(self, name, path, registry_id=""):
+    def __init__(self, name, path, registry_id="", catalogue_id=""):
         self.name = name
         self.path = path if _is_url(path) else os.path.normpath(path)
-        self.registry_id = (registry_id or "").strip().lower()
+        # Precedence: explicit registry_id wins if both are passed,
+        # since every live call site in the code still uses that name.
+        # The catalogue_id kwarg is purely a forward-compat seam for
+        # profile/config files written after the rename lands.
+        rid = registry_id or catalogue_id or ""
+        self.registry_id = rid.strip().lower()
+
+    @property
+    def catalogue_id(self):
+        """v5.0 alias for :attr:`registry_id` — same storage, new name.
+
+        Reads return whatever ``registry_id`` currently holds. Writes go
+        through the same normalisation (lowercase + strip) so either
+        name is safe to set from callers that have already adopted the
+        v5.0 vocabulary.
+        """
+        return self.registry_id
+
+    @catalogue_id.setter
+    def catalogue_id(self, value):
+        self.registry_id = (value or "").strip().lower()
 
     def to_dict(self):
         d = {"name": self.name, "path": self.path}
@@ -72,10 +103,14 @@ class RegistryEntry:
 
     @classmethod
     def from_dict(cls, d):
+        # Accept both key names so a config.json that has already been
+        # rewritten with ``catalogue_id`` deserialises cleanly. The
+        # writer still emits ``registry_id`` — flipping the write side
+        # is a later step once all v0.4 clients are gone.
         return cls(
             name=d.get("name", ""),
             path=d.get("path", ""),
-            registry_id=d.get("registry_id", ""),
+            registry_id=d.get("registry_id", "") or d.get("catalogue_id", ""),
         )
 
     def to_home_meta(self):
@@ -113,6 +148,15 @@ class RegistryEntry:
             # "https://example.com/registry/registry.json" -> "https://example.com/registry/"
             return self.path.rsplit("/", 1)[0] + "/"
         return os.path.dirname(os.path.normpath(self.path))
+
+
+# v5.0 name for :class:`RegistryEntry`. Identity assignment — both names
+# refer to the exact same class object, so ``isinstance(x, CatalogueEntry)``
+# and ``isinstance(x, RegistryEntry)`` are interchangeable. Consumers can
+# migrate to the new name as the surrounding code is touched; keeping both
+# names working avoids a flag-day rename that would be impossible to land
+# atomically across UI + core + tests.
+CatalogueEntry = RegistryEntry
 
 
 class Config:
@@ -458,6 +502,33 @@ class Config:
             if entry.registry_id and entry.registry_id == rid:
                 return entry
         return None
+
+    # ---- v5.0 catalogue-name aliases ------------------------------------
+    # These are thin delegates to the registry-named surface. Same storage,
+    # new vocabulary — consumers migrating to v5.0 terminology can call
+    # ``config.catalogues``, ``config.find_catalogue_by_id(...)`` etc.
+    # while the old names keep working until every call site is moved.
+
+    @property
+    def catalogues(self):
+        """v5.0 alias for :attr:`registries` — same list, new name."""
+        return self.registries
+
+    @catalogues.setter
+    def catalogues(self, value):
+        self.registries = list(value) if value is not None else []
+
+    def add_catalogue(self, name, path, catalogue_id=""):
+        """v5.0 alias for :meth:`add_registry`."""
+        self.add_registry(name, path, catalogue_id)
+
+    def remove_catalogue(self, name):
+        """v5.0 alias for :meth:`remove_registry`."""
+        self.remove_registry(name)
+
+    def find_catalogue_by_id(self, catalogue_id):
+        """v5.0 alias for :meth:`find_registry_by_id`."""
+        return self.find_registry_by_id(catalogue_id)
 
     @property
     def packages_dir(self):
