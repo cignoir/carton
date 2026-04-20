@@ -2,6 +2,7 @@
 
 import os
 
+from carton.ui._origin_badge import resolve_origin_verification
 from carton.ui.compat import QtWidgets, QtCore, QtGui, Qt
 from carton.ui.i18n import t
 from carton.ui import theme
@@ -176,6 +177,32 @@ class PackageCard(QtWidgets.QFrame):
                     color=theme.ACCENT_GREEN)
             )
             title_layout.addWidget(verified)
+
+        # v5.0 origin-verification badge — shown on pre-install library
+        # cards so users see up front whether the catalogue / Release
+        # signed the artifact's SHA256, or whether we'll TOFU-pin on
+        # first download. Suppressed on installed packages to avoid
+        # visual duplication with the ``verified`` mark above.
+        if not self._installed_version:
+            origin_badge = resolve_origin_verification(
+                self._pkg_data, self._installed_version,
+            )
+            if origin_badge:
+                badge_text = "{glyph} {label}".format(
+                    glyph=origin_badge["glyph"],
+                    label=t(origin_badge["text_key"]),
+                )
+                color = (theme.ACCENT_GREEN if origin_badge["state"] == "pinned"
+                         else theme.ACCENT_ORANGE)
+                origin_label = QtWidgets.QLabel(badge_text)
+                origin_label.setToolTip(t(origin_badge["tooltip_key"]))
+                origin_label.setStyleSheet(
+                    "font-size: 10px; font-weight: 600; color: {color};"
+                    " background: transparent; padding: 1px 6px;"
+                    " border: 1px solid {color}; border-radius: 3px;".format(
+                        color=color)
+                )
+                title_layout.addWidget(origin_label)
 
         # Published-to badge: clickable menu for unpublish, shown when this
         # package currently lives in one or more writable local registries.
