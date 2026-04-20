@@ -1,7 +1,18 @@
-"""Multi-registry client."""
+"""Multi-registry client.
+
+.. deprecated:: 0.5.0
+   Use :class:`carton.core.catalogue_client.CatalogueClient`. The v5.0
+   client understands both v4.0 registries (auto-migrated in memory)
+   and v5.0 catalogues, and exposes the same ``fetch`` /
+   ``get_packages`` surface this class provides. ``startup()`` already
+   uses ``CatalogueClient`` — the only remaining consumers of
+   ``RegistryClient`` are two legacy test files that will move over
+   during Step 4-B. This module will be removed post v0.5.0 rollout.
+"""
 
 import json
 import os
+import warnings
 import zipfile
 
 from carton.compat_urllib import urlopen, Request, URLError, urljoin, BytesIO
@@ -14,9 +25,21 @@ class RegistryClient:
 
     Attaches _registry_name and _registry_base_dir to each package data entry.
     Also resolves relative paths in download_url.
+
+    .. deprecated:: 0.5.0
+       Use :class:`carton.core.catalogue_client.CatalogueClient`. See
+       module docstring for context. Instantiating this class still
+       works but emits a :class:`DeprecationWarning`.
     """
 
     def __init__(self, config):
+        warnings.warn(
+            "RegistryClient is deprecated as of Carton 0.5.0; use "
+            "CatalogueClient from carton.core.catalogue_client. This "
+            "shim will be removed after the v0.5.0 rollout.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
         self._config = config
         self._packages = {}
 
