@@ -61,13 +61,19 @@ class PackageCard(QtWidgets.QFrame):
     unpublish_requested = QtCore.Signal(str, str)  # (pkg_id, registry_name)
 
     def __init__(self, pkg_id, pkg_data, installed_version=None, icon_path=None,
-                 published_registries=None, parent=None):
+                 published_registries=None, source_catalogue="", parent=None):
         super().__init__(parent)
         self._pkg_id = pkg_id
         self._pkg_data = pkg_data
         self._installed_version = installed_version
         self._icon_path = icon_path
         self._published_registries = list(published_registries or [])
+        # v5.0 provenance: "from: <catalogue>" means "this is where the
+        # user is SEEING the package in Library", distinct from
+        # ``published_registries`` which means "I published TO these" on
+        # the My Tools side. Callers pass the source catalogue name
+        # only in Library view; My Tools view leaves it blank.
+        self._source_catalogue = source_catalogue or ""
         self._setup_ui()
 
     def _setup_ui(self):
@@ -267,13 +273,21 @@ class PackageCard(QtWidgets.QFrame):
 
         title_layout.addStretch()
 
+        # Right-aligned meta: "from: <catalogue> · <author>". Joined into
+        # a single label so the separator logic collapses to ``" · ".join``
+        # instead of juggling three optional widgets side by side.
+        meta_parts = []
+        if self._source_catalogue:
+            meta_parts.append(t("card_source_catalogue", self._source_catalogue))
         author = self._pkg_data.get("author", "")
         if author:
-            author_label = QtWidgets.QLabel(author)
-            author_label.setStyleSheet(
+            meta_parts.append(author)
+        if meta_parts:
+            meta_label = QtWidgets.QLabel(" \u00b7 ".join(meta_parts))
+            meta_label.setStyleSheet(
                 "font-size: 11px; color: {}; background: transparent;".format(theme.TEXT_MUTED)
             )
-            title_layout.addWidget(author_label)
+            title_layout.addWidget(meta_label)
 
         info_layout.addLayout(title_layout)
 

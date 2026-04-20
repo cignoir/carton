@@ -1251,17 +1251,23 @@ class CartonWindow(QtWidgets.QDialog):
         if in_my_tools_view:
             card_pkg_data = pkg_data
             card_published = published_map.get(pkg_id, [])
+            card_source_catalogue = ""
         else:
             card_pkg_data = {
                 k: v for k, v in pkg_data.items() if k != "_local_script"
             }
             card_published = []
+            # Library view: show where we're seeing this package from.
+            # Dedup across catalogues already happened in CatalogueClient
+            # (first-wins), so a single catalogue name is the honest answer.
+            card_source_catalogue = pkg_data.get("_registry_name", "")
 
         card = PackageCard(
             pkg_id, card_pkg_data,
             installed_version=pkg_data.get("_installed_ver"),
             icon_path=icon_path,
             published_registries=card_published,
+            source_catalogue=card_source_catalogue,
         )
         card.launch_requested.connect(self._on_launch)
         card.install_requested.connect(self._on_install)
