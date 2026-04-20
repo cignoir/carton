@@ -216,3 +216,161 @@ class TestCatalogueClientGithub:
         packages = client.get_packages()
         assert "test/good" in packages
         assert "test/bad" not in packages
+
+
+class TestCatalogueClientPersonal:
+    """Personal catalogue merge — ``~/.carton/personal_catalogue.json`` gets
+    folded into the merged package dict alongside subscribed catalogues.
+
+    Hermeticity: every test injects an explicit :class:`PersonalCatalogue`
+    instance or ``personal_catalogue_path`` so no test reads from the
+    developer's actual home directory.
+    """
+
+    def _make_client(self, tmp_path, cache, personal=None, subscribed=None,
+                     github_stub=None, monkeypatch=None):
+        config = Config(install_dir=str(tmp_path / "install"))
+        for name, catalogue_path in (subscribed or []):
+            config.add_registry(name, str(catalogue_path))
+        if github_stub is not None:
+            # Personal github origins will try to hit the GitHub API via
+            # the Origin layer when resolving versions. Stub it out so
+            # the tests don't hit the network.
+            monkeypatch.setattr(github_api, "list_releases",
+                                lambda repo, cache=None: github_stub.get(repo, []))
+            monkeypatch.setattr(github_api, "list_tags",
+                                lambda repo, cache=None: [])
+            monkeypatch.setattr(github_api, "get_default_branch",
+                                lambda repo, cache=None: "main")
+            monkeypatch.setattr(github_api, "fetch_raw_text",
+                                lambda url, timeout=15: "")
+        return CatalogueClient(config, cache=cache, personal_catalogue=personal)
+
+    def test_merges_personal_github_package(self, tmp_path, isolated_cache, monkeypatch):
+        from carton.core.personal_catalogue import (
+            PERSONAL_DISPLAY_NAME,
+            PersonalCatalogue,
+        )
+
+        personal = PersonalCatalogue()
+        personal.add_github_package("alice/tool", "alice/tool")
+
+        client = self._make_client(
+            tmp_path, isolated_cache, personal=personal,
+            github_stub={"alice/tool": [
+                {"tag_name": "v1.0.0", "draft": False, "assets": [
+                    {"name": "tool-1.0.0.zip",
+                     "browser_download_url": "https://example.com/tool-1.0.0.zip",
+                     "size": 42},
+                ], "published_at": "2026-01-01T00:00:00Z"},
+            ]},
+            monkeypatch=monkeypatch,
+        )
+        client.fetch()
+
+        packages = client.get_packages()
+        assert "alice/tool" in packages
+        pkg = packages["alice/tool"]
+        assert pkg["_registry_name"] == PERSONAL_DISPLAY_NAME
+        assert pkg["_registry_remote"] is False
+        assert pkg["_origin"]["type"] == "github"
+        assert pkg["_registry_id"] == personal.catalogue_id
+
+    def test_empty_personal_is_noop(self, tmp_path, isolated_cache):
+        """Empty personal catalogue must not mask subscribed catalogue data."""
+        from carton.core.personal_catalogue import PersonalCatalogue
+
+        catalogue_path = tmp_path / CATALOGUE_FILENAME
+        catalogue_path.write_text(
+            json.dumps(_v5_catalogue({"test/tool": _embedded_pkg()})),
+            encoding="utf-8",
+        )
+        client = self._make_client(
+            tmp_path, isolated_cache,
+            personal=PersonalCatalogue(),
+            subscribed=[("studio", catalogue_path)],
+        )
+        client.fetch()
+
+        packages = client.get_packages()
+        assert list(packages.keys()) == ["test/tool"]
+        assert packages["test/tool"]["_registry_name"] == "studio"
+
+    def test_subscribed_catalogue_wins_on_collision(self, tmp_path, isolated_cache, monkeypatch):
+        """If a package id exists in both, the subscribed catalogue wins.
+
+        Personal is a user's ad-hoc fallback; an official source
+        should always take precedence to keep behaviour predictable.
+        """
+        from carton.core.personal_catalogue import PersonalCatalogue
+
+        catalogue_path = tmp_path / CATALOGUE_FILENAME
+        catalogue_path.write_text(
+            json.dumps(_v5_catalogue({"alice/tool": _embedded_pkg(name="tool")})),
+            encoding="utf-8",
+        )
+
+        personal = PersonalCatalogue()
+        personal.add_github_package("alice/tool", "alice/tool")
+
+        client = self._make_client(
+            tmp_path, isolated_cache, personal=personal,
+            subscribed=[("studio", catalogue_path)],
+            github_stub={}, monkeypatch=monkeypatch,
+        )
+        client.fetch()
+
+        pkg = client.get_packages()["alice/tool"]
+        # Subscribed catalogue's embedded entry, not personal's github.
+        assert pkg["_registry_name"] == "studio"
+        assert pkg["_origin"]["type"] == "embedded"
+
+    def test_loads_personal_from_explicit_path(self, tmp_path, isolated_cache, monkeypatch):
+        """``personal_catalogue_path`` param bypasses the default ~/.carton/ path."""
+        from carton.core.personal_catalogue import PersonalCatalogue
+
+        personal_path = tmp_path / "alt" / "personal_catalogue.json"
+        cat = PersonalCatalogue()
+        cat.add_github_package("alice/tool", "alice/tool")
+        cat.save(str(personal_path))
+
+        # Stub github_api to keep the test offline.
+        monkeypatch.setattr(github_api, "list_releases",
+                            lambda repo, cache=None: [])
+        monkeypatch.setattr(github_api, "list_tags",
+                            lambda repo, cache=None: [])
+        monkeypatch.setattr(github_api, "get_default_branch",
+                            lambda repo, cache=None: "main")
+        monkeypatch.setattr(github_api, "fetch_raw_text",
+                            lambda url, timeout=15: "")
+
+        config = Config(install_dir=str(tmp_path / "install"))
+        client = CatalogueClient(
+            config, cache=isolated_cache,
+            personal_catalogue_path=str(personal_path),
+        )
+        client.fetch()
+
+        assert "alice/tool" in client.get_packages()
+
+    def test_corrupt_personal_file_does_not_crash(self, tmp_path, isolated_cache):
+        """A garbled personal_catalogue.json must not break subscribed catalogues."""
+        personal_path = tmp_path / "personal_catalogue.json"
+        personal_path.write_text("definitely-not-json", encoding="utf-8")
+
+        catalogue_path = tmp_path / CATALOGUE_FILENAME
+        catalogue_path.write_text(
+            json.dumps(_v5_catalogue({"test/tool": _embedded_pkg()})),
+            encoding="utf-8",
+        )
+
+        config = Config(install_dir=str(tmp_path / "install"))
+        config.add_registry("studio", str(catalogue_path))
+
+        client = CatalogueClient(
+            config, cache=isolated_cache,
+            personal_catalogue_path=str(personal_path),
+        )
+        client.fetch()
+        # Subscribed catalogue still works.
+        assert "test/tool" in client.get_packages()

@@ -56,12 +56,22 @@ class CatalogueClient(object):
             ``~/.carton/source_cache/``. Tests pass a temp dir.
     """
 
-    def __init__(self, config, cache=None):
+    def __init__(self, config, cache=None, personal_catalogue=None,
+                 personal_catalogue_path=None):
         self._config = config
         self._cache = cache or SourceCache()
         self._packages = {}
         self._origins = {}
         self._catalogue_meta = {}  # pkg_id -> {"name": ..., "id": ..., "remote": bool}
+        # Personal catalogue = local receptacle for URL-direct single-package
+        # adds (see :mod:`carton.core.personal_catalogue`). Injection shape:
+        #   * ``personal_catalogue=<instance>`` → use it directly
+        #   * ``personal_catalogue_path=<path>`` → load from that path on fetch
+        #   * both None → load from the default ``~/.carton/`` location
+        # Tests typically pass an empty ``PersonalCatalogue()`` or a tmp_path
+        # to stay hermetic from the developer's real home directory.
+        self._personal_catalogue = personal_catalogue
+        self._personal_catalogue_path = personal_catalogue_path
 
     # ---- public --------------------------------------------------------
 
@@ -79,6 +89,13 @@ class CatalogueClient(object):
                 # other catalogues still resolve.
                 print("[Carton.catalogue] Failed to load {!r}: {}".format(
                     getattr(entry, "name", "<unknown>"), e))
+        # Personal catalogue is merged LAST so subscribed catalogues win
+        # on pkg_id collision — an official source should always trump a
+        # user's ad-hoc URL-direct add.
+        try:
+            self._load_personal_catalogue()
+        except Exception as e:
+            print("[Carton.catalogue] Personal catalogue load failed: {}".format(e))
 
     def get_packages(self):
         """Return merged ``{pkg_id: pkg_data}``. Loads on first call."""
@@ -91,6 +108,39 @@ class CatalogueClient(object):
         return self._origins.get(pkg_id)
 
     # ---- entry loading -------------------------------------------------
+
+    def _load_personal_catalogue(self):
+        """Fold personal catalogue packages into the merged dict.
+
+        Builds a synthetic :class:`RegistryEntry` with ``name="Personal"``
+        and an empty path so the existing :meth:`_merge_catalogue` path
+        can consume it without special-casing. ``is_remote`` becomes
+        False (the store lives under ``~/.carton/``), which is the
+        honest answer — personal packages don't come from a subscribed
+        URL. Consumers that want to distinguish personal from other
+        local catalogues can match on ``_registry_name == 'Personal'``
+        or on the fixed virtual entry path.
+        """
+        from carton.core.config import RegistryEntry
+        from carton.core.personal_catalogue import (
+            PERSONAL_DISPLAY_NAME,
+            PersonalCatalogue,
+        )
+
+        if self._personal_catalogue is None:
+            self._personal_catalogue = PersonalCatalogue.load(
+                self._personal_catalogue_path,
+            )
+        cat = self._personal_catalogue
+        if not cat.packages:
+            return
+
+        virtual = RegistryEntry(
+            name=PERSONAL_DISPLAY_NAME,
+            path="",
+            registry_id=cat.catalogue_id,
+        )
+        self._merge_catalogue(virtual, cat.to_dict(), base_dir="")
 
     def _load_entry(self, entry):
         if entry.is_remote:
