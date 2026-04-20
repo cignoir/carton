@@ -571,7 +571,7 @@ class CartonWindow(QtWidgets.QDialog):
             return None
 
         name, ok = QtWidgets.QInputDialog.getText(
-            self, "Registry Name",
+            self, "Catalogue Name",
             t("setup_registry_name"),
             text=os.path.basename(folder),
         )
@@ -673,7 +673,7 @@ class CartonWindow(QtWidgets.QDialog):
 
         base = os.path.basename(os.path.dirname(path))
         name, ok = QtWidgets.QInputDialog.getText(
-            self, "Registry Name",
+            self, "Catalogue Name",
             t("setup_registry_name"),
             text=base,
         )

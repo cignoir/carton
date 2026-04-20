@@ -508,7 +508,7 @@ class RegistriesSection(QtWidgets.QWidget):
             # ADD_ALIAS → fall through to the name prompt.
 
         name, ok = wide_input(
-            self, "Registry Name", t("settings_registry_name"), text=default_name,
+            self, "Catalogue Name", t("settings_registry_name"), text=default_name,
         )
         if not ok or not name:
             return
