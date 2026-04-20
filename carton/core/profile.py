@@ -32,8 +32,12 @@ class InvalidProfileError(ValueError):
 
 # Fields the profile is allowed to set. Anything outside this set is
 # rejected during validation so typos in hand-edited JSON surface early.
+# ``catalogues`` is the v5.0 alias for ``registries`` — exactly one of
+# the two may appear in a given profile (the validator rejects both
+# being set simultaneously to avoid silent precedence rules).
 _ALLOWED_KEYS = {
     "registries",
+    "catalogues",
     "language",
     "auto_check_updates",
     "github_repo",
@@ -82,6 +86,28 @@ class InstallerProfile:
 
     def remove_registry(self, name):
         self.registries = [r for r in self.registries if r.name != name]
+
+    # ---- v5.0 catalogue-name aliases -----------------------------------
+    # Same storage as the registry-named surface above. Lets UI widgets
+    # and config readers that have adopted v5.0 terminology work against
+    # InstallerProfile without a special case.
+
+    @property
+    def catalogues(self):
+        """v5.0 alias for :attr:`registries` — same list object."""
+        return self.registries
+
+    @catalogues.setter
+    def catalogues(self, value):
+        self.registries = list(value) if value is not None else []
+
+    def add_catalogue(self, name, path, catalogue_id=""):
+        """v5.0 alias for :meth:`add_registry`."""
+        self.add_registry(name, path, catalogue_id)
+
+    def remove_catalogue(self, name):
+        """v5.0 alias for :meth:`remove_registry`."""
+        self.remove_registry(name)
 
     # ---- factories -------------------------------------------------------
 
@@ -136,34 +162,49 @@ class InstallerProfile:
                 "Unknown profile field(s): {}".format(", ".join(sorted(unknown)))
             )
 
-        registries = data.get("registries", [])
-        if not isinstance(registries, list):
-            raise InvalidProfileError("'registries' must be a list")
+        # Accept either JSON key for the registry / catalogue list, but
+        # refuse both at once so there's no silent precedence rule: if a
+        # hand-editor is halfway through a rename and both slip in, fail
+        # loud rather than picking one arbitrarily.
+        has_registries = "registries" in data
+        has_catalogues = "catalogues" in data
+        if has_registries and has_catalogues:
+            raise InvalidProfileError(
+                "profile has both 'registries' and 'catalogues' — pick one"
+            )
+        list_key = "catalogues" if has_catalogues else "registries"
+        entries = data.get(list_key, [])
+        if not isinstance(entries, list):
+            raise InvalidProfileError("{!r} must be a list".format(list_key))
         normalized = []
-        for i, entry in enumerate(registries):
+        for i, entry in enumerate(entries):
             if not isinstance(entry, dict):
                 raise InvalidProfileError(
-                    "registries[{}] must be an object".format(i)
+                    "{}[{}] must be an object".format(list_key, i)
                 )
             name = entry.get("name", "")
             path = entry.get("path", "")
             if not name or not isinstance(name, str):
                 raise InvalidProfileError(
-                    "registries[{}].name is required".format(i)
+                    "{}[{}].name is required".format(list_key, i)
                 )
             if not path or not isinstance(path, str):
                 raise InvalidProfileError(
-                    "registries[{}].path is required".format(i)
+                    "{}[{}].path is required".format(list_key, i)
                 )
-            registry_id = entry.get("registry_id", "")
+            # Accept either id key on the inner entry too. catalogue_id
+            # wins only if registry_id isn't present — matches the
+            # precedence in RegistryEntry.__init__ so there's one rule.
+            rid_raw = entry.get("registry_id", "") or entry.get("catalogue_id", "")
+            registry_id = rid_raw or ""
             if registry_id:
                 if not isinstance(registry_id, str):
                     raise InvalidProfileError(
-                        "registries[{}].registry_id must be a string".format(i)
+                        "{}[{}].registry_id must be a string".format(list_key, i)
                     )
                 if not is_valid_registry_id(registry_id):
                     raise InvalidProfileError(
-                        "registries[{}].registry_id must be a UUID".format(i)
+                        "{}[{}].registry_id must be a UUID".format(list_key, i)
                     )
                 registry_id = registry_id.strip().lower()
             normalized.append({
