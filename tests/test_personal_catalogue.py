@@ -39,6 +39,33 @@ class TestDefaultPath:
         assert path.startswith(home)
 
 
+class TestDerivePkgId:
+    def test_valid_package(self):
+        data = {"namespace": "alice", "name": "tool"}
+        assert pc.derive_pkg_id(data) == "alice/tool"
+
+    def test_lowercases_both_components(self):
+        data = {"namespace": "Alice", "name": "Tool"}
+        assert pc.derive_pkg_id(data) == "alice/tool"
+
+    def test_strips_whitespace(self):
+        data = {"namespace": "  alice ", "name": "tool "}
+        assert pc.derive_pkg_id(data) == "alice/tool"
+
+    def test_missing_namespace_returns_empty(self):
+        data = {"name": "tool"}
+        assert pc.derive_pkg_id(data) == ""
+
+    def test_missing_name_returns_empty(self):
+        data = {"namespace": "alice"}
+        assert pc.derive_pkg_id(data) == ""
+
+    def test_non_dict_returns_empty(self):
+        assert pc.derive_pkg_id(None) == ""
+        assert pc.derive_pkg_id("not a dict") == ""
+        assert pc.derive_pkg_id(["list"]) == ""
+
+
 class TestFreshInstance:
     def test_generates_catalogue_id(self):
         cat = pc.PersonalCatalogue()

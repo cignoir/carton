@@ -30,6 +30,25 @@ PERSONAL_DISPLAY_NAME = "Personal"
 SCHEMA_VERSION = "5.0"
 
 
+def derive_pkg_id(pkg_data):
+    """Return ``"namespace/name"`` from a parsed ``package.json`` dict, or ``""``.
+
+    Used by the Settings > Add GitHub flow to decide whether a probed
+    ``package.json`` describes a valid single-package repo. Lower-cases
+    both components to match the v5.0 catalogue schema's allowed key
+    pattern; an empty return means the dict is not suitable for
+    personal-catalogue registration (caller falls through to the
+    catalogue.json probe path).
+    """
+    if not isinstance(pkg_data, dict):
+        return ""
+    ns = (pkg_data.get("namespace") or "").strip().lower()
+    name = (pkg_data.get("name") or "").strip().lower()
+    if not ns or not name:
+        return ""
+    return "{}/{}".format(ns, name)
+
+
 def default_path():
     """Return ``~/.carton/personal_catalogue.json``.
 

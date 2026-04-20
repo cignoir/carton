@@ -51,6 +51,27 @@ def probe_remote_registry_id(url, timeout=15):
     return read_registry_id(data)
 
 
+def probe_github_package_json(base_url, timeout=10):
+    """One-off HTTP GET to ``{base_url}/package.json``; return the parsed dict.
+
+    Used by the Settings > Add GitHub flow to decide whether the target
+    repo is a v5.0 single-package repo before falling back to the multi-
+    package ``catalogue.json`` probe. Any network / parse failure yields
+    ``None`` — the caller interprets that as "no package.json here".
+    """
+    url = base_url.rstrip("/") + "/package.json"
+    try:
+        req = Request(url)
+        req.add_header("Accept", "application/json")
+        resp = urlopen(req, timeout=timeout)
+        if getattr(resp, "getcode", lambda: 200)() != 200:
+            return None
+        data = json.loads(resp.read().decode("utf-8"))
+    except (URLError, OSError, ValueError):
+        return None
+    return data if isinstance(data, dict) else None
+
+
 def stamp_local_registry_with_prompt(parent, path, data):
     """Offer to write a fresh ``registry_id`` into a local registry.json.
 

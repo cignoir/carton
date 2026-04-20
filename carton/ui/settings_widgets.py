@@ -446,13 +446,18 @@ class RegistriesSection(QtWidgets.QWidget):
             )
             return
         base = "https://raw.githubusercontent.com/{}/{}".format(repo, branch)
+        # v5.0 single-package probe runs first: if the repo root carries a
+        # ``package.json`` with a valid ``namespace/name``, treat it as a
+        # single-package repo and register into the local personal
+        # catalogue instead of walking the multi-package probe path. This
+        # lets "paste owner/repo of your one tool" just work without the
+        # user having to hand-author a catalogue.json.
+        if self._try_register_single_package(base, repo):
+            return
         # Probe order: v5.0 catalogue before v4.0 registry, nested
         # layout before root (preserves the existing habit of the
         # sample repos — the official template publishes under
         # ``registry/registry.json`` → now ``registry/catalogue.json``).
-        # ``package.json`` probing — which would let this dialog accept
-        # a single-package repo URL — lands with the personal catalogue
-        # work in a follow-up commit.
         candidates = [
             base + "/registry/catalogue.json",
             base + "/catalogue.json",
@@ -477,6 +482,55 @@ class RegistriesSection(QtWidgets.QWidget):
         from carton.ui._registry_pairing import probe_remote_registry_id
         rid = probe_remote_registry_id(resolved)
         self._finish_add(resolved, repo.split("/")[1], registry_id=rid)
+
+    def _try_register_single_package(self, base, repo):
+        """Probe ``{base}/package.json`` and register into personal catalogue.
+
+        Returns True when the single-package path was taken (caller stops
+        and skips the catalogue.json probe). False means either no
+        ``package.json`` or the probed file lacked a usable
+        ``namespace/name``; the caller continues to the catalogue probe.
+
+        On a successful hit we mutate ``~/.carton/personal_catalogue.json``
+        and surface a message box — we intentionally do NOT touch
+        ``_target.registries`` because plan v5.0 keeps personal-catalogue
+        entries separate from subscribed catalogues. The live UI list
+        (``self._list``) only reflects subscribed catalogues, so nothing
+        needs to change there.
+        """
+        from carton.core.personal_catalogue import PersonalCatalogue, derive_pkg_id
+        from carton.ui._registry_pairing import probe_github_package_json
+
+        pkg_data = probe_github_package_json(base)
+        if pkg_data is None:
+            return False
+        pkg_id = derive_pkg_id(pkg_data)
+        if not pkg_id:
+            # package.json exists but lacks namespace/name — fall through
+            # so the user still has a chance to hit a sibling
+            # catalogue.json if the repo has both.
+            return False
+
+        catalogue = PersonalCatalogue.load()
+        if catalogue.contains(pkg_id):
+            QtWidgets.QMessageBox.information(
+                self, "Carton",
+                t("settings_github_pkg_already_added", pkg_id),
+            )
+            return True
+        catalogue.add_github_package(pkg_id, repo)
+        try:
+            catalogue.save()
+        except OSError as e:
+            QtWidgets.QMessageBox.warning(
+                self, "Carton", t("settings_github_error", str(e)),
+            )
+            return True
+        QtWidgets.QMessageBox.information(
+            self, "Carton",
+            t("settings_github_pkg_registered", pkg_id),
+        )
+        return True
 
     def _add_remote(self):
         from carton.ui._registry_pairing import probe_remote_registry_id
