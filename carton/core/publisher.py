@@ -15,6 +15,7 @@ import zipfile
 from datetime import datetime, timezone
 
 from carton.compat_urllib import urlopen, Request, URLError
+from carton.core import gh_cli as _default_gh_cli
 from carton.core.identity import (
     InvalidIdentityError,
     make_pkg_id,
@@ -526,6 +527,160 @@ class Publisher:
             existing = read_sidecar(local_path) or {}
             existing.update(updates)
             write_sidecar(local_path, existing)
+
+    def publish_github(self, pkg_data, repo, release_notes="",
+                       tag_prefix="v", namespace=None,
+                       embed_source_path=False,
+                       use_gh_cli=True, gh_cli_module=None):
+        """Publish a single package to a GitHub repo as a Release (v5.0).
+
+        This is the github-origin counterpart to :meth:`publish`: instead
+        of writing into a local registry/catalogue directory, it builds
+        the same zip artifact + a ``SHA256SUMS`` sidecar and uploads them
+        as assets on a GitHub Release. A Release with a matching asset
+        and a parseable SHA256SUMS is what :class:`GithubOrigin` treats
+        as **pinned**, so the resulting origin resolves with is_pinned=True
+        and passes strict_verify gates.
+
+        When ``gh`` isn't available (or ``use_gh_cli=False``), the method
+        still builds the artifacts and returns copy-pasteable manual
+        steps so the user can finish the Release via the web UI.
+
+        Args:
+            pkg_data: Entry from installed.json (same shape as
+                :meth:`publish` consumes).
+            repo: Target ``"owner/name"`` GitHub slug.
+            release_notes: Markdown body for the Release.
+            tag_prefix: Prepended to version for the git tag
+                (``"v"`` + ``"1.2.0"`` → tag ``"v1.2.0"``). Pass ``""``
+                to tag with the bare version.
+            namespace: Optional override for ``pkg_data['namespace']``.
+            embed_source_path: See :meth:`publish`. Defaults to False
+                for github publishes since leaking a publisher's local
+                directory layout to a public repo's package.json is
+                rarely desirable.
+            use_gh_cli: When False, skip gh entirely and return manual
+                steps — useful for dry-runs and CI preview builds.
+            gh_cli_module: Injected module implementing the surface of
+                :mod:`carton.core.gh_cli`. Production callers leave this
+                None; tests inject a stub.
+
+        Returns:
+            Dict with ``id``, ``namespace``, ``name``, ``version``,
+            ``repo``, ``tag``, ``zip_path``, ``sha256``, ``sha256sums_path``,
+            and either ``release_url`` (when gh succeeded) or
+            ``manual_steps`` (when gh unavailable / disabled / failed).
+            A ``warnings`` list may be present (e.g. when gh was tried
+            but fell back to manual).
+
+        Raises:
+            MissingNamespaceError: When namespace/name can't be resolved.
+            RuntimeError: When ``local_path`` is missing.
+            InvalidPythonPackageLayoutError: For the flat-module trap.
+        """
+        gh = gh_cli_module or _default_gh_cli
+
+        local_path = resolve_local_path(pkg_data.get("local_path", ""))
+        if not local_path or not os.path.exists(local_path):
+            raise RuntimeError("File not found: {}".format(local_path))
+
+        ns_raw = namespace or pkg_data.get("namespace", "")
+        if not ns_raw:
+            raise MissingNamespaceError(
+                "namespace is required to publish; set it in package.json / "
+                "sidecar, or pass via the Add dialog."
+            )
+        try:
+            ns = validate_namespace(ns_raw)
+            name = validate_name(pkg_data.get("name", ""))
+        except InvalidIdentityError as e:
+            raise MissingNamespaceError(str(e))
+
+        pkg_id = make_pkg_id(ns, name)
+        display_name = pkg_data.get("display_name", name)
+        version = pkg_data.get("version", "0.1.0")
+        pkg_type = pkg_data.get("type", "python_package")
+        icon = pkg_data.get("icon", "")
+        description = pkg_data.get("description", "")
+        entry_point = pkg_data.get("entry_point", {})
+        is_folder = pkg_data.get("is_folder", False)
+        author = pkg_data.get("author", "")
+        include_compiled = bool(pkg_data.get("include_compiled", False))
+
+        maya_versions = self._resolve_maya_versions(pkg_data, local_path, is_folder)
+        self._validate_python_package_layout(local_path, pkg_type, is_folder, name)
+
+        # Build the same zip shape as the embedded path so consumers
+        # installing from either origin see identical package.json bytes.
+        zip_path = self._create_zip(
+            local_path, ns, name, version, is_folder,
+            entry_point, display_name, icon, description, pkg_type, author,
+            maya_versions=maya_versions,
+            home_registry=pkg_data.get("home_registry"),
+            include_compiled=include_compiled,
+            embed_source_path=embed_source_path,
+        )
+        sha256 = self._compute_sha256(zip_path)
+
+        zip_name = os.path.basename(zip_path)
+        sums_path = os.path.join(os.path.dirname(zip_path), "SHA256SUMS")
+        # Two-space separator + no "*" binary marker: matches the
+        # permissive shape GithubOrigin._lookup_sha256_for_asset parses.
+        with open(sums_path, "w", encoding="utf-8", newline="\n") as f:
+            f.write("{sha}  {name}\n".format(sha=sha256, name=zip_name))
+
+        tag = "{prefix}{version}".format(prefix=tag_prefix, version=version)
+        title = "{name} {version}".format(name=display_name or name, version=version)
+
+        result = {
+            "id": pkg_id,
+            "namespace": ns,
+            "name": name,
+            "version": version,
+            "repo": repo,
+            "tag": tag,
+            "zip_path": zip_path,
+            "sha256": sha256,
+            "sha256sums_path": sums_path,
+        }
+        warnings = []
+
+        gh_usable = bool(use_gh_cli) and gh.is_available()
+        if not gh_usable:
+            result["manual_steps"] = gh.build_manual_instructions(
+                repo, tag, [zip_path, sums_path], notes=release_notes,
+            )
+            if use_gh_cli:
+                # The caller *wanted* automation — surface that we had
+                # to fall back so the UI can prompt for ``gh auth login``.
+                warnings.append("gh CLI unavailable; fell back to manual steps")
+        else:
+            try:
+                url = gh.create_release(
+                    repo, tag,
+                    title=title, notes=release_notes,
+                    assets=[zip_path, sums_path],
+                )
+                result["release_url"] = url
+            except gh.GhCliError as e:
+                # gh was present but the upload failed — keep the
+                # artifacts around so the user can retry manually.
+                stderr = getattr(e, "stderr", "") or ""
+                warnings.append("gh release create failed: {}".format(stderr or str(e)))
+                result["manual_steps"] = gh.build_manual_instructions(
+                    repo, tag, [zip_path, sums_path], notes=release_notes,
+                )
+
+        # Persist identity back into the source tree (same as embedded
+        # path) so subsequent publishes from this clone stay consistent.
+        self._persist_identity_to_source(
+            local_path, ns, name, is_folder,
+            home_registry=pkg_data.get("home_registry"),
+        )
+
+        if warnings:
+            result["warnings"] = warnings
+        return result
 
     def unpublish(self, pkg_id, registry_entry):
         """Remove a package from a registry.
