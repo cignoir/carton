@@ -21,6 +21,7 @@ from carton.core.origins.base import (
 )
 from carton.core.origins.embedded_origin import EmbeddedOrigin
 from carton.core.origins.github_origin import GithubOrigin
+from carton.core.origins.local_origin import LocalOrigin
 from carton.core.origins.url_origin import UrlOrigin
 
 
@@ -28,6 +29,7 @@ __all__ = [
     "ArtifactRef",
     "EmbeddedOrigin",
     "GithubOrigin",
+    "LocalOrigin",
     "Origin",
     "OriginError",
     "UrlOrigin",

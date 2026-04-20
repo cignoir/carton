@@ -25,6 +25,7 @@ from carton.core.migrations import (
 from carton.core.origins import (
     EmbeddedOrigin,
     GithubOrigin,
+    LocalOrigin,
     OriginError,
     UrlOrigin,
     origin_from_dict,
@@ -348,16 +349,18 @@ class CatalogueClient(object):
                 # Pick a stable "latest" by lexicographic order — semver
                 # ordering is the consumer's job.
                 item["latest_version"] = sorted(versions.keys())[-1]
-        elif isinstance(origin, UrlOrigin):
-            versions = self._project_url_versions(origin)
+        elif isinstance(origin, (UrlOrigin, LocalOrigin)):
+            # Url and local origins both expose a single "current"
+            # version (the one written in their package.json). Only the
+            # fetch mechanism differs (HTTP vs. disk); the projected
+            # shape is identical, so consumers don't branch on type.
+            versions = self._project_single_row_versions(origin)
             item["versions"] = versions
-            # url origin exposes a single "current" version — the one
-            # written in the remote package.json. Take that as latest.
             if versions:
                 item["latest_version"] = next(iter(versions.keys()))
-            # Display metadata for the card comes from the remote
-            # package.json too; surface them alongside origin so the UI
-            # can render a card without downloading the zip.
+            # Display metadata comes from the package.json itself
+            # (manifest is SoT), so splat it onto ``item`` for card
+            # rendering pre-install.
             self._hydrate_url_display(item, origin)
         else:
             item["versions"] = {}
@@ -388,14 +391,14 @@ class CatalogueClient(object):
         return out
 
     @staticmethod
-    def _project_url_versions(origin):
-        """Return a versions dict for a url origin.
+    def _project_single_row_versions(origin):
+        """Return a versions dict for url / local origins.
 
-        url origins own exactly one version (the one currently in the
-        remote ``package.json``). We project the returned ``ArtifactRef``
+        Both expose exactly one version (the current one in their
+        ``package.json``). We project the returned ``ArtifactRef``
         fields into the same shape embedded / github versions use so
         consumers can keep reading ``download_url`` / ``sha256`` /
-        ``_pinned`` without knowing the origin type.
+        ``_pinned`` without branching on origin type.
         """
         out = {}
         for ver, meta in origin.list_versions().items():
@@ -414,20 +417,29 @@ class CatalogueClient(object):
             out[ver] = entry
         return out
 
+    # Backwards-compat alias: the name _project_url_versions was used
+    # before LocalOrigin landed. External imports are unlikely (it's a
+    # private method) but keep the old name working so anyone touching
+    # the file in a half-applied patch doesn't get an AttributeError.
+    _project_url_versions = _project_single_row_versions
+
     @staticmethod
     def _hydrate_url_display(item, origin):
-        """Copy display metadata from the remote package.json into ``item``.
+        """Copy display metadata from the origin's package.json into ``item``.
 
-        Personal-catalogue url entries are stored as just
-        ``{"origin": {"type": "url", "url": ...}}`` — they don't repeat
+        Personal-catalogue url / local entries are stored as just
+        ``{"origin": {"type": "...", ...}}`` — they don't repeat
         display_name / description / icon inline. For the Library card
         to render something more informative than the raw pkg_id, we
         reach into the already-fetched package.json (cached on the
         origin instance) and splat its display fields into ``item``.
         Package-json fields win over any existing inline values because
-        the remote file is the v5.0 SoT.
+        the manifest file is the v5.0 SoT.
         """
-        data = origin._load_package_json()
+        loader = getattr(origin, "_load_package_json", None)
+        if loader is None:
+            return
+        data = loader()
         if not isinstance(data, dict):
             return
         for field in (
