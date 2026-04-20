@@ -446,7 +446,19 @@ class RegistriesSection(QtWidgets.QWidget):
             )
             return
         base = "https://raw.githubusercontent.com/{}/{}".format(repo, branch)
-        candidates = [base + "/registry/registry.json", base + "/registry.json"]
+        # Probe order: v5.0 catalogue before v4.0 registry, nested
+        # layout before root (preserves the existing habit of the
+        # sample repos — the official template publishes under
+        # ``registry/registry.json`` → now ``registry/catalogue.json``).
+        # ``package.json`` probing — which would let this dialog accept
+        # a single-package repo URL — lands with the personal catalogue
+        # work in a follow-up commit.
+        candidates = [
+            base + "/registry/catalogue.json",
+            base + "/catalogue.json",
+            base + "/registry/registry.json",
+            base + "/registry.json",
+        ]
         resolved = None
         for url in candidates:
             try:
