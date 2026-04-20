@@ -239,6 +239,12 @@ class CartonWindow(QtWidgets.QDialog):
         self._card_map = {}  # pkg_id -> PackageCard (for deferred icon updates)
         self._mytools_collapsed = set()  # ns keys collapsed in My Tools view
         self._mytools_groups = {}  # ns key -> (header_btn, [cards])
+        # Library view tracks its own collapse state so My Tools and
+        # Library can hide the same namespace independently — the user
+        # might want mystudio expanded in Library but collapsed in
+        # My Tools (or vice versa).
+        self._library_collapsed = set()
+        self._library_groups = {}
         self._update_check_worker = None
 
         self._setup_ui()
@@ -780,6 +786,12 @@ class CartonWindow(QtWidgets.QDialog):
 
     _MYTOOLS_KEY = "__my_tools__"
     _MYTOOLS_NS_PREFIX = "__my_tools__:"
+    # v5.0: Library sidebar is a namespace tree (All + per-namespace children)
+    # rather than a catalogue-per-row list. Package-first means the user
+    # asks "which namespace?" more often than "which catalogue?" — catalogue
+    # lookup stays available via Settings → Catalogues.
+    _LIBRARY_KEY = "__library__"
+    _LIBRARY_NS_PREFIX = "__library__:"
 
     def _is_mytools_selection(self, key):
         return key == self._MYTOOLS_KEY or (
@@ -792,36 +804,21 @@ class CartonWindow(QtWidgets.QDialog):
             return key[len(self._MYTOOLS_NS_PREFIX):]
         return None
 
-    def _resolve_registry_selection(self, selection):
-        """Map a sidebar selection (registry name) to its config entry.
+    def _is_library_selection(self, key):
+        return key == self._LIBRARY_KEY or (
+            isinstance(key, str) and key.startswith(self._LIBRARY_NS_PREFIX)
+        )
 
-        Returns the entry, or None if the selection doesn't match any
-        registry (e.g. ``self._MYTOOLS_KEY`` or a stale value).
+    def _library_ns_filter(self, key):
+        """Return the namespace filter for a Library selection, or None for 'all'.
+
+        ``None`` is returned both for the Library root (All) and for any
+        non-library selection, so callers can ``if ns is None`` to mean
+        "show everything in scope".
         """
-        if not selection or not self._config:
-            return None
-        for entry in self._config.registries:
-            if entry.name == selection:
-                return entry
+        if isinstance(key, str) and key.startswith(self._LIBRARY_NS_PREFIX):
+            return key[len(self._LIBRARY_NS_PREFIX):]
         return None
-
-    def _pkg_belongs_to_entry(self, pkg_data, entry):
-        """True if ``pkg_data`` belongs to ``entry`` (id-aware, name-fallback).
-
-        Packages get attributed to whichever registry loaded first when two
-        share a ``registry_id`` (local mirror + paired remote). A naive
-        name match would miss them on the *other* side; matching by
-        ``registry_id`` keeps the sidebar selection honest regardless of
-        load order. Falls back to the alias name when neither side has a
-        UUID yet (legacy/unstamped registries).
-        """
-        if entry is None:
-            return False
-        entry_rid = getattr(entry, "registry_id", "")
-        pkg_rid = pkg_data.get("_registry_id", "")
-        if entry_rid and pkg_rid and entry_rid == pkg_rid:
-            return True
-        return pkg_data.get("_registry_name", "") == entry.name
 
     def _rebuild_sidebar(self):
         """Rebuild sidebar items from config registries + My Tools."""
@@ -833,41 +830,30 @@ class CartonWindow(QtWidgets.QDialog):
         packages = self._registry_client.get_packages() if self._registry_client else {}
         installed = self._install_manager.get_installed_packages() if self._install_manager else {}
 
-        # Count packages two ways: by alias name (legacy / unstamped
-        # registries) and by registry_id (canonical, survives the local↔
-        # remote mirror dedup that drops one side's _registry_name).
-        reg_counts_by_name = {}
-        reg_counts_by_id = {}
+        # Library — All + namespace children. Mirrors the My Tools layout:
+        # package-first means the user picks a namespace to browse rather
+        # than a catalogue, and same-pkg-id across catalogues is already
+        # deduped by CatalogueClient (first-catalogue-wins). Catalogue-
+        # level management (Add / Edit / Remove) moved to the Settings
+        # dialog since v5.0's Library view is not catalogue-scoped.
+        lib_total = len(packages)
+        all_item = QtWidgets.QListWidgetItem(
+            "{} ({})".format(t("library_all"), lib_total),
+        )
+        all_item.setData(Qt.UserRole, self._LIBRARY_KEY)
+        self._registry_list.addItem(all_item)
+
+        lib_ns_counts = {}
         for pkg_data in packages.values():
-            rn = pkg_data.get("_registry_name", "")
-            reg_counts_by_name[rn] = reg_counts_by_name.get(rn, 0) + 1
-            rid = pkg_data.get("_registry_id", "")
-            if rid:
-                reg_counts_by_id[rid] = reg_counts_by_id.get(rid, 0) + 1
-
-        # Hide local mirrors from the sidebar when a remote entry shares
-        # their registry_id — the remote is the canonical "consumer"
-        # face, the local is just the publish-side write target. Both
-        # remain accessible from Settings → Registries for management.
-        remote_ids = {
-            e.registry_id for e in (self._config.registries if self._config else [])
-            if e.is_remote and e.registry_id
-        }
-
-        # Registries
-        if self._config:
-            for entry in self._config.registries:
-                if (not entry.is_remote
-                        and entry.registry_id
-                        and entry.registry_id in remote_ids):
-                    continue
-                if entry.registry_id and entry.registry_id in reg_counts_by_id:
-                    count = reg_counts_by_id[entry.registry_id]
-                else:
-                    count = reg_counts_by_name.get(entry.name, 0)
-                item = QtWidgets.QListWidgetItem("{} ({})".format(entry.name, count))
-                item.setData(Qt.UserRole, entry.name)
-                self._registry_list.addItem(item)
+            ns = (pkg_data.get("namespace") or "").lower()
+            lib_ns_counts[ns] = lib_ns_counts.get(ns, 0) + 1
+        for ns in sorted(lib_ns_counts.keys(), key=lambda k: (k == "", k)):
+            label = ns if ns else t("my_tools_no_namespace")
+            child = QtWidgets.QListWidgetItem(
+                "{} ({})".format(label, lib_ns_counts[ns]),
+            )
+            child.setData(Qt.UserRole, self._LIBRARY_NS_PREFIX + ns)
+            self._registry_list.addItem(child)
 
         # My Tools — All + namespace children
         my_pkgs = [p for p in installed.values() if is_my_tools(p)]
@@ -948,14 +934,18 @@ class CartonWindow(QtWidgets.QDialog):
         self._register_btn.setVisible(is_my_tools)
 
         if not is_my_tools:
-            # Default to "installed", fall back to "all" if none installed
+            # Default to "installed", fall back to "all" if none installed.
+            # Library selection is now namespace-scoped (or "all"), so we
+            # filter packages by namespace before checking which have an
+            # install on disk.
             packages = self._registry_client.get_packages() if self._registry_client else {}
             installed = self._install_manager.get_installed_packages() if self._install_manager else {}
-            sel_entry = self._resolve_registry_selection(self._sidebar_selection)
+            ns_filter = self._library_ns_filter(self._sidebar_selection)
             has_installed = any(
                 pkg_id in installed
                 for pkg_id, pkg_data in packages.items()
-                if self._pkg_belongs_to_entry(pkg_data, sel_entry)
+                if ns_filter is None
+                or (pkg_data.get("namespace") or "").lower() == ns_filter
             )
             self._current_tab = "installed" if has_installed else "all"
             self._tab_installed.setChecked(self._current_tab == "installed")
@@ -1042,13 +1032,24 @@ class CartonWindow(QtWidgets.QDialog):
         # Built once per rebuild instead of per-card.
         published_map = self._build_published_map()
 
-        is_my_tools_view = (selection == self._MYTOOLS_KEY)  # only "All", not ns children
+        # Grouped rendering: My Tools root + Library root both render as
+        # namespace trees. Per-namespace children (My Tools or Library)
+        # render as a flat list — the namespace is already in the sidebar
+        # label so a tree header would be redundant.
+        is_mytools_root = (selection == self._MYTOOLS_KEY)
+        is_library_root = (selection == self._LIBRARY_KEY)
+        is_grouped_view = is_mytools_root or is_library_root
         icon_fetch_tasks = []
         ns_groups = {}  # ns_key -> (header_btn, [card widgets])
 
-        if is_my_tools_view:
+        if is_grouped_view:
+            # Collapse state is tracked per-view so My Tools and Library
+            # can hide the same namespace independently (applied to the
+            # header after the loop completes).
             for ns, group_items in group_by_namespace(visible_items):
-                header = self._create_mytools_group_header(ns)
+                header = self._create_group_header(
+                    ns, is_mytools=is_mytools_root,
+                )
                 ns_groups[ns] = (header, [])
                 self._insert_card_widget(header)
                 for pkg_id, pkg_data in group_items:
@@ -1066,12 +1067,19 @@ class CartonWindow(QtWidgets.QDialog):
                 )
                 self._insert_card_widget(card)
 
-        # Apply initial collapsed state for My Tools groups
-        self._mytools_groups = ns_groups
-        for ns_key, (_hdr, cards) in ns_groups.items():
-            if ns_key in self._mytools_collapsed:
-                for c in cards:
-                    c.setVisible(False)
+        # Apply initial collapsed state for the active grouped view.
+        if is_mytools_root:
+            self._mytools_groups = ns_groups
+            for ns_key, (_hdr, cards) in ns_groups.items():
+                if ns_key in self._mytools_collapsed:
+                    for c in cards:
+                        c.setVisible(False)
+        elif is_library_root:
+            self._library_groups = ns_groups
+            for ns_key, (_hdr, cards) in ns_groups.items():
+                if ns_key in self._library_collapsed:
+                    for c in cards:
+                        c.setVisible(False)
 
         self._start_icon_fetcher(icon_fetch_tasks)
 
@@ -1134,12 +1142,20 @@ class CartonWindow(QtWidgets.QDialog):
         return items
 
     def _collect_registry_items(self, packages, installed, selection):
-        """Return ``[(pkg_id, view_data)]`` for the selected registry view."""
-        sel_entry = self._resolve_registry_selection(selection)
+        """Return ``[(pkg_id, view_data)]`` for the selected Library view.
+
+        Library selections in v5.0 are namespace-scoped (or ``All``), so
+        the filter is a simple ``pkg.namespace == selection_namespace``.
+        Dedup across catalogues already happened in CatalogueClient
+        (first-catalogue-wins), so we don't re-filter by catalogue here.
+        """
+        ns_filter = self._library_ns_filter(selection)
         items = []
         for pkg_id, pkg_data in packages.items():
-            if not self._pkg_belongs_to_entry(pkg_data, sel_entry):
-                continue
+            if ns_filter is not None:
+                pkg_ns = (pkg_data.get("namespace") or "").lower()
+                if pkg_ns != ns_filter:
+                    continue
             item = dict(pkg_data)
             # A demoted (uninstalled-from-registry) entry stays in
             # installed.json as source="local" so it remains in My Tools,
@@ -1167,14 +1183,28 @@ class CartonWindow(QtWidgets.QDialog):
             if self._current_tab == "installed" and not is_installed:
                 continue
             items.append((pkg_id, item))
-        items.sort(key=lambda x: x[1].get("display_name", ""))
+        # Sort by (namespace, display_name) so Library "All" groups
+        # visually by namespace when it gets rendered tree-style.
+        # Per-namespace views still land on a stable display_name order.
+        items.sort(key=lambda x: (
+            (x[1].get("namespace") or "~").lower(),
+            x[1].get("display_name", ""),
+        ))
         return items
 
-    def _create_mytools_group_header(self, ns):
-        """Build the collapsible header button for a My Tools namespace group."""
+    def _create_group_header(self, ns, is_mytools):
+        """Build the collapsible namespace header used by both grouped views.
+
+        ``is_mytools=True`` wires clicks to the My Tools collapse set;
+        ``False`` wires to the Library collapse set. The two views have
+        independent collapse state so hiding a namespace in one doesn't
+        affect the other.
+        """
         label_text = ns if ns else t("my_tools_no_namespace")
-        collapsed = ns in self._mytools_collapsed
-        arrow = arrow_glyph(not collapsed)
+        collapsed_set = (
+            self._mytools_collapsed if is_mytools else self._library_collapsed
+        )
+        arrow = arrow_glyph(ns not in collapsed_set)
         header = QtWidgets.QPushButton("{}  {}".format(arrow, label_text))
         header.setCursor(Qt.PointingHandCursor)
         header.setStyleSheet(
@@ -1186,9 +1216,14 @@ class CartonWindow(QtWidgets.QDialog):
             .format(dim=theme.TEXT_DIM, border=theme.BORDER,
                     text=theme.TEXT_PRIMARY)
         )
-        header.clicked.connect(
-            lambda _checked=False, k=ns: self._toggle_mytools_group(k)
-        )
+        if is_mytools:
+            header.clicked.connect(
+                lambda _checked=False, k=ns: self._toggle_mytools_group(k)
+            )
+        else:
+            header.clicked.connect(
+                lambda _checked=False, k=ns: self._toggle_library_group(k)
+            )
         return header
 
     def _create_package_card(self, pkg_id, pkg_data, selection,
@@ -1247,14 +1282,31 @@ class CartonWindow(QtWidgets.QDialog):
         return card
 
     def _toggle_mytools_group(self, ns_key):
-        group = self._mytools_groups.get(ns_key)
+        self._toggle_group(
+            self._mytools_groups, self._mytools_collapsed, ns_key,
+        )
+
+    def _toggle_library_group(self, ns_key):
+        self._toggle_group(
+            self._library_groups, self._library_collapsed, ns_key,
+        )
+
+    @staticmethod
+    def _toggle_group(groups, collapsed_set, ns_key):
+        """Flip collapse state for a grouped view's namespace header.
+
+        Shared between My Tools and Library since the UI affordance is
+        identical — only the backing ``groups`` / ``collapsed`` sets
+        differ. Walks cards to show/hide and rewrites the header arrow
+        in place (header text: ``"{arrow}  {label}"`` — 3-char prefix).
+        """
+        group = groups.get(ns_key)
         if not group:
             return
         header, cards = group
-        visible = toggle_collapsed(self._mytools_collapsed, ns_key)
+        visible = toggle_collapsed(collapsed_set, ns_key)
         for c in cards:
             c.setVisible(visible)
-        # Update arrow in header text (first 1 char + 2 spaces + label)
         text = header.text()
         if len(text) >= 3:
             header.setText(arrow_glyph(visible) + text[1:])
