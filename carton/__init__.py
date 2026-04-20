@@ -30,7 +30,14 @@ def startup():
     from carton.core.config import Config
     from carton.core.env_manager import MayaEnvManager
     from carton.core.installer import InstallManager
-    from carton.core.registry_client import RegistryClient
+    # v5.0 Step 4-A Phase 3: boot the catalogue-aware client instead of
+    # the legacy registry one. CatalogueClient understands both v4.0
+    # registries (auto-migrated in memory) and v5.0 catalogues with the
+    # new Origin abstraction, and its public API (``fetch`` /
+    # ``get_packages``) is a strict superset of what UI / Updater /
+    # Publisher read from RegistryClient today — the rename happens
+    # lazily as the surrounding files are touched (Step 4-B).
+    from carton.core.catalogue_client import CatalogueClient
     from carton.core.downloader import Downloader
     from carton.core.self_updater import SelfUpdater
     from carton.core.script_manager import ScriptManager
@@ -49,7 +56,10 @@ def startup():
 
     _env_mgr = MayaEnvManager()
     _install_mgr = InstallManager(_config, _env_mgr)
-    _registry_client = RegistryClient(_config)
+    # The global is still named ``_registry_client`` so downstream code
+    # (main_window.set_services, Updater, tests) keeps working without a
+    # flag-day rename. The instance type is what changes here.
+    _registry_client = CatalogueClient(_config)
     _downloader = Downloader(_config)
     _self_updater = SelfUpdater(_config, _downloader)
     _script_mgr = ScriptManager(_config, _install_mgr, _env_mgr)

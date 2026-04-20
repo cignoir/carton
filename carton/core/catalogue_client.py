@@ -17,8 +17,9 @@ that wants to use them directly.
 
 import json
 import os
+import zipfile
 
-from carton.compat_urllib import urlopen, Request, URLError, urljoin
+from carton.compat_urllib import urlopen, Request, URLError, urljoin, BytesIO
 from carton.core.migrations import (
     CATALOGUE_FILENAME,
     LEGACY_REGISTRY_FILENAME,
@@ -168,6 +169,39 @@ class CatalogueClient(object):
         self._cache_catalogue_id(entry, data)
         base_dir = url.rsplit("/", 1)[0] + "/"
         self._merge_catalogue(entry, data, base_dir=base_dir)
+        # Feature-parity with RegistryClient: remote catalogues get their
+        # icons.zip pulled into the local icon cache on fetch so the UI
+        # can render thumbnails without a per-icon round trip. A missing
+        # icons.zip is fine — individual icons are fetched lazily by the
+        # UI layer as a fallback.
+        self._fetch_icons_archive(entry)
+
+    def _fetch_icons_archive(self, entry):
+        """Pull ``icons.zip`` next to the remote catalogue, if present.
+
+        Mirrors :meth:`RegistryClient._fetch_icons_archive`. Extracted to
+        ``config.icon_cache_dir`` and bounded by
+        :func:`carton.core.icon_cache.enforce_size_limit` so the cache
+        doesn't grow unbounded across many subscriptions.
+        """
+        cache_dir = self._config.icon_cache_dir
+        base = entry.base_dir
+        icons_url = urljoin(base, "icons.zip")
+        try:
+            req = Request(icons_url)
+            resp = urlopen(req, timeout=10)
+            data = resp.read()
+            os.makedirs(cache_dir, exist_ok=True)
+            with zipfile.ZipFile(BytesIO(data)) as zf:
+                zf.extractall(cache_dir)
+        except Exception:
+            # Fall back to per-icon download handled by the UI layer.
+            pass
+        try:
+            from carton.core.icon_cache import enforce_size_limit
+            enforce_size_limit(cache_dir)
+        except Exception:
+            pass
 
     @staticmethod
     def _resolve_local_catalogue_path(path):
