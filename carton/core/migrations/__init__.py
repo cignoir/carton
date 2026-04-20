@@ -22,16 +22,28 @@ from carton.core.migrations.registry import (
     REGISTRY_SCHEMA_VERSION,
     migrate_registry_data,
 )
+from carton.core.migrations.catalogue import (
+    CATALOGUE_FILENAME,
+    CATALOGUE_SCHEMA_VERSION,
+    LEGACY_REGISTRY_FILENAME,
+    migrate_local_registry_file_to_catalogue,
+    migrate_registry_to_catalogue,
+)
 
 
 __all__ = [
+    "CATALOGUE_FILENAME",
+    "CATALOGUE_SCHEMA_VERSION",
     "INSTALLED_SCHEMA_VERSION",
+    "LEGACY_REGISTRY_FILENAME",
     "REGISTRY_SCHEMA_VERSION",
+    "make_backup",
     "migrate_installed_data",
-    "migrate_registry_data",
     "migrate_installed_file",
     "migrate_local_registry_file",
-    "make_backup",
+    "migrate_local_registry_file_to_catalogue",
+    "migrate_registry_data",
+    "migrate_registry_to_catalogue",
 ]
 
 

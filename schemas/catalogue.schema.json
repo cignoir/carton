@@ -1,0 +1,181 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://carton.dev/schemas/catalogue.schema.json",
+  "title": "Carton Catalogue",
+  "description": "Carton パッケージカタログ (v5.0). package を一級、catalogue は発見インデックス。各 package は origin (実体場所) を持つ。",
+  "type": "object",
+  "required": ["schema_version", "catalogue_id", "packages"],
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "enum": ["5.0"]
+    },
+    "catalogue_id": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+      "description": "カタログの不変識別子 (UUID v4)。ローカル/リモートミラーの同一性判定に使用"
+    },
+    "display_name": {
+      "type": "string",
+      "description": "UI に表示するカタログ名"
+    },
+    "last_updated": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "packages": {
+      "type": "object",
+      "description": "キーは \"<namespace>/<name>\" 形式",
+      "propertyNames": {
+        "pattern": "^[a-z0-9][a-z0-9-]{1,31}/[a-z0-9][a-z0-9_-]{1,31}$"
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/catalogue_package"
+      }
+    }
+  },
+  "$defs": {
+    "catalogue_package": {
+      "type": "object",
+      "required": ["origin"],
+      "properties": {
+        "origin": {
+          "oneOf": [
+            { "$ref": "#/$defs/origin_embedded" },
+            { "$ref": "#/$defs/origin_github" },
+            { "$ref": "#/$defs/origin_url" },
+            { "$ref": "#/$defs/origin_local" }
+          ]
+        },
+        "first_published_by": {
+          "type": "string",
+          "description": "embedded origin で最初に publish した author。catalogue 管理者向けメタ"
+        },
+        "first_published_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "tags": {
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      }
+    },
+    "origin_embedded": {
+      "type": "object",
+      "description": "Catalogue 自身が artifact を host する。version 情報も catalogue 内に持つ。",
+      "required": ["type", "versions"],
+      "properties": {
+        "type": { "const": "embedded" },
+        "latest_version": {
+          "type": "string",
+          "pattern": "^\\d+\\.\\d+\\.\\d+$"
+        },
+        "versions": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/$defs/version_entry"
+          }
+        }
+      }
+    },
+    "origin_github": {
+      "type": "object",
+      "description": "GitHub repo が package を管理。version は Releases/Tags から動的解決",
+      "required": ["type", "repo"],
+      "properties": {
+        "type": { "const": "github" },
+        "repo": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9._-]+/[A-Za-z0-9._-]+$",
+          "description": "owner/repo 形式"
+        },
+        "ref": {
+          "type": "string",
+          "description": "オプション: 特定の tag/branch/commit を pin"
+        }
+      }
+    },
+    "origin_url": {
+      "type": "object",
+      "description": "任意 URL に package.json を置く",
+      "required": ["type", "url"],
+      "properties": {
+        "type": { "const": "url" },
+        "url": {
+          "type": "string",
+          "format": "uri"
+        }
+      }
+    },
+    "origin_local": {
+      "type": "object",
+      "description": "ローカルパス上の package",
+      "required": ["type", "path"],
+      "properties": {
+        "type": { "const": "local" },
+        "path": { "type": "string" }
+      }
+    },
+    "version_entry": {
+      "type": "object",
+      "required": ["maya_versions", "released_at"],
+      "properties": {
+        "maya_versions": {
+          "type": "array",
+          "items": { "type": "string" },
+          "minItems": 1
+        },
+        "download_url": {
+          "type": "string",
+          "description": "catalogue.json からの相対パス、または絶対 URL"
+        },
+        "sha256": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$",
+          "description": "pinned origin (embedded等) では SoT。unpinned origin では cache TOFU 値"
+        },
+        "size_bytes": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "platform": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": ["win64", "linux", "mac"]
+          }
+        },
+        "artifacts": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/$defs/artifact"
+          },
+          "description": "プラグイン用: プラットフォーム×Mayaバージョン別アーティファクト"
+        },
+        "released_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "changelog": {
+          "type": "string"
+        }
+      }
+    },
+    "artifact": {
+      "type": "object",
+      "required": ["sha256", "size_bytes"],
+      "properties": {
+        "sha256": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "size_bytes": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "additionalProperties": false
+    }
+  }
+}

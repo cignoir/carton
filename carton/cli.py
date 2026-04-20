@@ -97,6 +97,38 @@ def _registry_id(args):
         sys.exit(2)
 
 
+def _catalogue_migrate(args):
+    """Migrate a v4.0 registry.json on disk to a v5.0 catalogue.json.
+
+    Idempotent — running against an already-migrated tree is a no-op
+    (and prints a hint pointing at the existing catalogue.json).
+    """
+    from carton.core.migrations import (
+        CATALOGUE_FILENAME,
+        LEGACY_REGISTRY_FILENAME,
+        migrate_local_registry_file_to_catalogue,
+    )
+
+    target = os.path.abspath(args.path)
+    if os.path.isdir(target):
+        candidate = os.path.join(target, LEGACY_REGISTRY_FILENAME)
+        if not os.path.exists(candidate):
+            candidate = os.path.join(target, CATALOGUE_FILENAME)
+        target = candidate
+
+    if not os.path.exists(target):
+        print("Error: file not found: {}".format(target))
+        sys.exit(1)
+
+    out_path = migrate_local_registry_file_to_catalogue(target)
+    if not out_path:
+        print("Nothing to migrate.")
+        return
+    print("Wrote: {}".format(out_path))
+    if os.path.basename(target).lower() == LEGACY_REGISTRY_FILENAME and not os.path.exists(target):
+        print("Backed up legacy registry.json next to it (look for '*.bak-v0.4.*').")
+
+
 def main():
     parser = argparse.ArgumentParser(
         prog="carton",
@@ -128,6 +160,18 @@ def main():
         help="Write a fresh UUID into the file if it doesn't already have one",
     )
 
+    # catalogue subgroup (v5.0)
+    cat = sub.add_parser("catalogue", help="Catalogue (v5.0) utilities")
+    cat_sub = cat.add_subparsers(dest="catalogue_command")
+    mig_p = cat_sub.add_parser(
+        "migrate",
+        help="Convert a v4.0 registry.json into a v5.0 catalogue.json in place",
+    )
+    mig_p.add_argument(
+        "path",
+        help="Path to registry.json (or its containing directory)",
+    )
+
     args = parser.parse_args()
 
     if args.command == "list":
@@ -136,6 +180,8 @@ def main():
         _unpublish(args)
     elif args.command == "registry" and getattr(args, "registry_command", None) == "id":
         _registry_id(args)
+    elif args.command == "catalogue" and getattr(args, "catalogue_command", None) == "migrate":
+        _catalogue_migrate(args)
     else:
         parser.print_help()
 
