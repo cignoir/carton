@@ -7,6 +7,11 @@ from collections import OrderedDict
 from carton.compat_urllib import urlopen, Request, URLError, urljoin
 from carton.core.display_name_resolver import resolve_display_name
 from carton.core.install_state import is_my_tools, is_pure_local
+from carton.ui._namespace_grouping import (
+    arrow_glyph,
+    group_by_namespace,
+    toggle_collapsed,
+)
 from carton.ui.compat import QtWidgets, QtCore, Qt, wrapInstance
 from carton.ui.i18n import t
 from carton.ui import theme
@@ -1040,23 +1045,26 @@ class CartonWindow(QtWidgets.QDialog):
         is_my_tools_view = (selection == self._MYTOOLS_KEY)  # only "All", not ns children
         icon_fetch_tasks = []
         ns_groups = {}  # ns_key -> (header_btn, [card widgets])
-        current_ns = None
 
-        for pkg_id, pkg_data in visible_items:
-            if is_my_tools_view:
-                ns = (pkg_data.get("namespace") or "").lower()
-                if ns != current_ns:
-                    current_ns = ns
-                    header = self._create_mytools_group_header(ns)
-                    ns_groups[ns] = (header, [])
-                    self._insert_card_widget(header)
-
-            card = self._create_package_card(
-                pkg_id, pkg_data, selection, published_map, icon_fetch_tasks,
-            )
-            self._insert_card_widget(card)
-            if is_my_tools_view and current_ns in ns_groups:
-                ns_groups[current_ns][1].append(card)
+        if is_my_tools_view:
+            for ns, group_items in group_by_namespace(visible_items):
+                header = self._create_mytools_group_header(ns)
+                ns_groups[ns] = (header, [])
+                self._insert_card_widget(header)
+                for pkg_id, pkg_data in group_items:
+                    card = self._create_package_card(
+                        pkg_id, pkg_data, selection, published_map,
+                        icon_fetch_tasks,
+                    )
+                    self._insert_card_widget(card)
+                    ns_groups[ns][1].append(card)
+        else:
+            for pkg_id, pkg_data in visible_items:
+                card = self._create_package_card(
+                    pkg_id, pkg_data, selection, published_map,
+                    icon_fetch_tasks,
+                )
+                self._insert_card_widget(card)
 
         # Apply initial collapsed state for My Tools groups
         self._mytools_groups = ns_groups
@@ -1166,7 +1174,7 @@ class CartonWindow(QtWidgets.QDialog):
         """Build the collapsible header button for a My Tools namespace group."""
         label_text = ns if ns else t("my_tools_no_namespace")
         collapsed = ns in self._mytools_collapsed
-        arrow = "\u25b6" if collapsed else "\u25bc"
+        arrow = arrow_glyph(not collapsed)
         header = QtWidgets.QPushButton("{}  {}".format(arrow, label_text))
         header.setCursor(Qt.PointingHandCursor)
         header.setStyleSheet(
@@ -1243,19 +1251,13 @@ class CartonWindow(QtWidgets.QDialog):
         if not group:
             return
         header, cards = group
-        if ns_key in self._mytools_collapsed:
-            self._mytools_collapsed.discard(ns_key)
-            visible = True
-        else:
-            self._mytools_collapsed.add(ns_key)
-            visible = False
+        visible = toggle_collapsed(self._mytools_collapsed, ns_key)
         for c in cards:
             c.setVisible(visible)
         # Update arrow in header text (first 1 char + 2 spaces + label)
         text = header.text()
         if len(text) >= 3:
-            new_arrow = "\u25bc" if visible else "\u25b6"
-            header.setText(new_arrow + text[1:])
+            header.setText(arrow_glyph(visible) + text[1:])
 
     def _on_icon_ready(self, pkg_id, icon_path):
         """Slot called from background thread when an icon is downloaded."""
