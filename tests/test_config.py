@@ -193,17 +193,6 @@ class TestCatalogueEntryCatalogueId:
         e = CatalogueEntry.from_dict(src)
         assert e.catalogue_id == self._UUID
 
-    def test_to_home_meta_minimal(self):
-        e = CatalogueEntry("solo", "")
-        assert e.to_home_meta() == {"name": "solo"}
-
-    def test_to_home_meta_includes_id_and_hint(self):
-        e = CatalogueEntry("studio", "/p/registry.json", catalogue_id=self._UUID)
-        meta = e.to_home_meta()
-        assert meta["name"] == "studio"
-        assert meta["registry_id"] == self._UUID
-        assert meta["hint"] == os.path.normpath("/p/registry.json")
-
 
 class TestConfigCatalogueIdLookup:
     _UUID_A = "aaaaaaaa-1111-4111-8111-aaaaaaaaaaaa"

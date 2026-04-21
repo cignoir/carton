@@ -78,35 +78,15 @@ class CatalogueEntry:
             catalogue_id=d.get("catalogue_id", ""),
         )
 
-    def to_home_meta(self):
-        """Build a legacy ``home_registry`` payload for embedding in package metadata.
-
-        Single source of truth so publisher / script_manager / UI never
-        construct home_registry dicts ad hoc. The output field name
-        ``registry_id`` reflects the on-wire ``home_registry`` shape that
-        v0.4.x consumers expect; v5.0 emitters should prefer
-        :meth:`to_home_origin_meta`.
-        """
-        meta = {"name": self.name}
-        if self.catalogue_id:
-            meta["registry_id"] = self.catalogue_id
-        # An empty path normalises to "." via os.path.normpath in __init__;
-        # treat that as "no hint" so the meta dict stays minimal.
-        if self.path and self.path != ".":
-            meta["hint"] = self.path
-        return meta
-
     def to_home_origin_meta(self):
         """Build a v5.0 ``home_origin`` payload (embedded-type) for this entry.
 
-        Counterpart to :meth:`to_home_meta`. Where ``home_registry`` only
-        expressed the legacy ``{name, registry_id, hint}`` shape, the v5.0
-        ``home_origin`` is a tagged union over embedded/github/url/local —
-        a :class:`CatalogueEntry` (=embedded catalogue) always emits the
-        embedded variant, so the payload is
+        Single source of truth so publisher / UI never construct home_origin
+        dicts ad hoc. A :class:`CatalogueEntry` (=embedded catalogue) always
+        emits the embedded variant, so the payload is
         ``{"type": "embedded", "catalogue_name": ..., "catalogue_id": ...,
-        "hint": ...}``. Github/url origins construct their own payload at
-        publish time and never go through this helper.
+        "hint": ...}``. Github/url/local origins construct their own
+        payload at publish time and never go through this helper.
         """
         meta = {"type": "embedded", "catalogue_name": self.name}
         if self.catalogue_id:

@@ -1535,7 +1535,7 @@ class CartonWindow(QtWidgets.QDialog):
 
         if kind == "embedded":
             target_registry = payload
-            if not self._confirm_home_registry_mismatch(pkg_data, target_registry):
+            if not self._confirm_home_origin_mismatch(pkg_data, target_registry):
                 return
             confirm_result = self._confirm_publish_details(
                 pkg_data, target_registry.name,
@@ -1608,19 +1608,25 @@ class CartonWindow(QtWidgets.QDialog):
             return ""
         return repo
 
-    def _confirm_home_registry_mismatch(self, pkg_data, target_registry):
-        """Warn if publishing to a different registry than the home one.
+    def _confirm_home_origin_mismatch(self, pkg_data, target_registry):
+        """Warn if publishing to a different catalogue than the home one.
 
-        Compares by ``registry_id`` when both sides have one so that a
-        registry known under different names on different machines still
-        passes without a prompt. Falls back to name equality for legacy
-        entries that pre-date UUID stamping.
+        Only meaningful for packages whose ``home_origin`` is an embedded
+        catalogue — a github/url/local home has no comparable target at
+        this call site, so we pass through without prompting. For embedded
+        homes, compare by ``catalogue_id`` when both sides have one so a
+        catalogue known under different names on different machines still
+        passes without a prompt; fall back to name equality for entries
+        that pre-date UUID stamping.
 
         Returns True to proceed, False if the user cancelled.
         """
-        home_meta = pkg_data.get("home_registry") or {}
-        home_name = home_meta.get("name", "")
-        home_id = home_meta.get("registry_id", "")
+        home_origin = pkg_data.get("home_origin") or {}
+        if home_origin.get("type") and home_origin.get("type") != "embedded":
+            return True
+
+        home_name = home_origin.get("catalogue_name", "")
+        home_id = home_origin.get("catalogue_id", "")
         target_id = getattr(target_registry, "catalogue_id", "")
 
         if home_id and target_id:
@@ -1715,8 +1721,8 @@ class CartonWindow(QtWidgets.QDialog):
             "namespace": result["namespace"],
             "name": result["name"],
         }
-        if not pkg_data.get("home_registry"):
-            fields["home_registry"] = written_entry.to_home_meta()
+        if not pkg_data.get("home_origin"):
+            fields["home_origin"] = written_entry.to_home_origin_meta()
         self._install_manager.rekey_package(pkg_id, result["id"], fields)
 
         display = pkg_data.get("display_name", pkg_id)
