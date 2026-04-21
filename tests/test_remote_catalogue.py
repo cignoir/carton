@@ -1,4 +1,4 @@
-"""Tests for remote (URL-based) registry support."""
+"""Tests for remote (URL-based) catalogue support."""
 
 import json
 import os
@@ -111,18 +111,8 @@ class TestPublisherRemoteGuard:
             assert results == []
 
 
-# URL resolution and remote/local flag attachment used to be covered
-# here by poking RegistryClient._merge_packages directly. CatalogueClient
-# does the same projection via ``_build_legacy_shape`` +
-# ``_project_embedded_versions`` — tests/test_catalogue_client.py covers
-# the local/relative-path side via a live embedded catalogue, and the
-# remote-flag counterpart is exercised indirectly through the fetch +
-# merge path in this file's ``TestConfigRemoteRegistry``. RegistryClient
-# itself is slated for removal once this import is the last holdout.
-
-
-class TestConfigRemoteRegistry:
-    """Config should save and load remote registry URLs correctly."""
+class TestConfigRemoteCatalogue:
+    """Config should save and load remote catalogue URLs correctly."""
 
     def test_save_and_load_remote(self):
         with tempfile.TemporaryDirectory() as tmpdir:
