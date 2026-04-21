@@ -1303,7 +1303,7 @@ class CartonWindow(QtWidgets.QDialog):
             pkg_id, card_pkg_data,
             installed_version=pkg_data.get("_installed_ver"),
             icon_path=icon_path,
-            published_registries=card_published,
+            published_catalogues=card_published,
         )
         card.launch_requested.connect(self._on_launch)
         card.install_requested.connect(self._on_install)
@@ -1377,14 +1377,14 @@ class CartonWindow(QtWidgets.QDialog):
         if not pkg_data:
             return
 
-        # Check which registries have this package published
+        # Check which catalogues have this package published
         published_regs = []
         if self._publisher:
-            published_regs = self._publisher.find_published_registries(pkg_id)
+            published_regs = self._publisher.find_published_catalogues(pkg_id)
 
         result = EditDialog.prompt(
             pkg_id, pkg_data,
-            published_registries=published_regs, parent=self,
+            published_catalogues=published_regs, parent=self,
         )
         if not result:
             return

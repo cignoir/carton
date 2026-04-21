@@ -61,13 +61,13 @@ class PackageCard(QtWidgets.QFrame):
     unpublish_requested = QtCore.Signal(str, str)  # (pkg_id, registry_name)
 
     def __init__(self, pkg_id, pkg_data, installed_version=None, icon_path=None,
-                 published_registries=None, parent=None):
+                 published_catalogues=None, parent=None):
         super().__init__(parent)
         self._pkg_id = pkg_id
         self._pkg_data = pkg_data
         self._installed_version = installed_version
         self._icon_path = icon_path
-        self._published_registries = list(published_registries or [])
+        self._published_catalogues = list(published_catalogues or [])
         self._setup_ui()
 
     def _setup_ui(self):
@@ -200,12 +200,12 @@ class PackageCard(QtWidgets.QFrame):
 
         # Published-to badge: clickable menu for unpublish, shown when this
         # package currently lives in one or more writable local registries.
-        if self._published_registries:
+        if self._published_catalogues:
             pub_btn = QtWidgets.QToolButton()
-            if len(self._published_registries) == 1:
-                pub_btn.setText(t("published_to_badge", self._published_registries[0]))
+            if len(self._published_catalogues) == 1:
+                pub_btn.setText(t("published_to_badge", self._published_catalogues[0]))
             else:
-                pub_btn.setText(t("published_to_badge_multi", len(self._published_registries)))
+                pub_btn.setText(t("published_to_badge_multi", len(self._published_catalogues)))
             pub_btn.setToolTip(t("unpublish_select_catalogue"))
             pub_btn.setCursor(Qt.PointingHandCursor)
             pub_btn.setPopupMode(QtWidgets.QToolButton.InstantPopup)
@@ -249,7 +249,7 @@ class PackageCard(QtWidgets.QFrame):
                     accent=theme.ACCENT_GREEN,
                 )
             )
-            for reg_name in self._published_registries:
+            for reg_name in self._published_catalogues:
                 act = menu.addAction(t("unpublish_from", reg_name))
                 # Default-arg binding to freeze reg_name per iteration.
                 act.triggered.connect(
