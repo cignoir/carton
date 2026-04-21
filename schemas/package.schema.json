@@ -79,29 +79,9 @@
       "type": ["string", "null"],
       "description": "アイコン。画像ファイルの相対パス (例: resources/icon.png)、絵文字 (例: 📷)、'@auto' (icons/<name>.png 自動解決)、null (アイコン無し)"
     },
-    "home_registry": {
-      "type": "object",
-      "description": "このパッケージの本籍レジストリ（v0.4 形式、embedded カタログ専用）。別レジストリに publish しようとすると警告される。v5.0 では home_origin が generalised 代替。互換のため両方並存可",
-      "properties": {
-        "name": {
-          "type": "string",
-          "description": "Carton 内で登録されているレジストリ名"
-        },
-        "registry_id": {
-          "type": "string",
-          "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
-          "description": "本籍レジストリの UUID。Config 層で自動付与される"
-        },
-        "hint": {
-          "type": "string",
-          "description": "レジストリの場所ヒント（パス または URL）。Add 時のレジストリ追加誘導に使う"
-        }
-      },
-      "additionalProperties": false
-    },
     "home_origin": {
       "type": "object",
-      "description": "v5.0 本籍 origin。embedded（従来の registry）/ github / url / local を統一形で表現。home_registry と並存可（alias 期間）",
+      "description": "v5.0 本籍 origin。embedded（従来の registry）/ github / url / local を統一形で表現。別 catalogue に publish しようとすると警告される",
       "oneOf": [
         {
           "type": "object",

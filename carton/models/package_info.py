@@ -25,15 +25,10 @@ class PackageInfo:
     re-resolve artifacts on reinstall / upgrade without re-reading the
     catalogue.
 
-    v5.0 addition: ``home_origin`` (optional) generalises ``home_registry``.
-    Where ``home_registry`` could only name an embedded catalogue
-    (``{"name": ..., "registry_id": ...}``), ``home_origin`` also expresses
-    github/url/local publication targets (``{"type": "github",
-    "repo": "..."}`` etc). The two fields co-exist on ``PackageInfo`` for
-    the duration of the v5.0 transition; they are persisted side-by-side
-    in installed.json / package.json, and no automatic synchronisation is
-    performed — consumers in the alias period touch exactly one of them,
-    and Step 4-B migrates them in-place.
+    v5.0: ``home_origin`` (optional) names the package's publication home
+    as a tagged union over embedded/github/url/local (e.g.
+    ``{"type": "github", "repo": "owner/name"}``). Used by the publish
+    flow to default the target and warn on mismatches.
     """
 
     def __init__(
@@ -54,7 +49,6 @@ class PackageInfo:
         path="",
         installed_at="",
         local_path="",
-        home_registry=None,
         activated_paths=None,
         pinned=False,
         origin=None,
@@ -85,13 +79,6 @@ class PackageInfo:
         self.path = path
         self.installed_at = installed_at
         self.local_path = local_path
-        self.home_registry = home_registry or {}
-        # v5.0: home_origin is the generalised form of home_registry — it
-        # can name a github/url/local publication target in addition to
-        # embedded catalogues. We store it verbatim (dict or empty dict);
-        # callers that want the embedded-only legacy shape keep using
-        # ``home_registry``. Sync between the two is intentionally not
-        # performed at this layer — see class docstring.
         self.home_origin = home_origin or {}
         # {env_var: [path, ...]} recorded at install time. Used on
         # uninstall to restore the env to its pre-install state even if
@@ -163,7 +150,6 @@ class PackageInfo:
             source=data.get("source", "registry"),
             installed_at=data.get("installed_at", ""),
             local_path=data.get("local_path", ""),
-            home_registry=data.get("home_registry", {}),
             home_origin=data.get("home_origin", {}),
             activated_paths=data.get("activated_paths", {}),
             pinned=data.get("pinned", False),
@@ -196,8 +182,6 @@ class PackageInfo:
                 d["display_name"] = self.display_name
         if self.local_path:
             d["local_path"] = self.local_path
-        if self.home_registry:
-            d["home_registry"] = self.home_registry
         if self.home_origin:
             d["home_origin"] = self.home_origin
         if self.activated_paths:

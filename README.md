@@ -168,11 +168,13 @@ repos work without needing a `catalogue.json` wrapper.
 - `registry.json` → `catalogue.json` in place; the original is preserved as
   `registry.json.bak-v0.4.<ms>` for rollback. Each package entry is rewritten
   to the new shape with `origin: {"type": "embedded", "versions": {...}}`.
-- `registry_id` → `catalogue_id` (UUID preserved). Config files dual-emit
-  both keys during the transition for backward reading.
-- `home_registry` on published artifacts gets a sibling `home_origin`
-  (tagged union over embedded / github / url / local). Both keys coexist
-  during the alias period.
+- `registry_id` → `catalogue_id` (UUID preserved in config / catalogue
+  files).
+- `home_registry` on published artifacts is replaced by `home_origin`
+  (tagged union over embedded / github / url / local). Pre-v0.5.0
+  artifacts carrying only `home_registry` no longer pre-fill the home
+  info on re-register; republishing re-stamps `home_origin` from the
+  target.
 
 **UI / terminology changes:**
 
@@ -523,9 +525,7 @@ inner `package.json` rather than trusting any cached copy.
 
 `home_origin` records where this package likes to be published (embedded
 catalogue / github repo / url / local). It's a tagged union over the four
-origin types and replaces the v0.4 `home_registry` field. Both coexist
-during the alias period so older clients keep reading the embedded-only
-shape.
+origin types and replaces the v0.4 `home_registry` field.
 
 ### Identity model
 

@@ -59,18 +59,6 @@
           "type": "boolean",
           "description": "My Tools (source=local) の場合、参照先がフォルダかファイルかの区別"
         },
-        "home_registry": {
-          "type": "object",
-          "description": "v0.4 本籍情報（embedded カタログ専用）。v5.0 では home_origin が generalised 代替",
-          "properties": {
-            "name": { "type": "string" },
-            "registry_id": {
-              "type": "string",
-              "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
-            },
-            "hint": { "type": "string" }
-          }
-        },
         "origin": {
           "type": "object",
           "description": "v5.0 inbound origin snapshot. このパッケージをどこから install したかの identity を記録する (catalogue の versions/latest_version は stale になるので含めない、再解決時は origin 経由で最新を取る)",
@@ -88,7 +76,7 @@
         },
         "home_origin": {
           "type": "object",
-          "description": "v5.0 本籍 origin（embedded/github/url/local）。home_registry と並存可",
+          "description": "v5.0 本籍 origin（embedded/github/url/local）",
           "required": ["type"],
           "properties": {
             "type": {

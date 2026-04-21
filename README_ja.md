@@ -134,8 +134,8 @@ v5.0 は **Package-first モデル**を導入しました — パッケージは
 **初回起動時に自動 migrate される内容：**
 
 - `registry.json` → `catalogue.json`（同じ場所で rename）、旧ファイルは `registry.json.bak-v0.4.<ms>` として退避。各 package エントリは新しい shape（`origin: {"type": "embedded", "versions": {...}}`）に書き換え。
-- `registry_id` → `catalogue_id`（UUID は保持）。config ファイルは移行期間中、両方のキーを dual-emit します（下位互換読み込みのため）。
-- publish 済みアーティファクトの `home_registry` には兄弟フィールド `home_origin`（embedded / github / url / local のタグドユニオン）が追加されます。alias 期間は両キーが共存します。
+- `registry_id` → `catalogue_id`（UUID は保持）。config / catalogue ファイル内で rename。
+- publish 済みアーティファクトの `home_registry` は `home_origin`（embedded / github / url / local のタグドユニオン）に置き換わります。v0.5.0 より前の `home_registry` だけを持つアーティファクトは re-register 時に home 情報が拾われなくなりますが、再 publish すれば `home_origin` が新たに stamp されます。
 
 **UI / 用語の変更：**
 
@@ -417,7 +417,7 @@ my_plugin/
 - 文字列リテラル `"@auto"`（カタログの `icons/<name>.png` を自動解決）
 - `null`（アイコンなし）
 
-`home_origin` はこのパッケージが通常どこに publish されるかを記録します（embedded カタログ / github リポジトリ / url / local の 4 種のタグドユニオン）。v0.4 の `home_registry` フィールドの後継です。alias 期間中は両方が共存し、古いクライアントは引き続き embedded 形式のみ読めます。
+`home_origin` はこのパッケージが通常どこに publish されるかを記録します（embedded カタログ / github リポジトリ / url / local の 4 種のタグドユニオン）。v0.4 の `home_registry` フィールドの後継です。
 
 ### 識別子モデル
 
