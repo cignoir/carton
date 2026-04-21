@@ -25,14 +25,17 @@ def read_local_catalogue_id(path):
 
     Returns ``(id, data_dict)`` where ``id`` may be empty. Returns
     ``("", None)`` on read / parse failure — callers should surface the
-    error to the user in their own context.
+    error to the user in their own context. Accepts the legacy v4.0
+    ``registry_id`` key as a fallback so stamping still works on an
+    un-migrated file.
     """
     try:
         with open(path, "r", encoding="utf-8") as f:
             data = json.load(f)
     except (OSError, json.JSONDecodeError):
         return "", None
-    return read_uuid(data, "registry_id"), data
+    cid = read_uuid(data, "catalogue_id") or read_uuid(data, "registry_id")
+    return cid, data
 
 
 def probe_remote_catalogue_id(url, timeout=15):
@@ -40,6 +43,8 @@ def probe_remote_catalogue_id(url, timeout=15):
 
     Any network / parse error yields ``""``. No retry, no caching — callers
     that need persistence should store the result on a CatalogueEntry.
+    Falls back to the legacy ``registry_id`` key for producers that
+    haven't migrated yet.
     """
     try:
         req = Request(url)
@@ -48,7 +53,7 @@ def probe_remote_catalogue_id(url, timeout=15):
         data = json.loads(resp.read().decode("utf-8"))
     except (URLError, OSError, ValueError):
         return ""
-    return read_uuid(data, "registry_id")
+    return read_uuid(data, "catalogue_id") or read_uuid(data, "registry_id")
 
 
 def probe_github_package_json(base_url, timeout=10):
@@ -88,19 +93,22 @@ def stamp_local_catalogue_with_prompt(parent, path, data):
     )
     if reply != QtWidgets.QMessageBox.Yes:
         return ""
-    from carton.core.migrations import REGISTRY_SCHEMA_VERSION, migrate_registry_data
-    # Migrate to the current schema so the stamp is paired with a v4.0
-    # write — leaving an old schema_version in place would re-trigger
-    # migration on the next read for no benefit.
-    data, _ = migrate_registry_data(data)
-    rid, _ = stamp_uuid(data, "registry_id")
-    data["schema_version"] = REGISTRY_SCHEMA_VERSION
+    from carton.core.migrations import (
+        CATALOGUE_SCHEMA_VERSION,
+        migrate_registry_to_catalogue,
+    )
+    # Migrate to the current v5.0 shape so the stamp is paired with a
+    # v5.0 write — leaving an old schema_version in place would re-
+    # trigger migration on the next read for no benefit.
+    data, _ = migrate_registry_to_catalogue(data)
+    cid, _ = stamp_uuid(data, "catalogue_id")
+    data["schema_version"] = CATALOGUE_SCHEMA_VERSION
     try:
         with open(path, "w", encoding="utf-8") as f:
             json.dump(data, f, indent=2, ensure_ascii=False)
     except OSError:
         return ""
-    return rid
+    return cid
 
 
 class DuplicateCatalogueChoice:
