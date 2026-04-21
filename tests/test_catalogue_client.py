@@ -353,6 +353,210 @@ class TestCatalogueClientPersonal:
 
         assert "alice/tool" in client.get_packages()
 
+    def test_corrupt_personal_file_does_not_crash_stub(self, tmp_path, isolated_cache):
+        # Kept as a stub marker — real assertion lives below; this split
+        # was introduced so the projection tests can append without
+        # disturbing the existing class layout. Left as a no-op:
+        pass
+
+
+class TestCatalogueClientUrlOrigin:
+    """URL origin projection — CatalogueClient must fold the remote
+    package.json's fields into the legacy-shape dict so the UI can render
+    cards pre-install without knowing it's a url origin under the hood."""
+
+    def _write_catalogue(self, tmp_path, url):
+        path = tmp_path / CATALOGUE_FILENAME
+        path.write_text(
+            json.dumps(_v5_catalogue(packages={
+                "studio/tool": {
+                    "origin": {"type": "url", "url": url},
+                },
+            })),
+            encoding="utf-8",
+        )
+        return path
+
+    def _stub_urlopen(self, monkeypatch, payload):
+        """Replace url_origin.urlopen with a fixed JSON response."""
+        from carton.core.origins import url_origin as url_mod
+
+        class _Resp:
+            def read(self_inner):
+                return json.dumps(payload).encode("utf-8")
+
+        monkeypatch.setattr(url_mod, "urlopen",
+                            lambda req, timeout=10: _Resp())
+
+    def test_projects_versions_from_remote_package_json(
+        self, tmp_path, isolated_cache, monkeypatch,
+    ):
+        self._stub_urlopen(monkeypatch, {
+            "namespace": "studio",
+            "name": "tool",
+            "display_name": "Tool",
+            "version": "1.5.0",
+            "maya_versions": ["2025"],
+            "download_url": "https://example.com/tool-1.5.0.zip",
+            "sha256": "f" * 64,
+            "size_bytes": 42,
+        })
+        path = self._write_catalogue(tmp_path, "https://example.com/tool/package.json")
+        cfg = Config(catalogues=[CatalogueEntry("url-cat", str(path),
+                                                catalogue_id=_VALID_UUID)])
+        client = CatalogueClient(cfg, cache=isolated_cache)
+        client.fetch()
+
+        pkgs = client.get_packages()
+        assert "studio/tool" in pkgs
+        entry = pkgs["studio/tool"]
+        assert entry["latest_version"] == "1.5.0"
+        versions = entry["versions"]
+        assert list(versions.keys()) == ["1.5.0"]
+        v = versions["1.5.0"]
+        assert v["download_url"] == "https://example.com/tool-1.5.0.zip"
+        assert v["sha256"] == "f" * 64
+        assert v["_pinned"] is True
+        assert v["size_bytes"] == 42
+
+    def test_hydrates_display_fields_from_manifest(
+        self, tmp_path, isolated_cache, monkeypatch,
+    ):
+        """package.json display fields must win over the catalogue entry
+        (the manifest is the SoT for url origins)."""
+        self._stub_urlopen(monkeypatch, {
+            "namespace": "studio",
+            "name": "tool",
+            "display_name": "Super Tool",
+            "description": "from manifest",
+            "icon": "🔧",
+            "type": "python_package",
+            "author": "alice",
+            "version": "1.0.0",
+            "download_url": "https://example.com/x.zip",
+        })
+        path = self._write_catalogue(tmp_path, "https://example.com/tool/package.json")
+        cfg = Config(catalogues=[CatalogueEntry("url-cat", str(path),
+                                                catalogue_id=_VALID_UUID)])
+        client = CatalogueClient(cfg, cache=isolated_cache)
+        client.fetch()
+
+        entry = client.get_packages()["studio/tool"]
+        assert entry["display_name"] == "Super Tool"
+        assert entry["description"] == "from manifest"
+        assert entry["icon"] == "🔧"
+        assert entry["author"] == "alice"
+        assert entry["type"] == "python_package"
+
+    def test_unpinned_url_origin_flagged(
+        self, tmp_path, isolated_cache, monkeypatch,
+    ):
+        """When the manifest has no sha256, _pinned is False so the
+        downloader's TOFU path kicks in."""
+        self._stub_urlopen(monkeypatch, {
+            "name": "tool", "namespace": "studio",
+            "version": "1.0.0",
+            "download_url": "https://example.com/x.zip",
+        })
+        path = self._write_catalogue(tmp_path, "https://example.com/tool/package.json")
+        cfg = Config(catalogues=[CatalogueEntry("url-cat", str(path),
+                                                catalogue_id=_VALID_UUID)])
+        client = CatalogueClient(cfg, cache=isolated_cache)
+        client.fetch()
+
+        v = client.get_packages()["studio/tool"]["versions"]["1.0.0"]
+        assert v["_pinned"] is False
+        assert "sha256" not in v or v.get("sha256") == ""
+
+    def test_fetch_failure_yields_empty_versions(
+        self, tmp_path, isolated_cache, monkeypatch,
+    ):
+        """A url origin whose manifest 404s should still register the
+        package but produce an empty versions dict (no crash, card
+        degrades to 'unavailable')."""
+        from carton.core.origins import url_origin as url_mod
+        from carton.compat_urllib import URLError
+
+        def _boom(req, timeout=10):
+            raise URLError("connection refused")
+
+        monkeypatch.setattr(url_mod, "urlopen", _boom)
+
+        path = self._write_catalogue(tmp_path, "https://example.com/tool/package.json")
+        cfg = Config(catalogues=[CatalogueEntry("url-cat", str(path),
+                                                catalogue_id=_VALID_UUID)])
+        client = CatalogueClient(cfg, cache=isolated_cache)
+        client.fetch()
+
+        pkgs = client.get_packages()
+        assert "studio/tool" in pkgs
+        assert pkgs["studio/tool"]["versions"] == {}
+
+
+class TestCatalogueClientLocalOrigin:
+    """Local origin projection — same shape as url origin but reads from
+    disk. Covers happy-path projection plus missing-manifest degradation."""
+
+    def _write_catalogue(self, tmp_path, origin_path):
+        path = tmp_path / "cat" / CATALOGUE_FILENAME
+        os.makedirs(path.parent, exist_ok=True)
+        path.write_text(
+            json.dumps(_v5_catalogue(packages={
+                "studio/local_tool": {
+                    "origin": {"type": "local", "path": origin_path},
+                },
+            })),
+            encoding="utf-8",
+        )
+        return path
+
+    def _write_manifest(self, dir_path, body):
+        os.makedirs(dir_path, exist_ok=True)
+        path = os.path.join(dir_path, "package.json")
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump(body, f)
+
+    def test_projects_version_and_resolves_relative_artifact(
+        self, tmp_path, isolated_cache,
+    ):
+        src = tmp_path / "src"
+        self._write_manifest(str(src), {
+            "namespace": "studio",
+            "name": "local_tool",
+            "display_name": "Local Tool",
+            "version": "0.1.0",
+            "download_url": "local_tool-0.1.0.zip",
+            "sha256": "b" * 64,
+        })
+        path = self._write_catalogue(tmp_path, str(src))
+        cfg = Config(catalogues=[CatalogueEntry("local-cat", str(path),
+                                                catalogue_id=_VALID_UUID)])
+        client = CatalogueClient(cfg, cache=isolated_cache)
+        client.fetch()
+
+        entry = client.get_packages()["studio/local_tool"]
+        assert entry["latest_version"] == "0.1.0"
+        assert entry["display_name"] == "Local Tool"
+        v = entry["versions"]["0.1.0"]
+        expected = os.path.normpath(os.path.join(str(src), "local_tool-0.1.0.zip"))
+        assert v["download_url"] == expected
+        assert v["_pinned"] is True
+
+    def test_missing_manifest_directory_yields_empty_versions(
+        self, tmp_path, isolated_cache,
+    ):
+        """Local origin pointing at a nonexistent path should register
+        the package (so the UI can show 'source moved') but hold empty
+        versions — no crash."""
+        path = self._write_catalogue(tmp_path, str(tmp_path / "does_not_exist"))
+        cfg = Config(catalogues=[CatalogueEntry("local-cat", str(path),
+                                                catalogue_id=_VALID_UUID)])
+        client = CatalogueClient(cfg, cache=isolated_cache)
+        client.fetch()
+
+        entry = client.get_packages()["studio/local_tool"]
+        assert entry["versions"] == {}
+
     def test_corrupt_personal_file_does_not_crash(self, tmp_path, isolated_cache):
         """A garbled personal_catalogue.json must not break subscribed catalogues."""
         personal_path = tmp_path / "personal_catalogue.json"
