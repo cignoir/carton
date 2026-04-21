@@ -115,14 +115,26 @@ visible install refusal.
 Settings (⚙) > Add
 ```
 
-Pick the flow that matches what you have:
+The picker asks two questions. **Step 1 — what are you adding?**
+
+- 📦 **Single package** — add one tool directly (the common case).
+- 📚 **Catalogue** — connect to a multi-tool distribution (for authors
+  / teams curating many tools at once).
+
+**Step 2 — where from?** (options depend on Step 1; `← Back` returns to
+Step 1.)
+
+Single package:
 
 - **GitHub repository** — `owner/repo`. Carton first probes `package.json`
   (single-tool repo) and falls back to `catalogue.json` (multi-tool repo).
 - **Single package by URL** — direct URL to a `package.json` hosted anywhere.
-- **Remote catalogue URL** — URL to a `catalogue.json` (batch subscription).
+
+Catalogue:
+
 - **Local catalogue file** — path to a `catalogue.json` on a shared drive or
   local filesystem.
+- **Remote catalogue URL** — URL to a `catalogue.json` (batch subscription).
 - **Create new local catalogue** — scaffold an empty catalogue for your
   studio to publish into.
 
@@ -157,11 +169,36 @@ local-only entry.
 
 ## Upgrading
 
-### From v0.4 to v5.0
+### From v0.4 to v0.5
 
-v5.0 introduces the **Package-first model**: packages exist independently
-of catalogues, origins are a first-class concept, and single-package GitHub
-repos work without needing a `catalogue.json` wrapper.
+v0.5.0 ships the **Package-first model** and bumps the catalogue schema
+from 4.0 to 5.0: packages exist independently of catalogues, origins are
+a first-class concept, and single-package GitHub repos work without
+needing a `catalogue.json` wrapper.
+
+> **⚠️ Breaking changes** — read this section before upgrading a shared
+> catalogue.
+
+- **Hard cut-over, no coexistence.** v0.4 clients cannot read v0.5
+  catalogues (the filename itself changed: `registry.json` →
+  `catalogue.json`, and the inner shape is different). Everyone on a
+  shared catalogue needs to upgrade in lockstep.
+- **Catalogue maintainers must re-upload.** After the auto-migration
+  runs on your machine, push the resulting `catalogue.json` (and the
+  unchanged `packages/` tree) back to your host so consumers pick up
+  the new shape.
+- **Python API:** the `RegistryClient` class has been removed. External
+  consumers should import `CatalogueClient` from
+  `carton.core.catalogue_client` — same surface, with `registry_*`
+  symbols renamed to `catalogue_*`.
+- **Field renames** in both `installed.json` and published
+  `package.json`: `registry_id` → `catalogue_id`, `home_registry` →
+  `home_origin` (a tagged union over `embedded` / `github` / `url` /
+  `local`). Pre-v0.5.0 artifacts carrying only `home_registry` no
+  longer pre-fill home info on re-register; republishing re-stamps
+  `home_origin` from the target.
+- **CLI flag rename:** `python -m carton unpublish --registry ...` is
+  now `--catalogue ...`.
 
 **Automatic migrations on first launch:**
 
@@ -170,25 +207,16 @@ repos work without needing a `catalogue.json` wrapper.
   to the new shape with `origin: {"type": "embedded", "versions": {...}}`.
 - `registry_id` → `catalogue_id` (UUID preserved in config / catalogue
   files).
-- `home_registry` on published artifacts is replaced by `home_origin`
-  (tagged union over embedded / github / url / local). Pre-v0.5.0
-  artifacts carrying only `home_registry` no longer pre-fill the home
-  info on re-register; republishing re-stamps `home_origin` from the
-  target.
 
 **UI / terminology changes:**
 
 - "Registries" → "Catalogues" throughout the UI.
 - Library sidebar now groups by namespace instead of per-catalogue row.
   Catalogue management moves to Settings → Catalogues.
-- `Add` dialog leads with single-package flows (GitHub repo, Single package
-  by URL); catalogue flows (Remote catalogue URL, Local catalogue file,
-  Create new local catalogue) remain available.
-
-**Catalogue maintainers** — re-upload the auto-migrated `catalogue.json` to
-your host so consumers pick up the new shape. v0.4 clients can't read v5.0
-catalogues (filename changed); the migration is a hard cut-over, not a
-coexistence.
+- `Add` picker is now a **two-step dialog**: pick scope (single package
+  / catalogue) first, then the transport. The five previous entry
+  flows are still available, just grouped under the scope they belong
+  to.
 
 CLI helper for catalogue maintainers upgrading by hand:
 
@@ -559,7 +587,7 @@ automatically the first time you publish.
 python -m carton list path/to/catalogue.json
 
 # Unpublish a package from a catalogue
-python -m carton unpublish --registry path/to/catalogue.json --id mystudio/rigger
+python -m carton unpublish --catalogue path/to/catalogue.json --id mystudio/rigger
 
 # Migrate a v0.4 registry.json into a v5.0 catalogue.json in place
 python -m carton catalogue migrate path/to/registry.json
