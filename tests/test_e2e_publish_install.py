@@ -17,7 +17,7 @@ import zipfile
 import pytest
 
 from carton.core.catalogue_client import CatalogueClient
-from carton.core.config import Config, RegistryEntry
+from carton.core.config import Config, CatalogueEntry
 from carton.core.downloader import Downloader
 from carton.core.env_manager import MayaEnvManager
 from carton.core.installer import InstallManager
@@ -76,7 +76,7 @@ class TestPublishInstallRoundtrip:
 
             src_pkg = _make_nested_source_package(source_root)
             registry_path = os.path.join(registry_root, "registry.json")
-            registry_entry = RegistryEntry("e2e-local", registry_path)
+            registry_entry = CatalogueEntry("e2e-local", registry_path)
 
             # --- Publisher side ---
             pub_config = Config(
@@ -280,10 +280,10 @@ class TestPublishViaRemoteMirror:
                 }, f)
             os.makedirs(os.path.join(mirror_root, "packages"))
 
-            mirror_entry = RegistryEntry(
-                "carton-guru2", mirror_path, registry_id=shared_uuid,
+            mirror_entry = CatalogueEntry(
+                "carton-guru2", mirror_path, catalogue_id=shared_uuid,
             )
-            remote_entry = RegistryEntry(
+            remote_entry = CatalogueEntry(
                 "ぐるぐる",
                 "https://example.com/guru2/registry.json",
             )

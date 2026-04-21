@@ -4,7 +4,7 @@ import json
 import os
 import tempfile
 
-from carton.core.config import Config, RegistryEntry
+from carton.core.config import Config, CatalogueEntry
 from carton.core.env_manager import MayaEnvManager
 from carton.core.installer import InstallManager
 from carton.core.publisher import Publisher

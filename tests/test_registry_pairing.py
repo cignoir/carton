@@ -11,7 +11,7 @@ import json
 import os
 
 from carton.compat_urllib import URLError
-from carton.core.config import Config, RegistryEntry
+from carton.core.config import Config, CatalogueEntry
 from carton.ui._registry_pairing import (
     find_duplicate_entry,
     probe_github_package_json,
@@ -25,17 +25,17 @@ _UUID_B = "bbbbbbbb-2222-4222-8222-bbbbbbbbbbbb"
 class TestFindDuplicateEntry:
     def test_no_rid_returns_none(self):
         c = Config()
-        c.add_registry("a", "/p/a.json", registry_id=_UUID_A)
+        c.add_registry("a", "/p/a.json", catalogue_id=_UUID_A)
         assert find_duplicate_entry(c.registries, "", "/p/new.json") is None
 
     def test_no_match_returns_none(self):
         c = Config()
-        c.add_registry("a", "/p/a.json", registry_id=_UUID_A)
+        c.add_registry("a", "/p/a.json", catalogue_id=_UUID_A)
         assert find_duplicate_entry(c.registries, _UUID_B, "/p/new.json") is None
 
     def test_match_returns_entry(self):
         c = Config()
-        c.add_registry("a", "/p/a.json", registry_id=_UUID_A)
+        c.add_registry("a", "/p/a.json", catalogue_id=_UUID_A)
         match = find_duplicate_entry(c.registries, _UUID_A, "/p/new.json")
         assert match is not None
         assert match.name == "a"
@@ -43,7 +43,7 @@ class TestFindDuplicateEntry:
     def test_same_path_not_a_duplicate(self):
         """Re-selecting a registry already in the list is not a duplicate."""
         c = Config()
-        c.add_registry("a", "/p/a.json", registry_id=_UUID_A)
+        c.add_registry("a", "/p/a.json", catalogue_id=_UUID_A)
         same = os.path.normpath("/p/a.json")
         assert find_duplicate_entry(c.registries, _UUID_A, same) is None
 
@@ -59,7 +59,7 @@ class TestFindDuplicateEntry:
         c = Config()
         c.add_registry(
             "guru2", "https://example.com/guru2/registry.json",
-            registry_id=_UUID_A,
+            catalogue_id=_UUID_A,
         )
         remote_entry = c.registries[0]
         match = find_duplicate_entry(
@@ -76,11 +76,11 @@ class TestFindDuplicateEntry:
         c = Config()
         c.add_registry(
             "guru2-remote", "https://example.com/guru2/registry.json",
-            registry_id=_UUID_A,
+            catalogue_id=_UUID_A,
         )
         c.add_registry(
             "guru2-local", "F:/workspace/carton-guru2/registry.json",
-            registry_id=_UUID_A,
+            catalogue_id=_UUID_A,
         )
         remote_entry = c.registries[0]
         local_entry = c.registries[1]

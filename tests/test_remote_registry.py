@@ -6,7 +6,7 @@ import tempfile
 
 import pytest
 
-from carton.core.config import Config, RegistryEntry, _is_url
+from carton.core.config import Config, CatalogueEntry, _is_url
 from carton.core.publisher import Publisher, RemoteMirrorMissingError
 
 
@@ -27,31 +27,31 @@ class TestIsUrl:
         assert _is_url("//server/share/registry.json") is False
 
 
-class TestRegistryEntryRemote:
+class TestCatalogueEntryRemote:
     def test_is_remote_url(self):
-        e = RegistryEntry("test", "https://example.com/reg/registry.json")
+        e = CatalogueEntry("test", "https://example.com/reg/registry.json")
         assert e.is_remote is True
 
     def test_is_remote_local(self):
-        e = RegistryEntry("test", "/some/path/registry.json")
+        e = CatalogueEntry("test", "/some/path/registry.json")
         assert e.is_remote is False
 
     def test_url_not_normpathed(self):
         """URLs should not be mangled by os.path.normpath."""
         url = "https://raw.githubusercontent.com/org/repo/main/registry.json"
-        e = RegistryEntry("test", url)
+        e = CatalogueEntry("test", url)
         assert e.path == url
 
     def test_base_dir_url(self):
-        e = RegistryEntry("test", "https://example.com/registry/registry.json")
+        e = CatalogueEntry("test", "https://example.com/registry/registry.json")
         assert e.base_dir == "https://example.com/registry/"
 
     def test_base_dir_url_nested(self):
-        e = RegistryEntry("test", "https://raw.githubusercontent.com/org/repo/main/registry.json")
+        e = CatalogueEntry("test", "https://raw.githubusercontent.com/org/repo/main/registry.json")
         assert e.base_dir == "https://raw.githubusercontent.com/org/repo/main/"
 
     def test_base_dir_local(self):
-        e = RegistryEntry("test", "/some/dir/registry.json")
+        e = CatalogueEntry("test", "/some/dir/registry.json")
         assert e.base_dir == os.path.normpath("/some/dir")
 
 
@@ -69,7 +69,7 @@ class TestPublisherRemoteGuard:
         monkeypatch.setattr(
             Publisher, "_probe_remote_registry_id", staticmethod(lambda e: ""),
         )
-        remote_entry = RegistryEntry("remote", "https://example.com/registry.json")
+        remote_entry = CatalogueEntry("remote", "https://example.com/registry.json")
         with pytest.raises(RemoteMirrorMissingError) as excinfo:
             publisher.publish({}, remote_entry)
         assert excinfo.value.reason == "no_remote_id"
@@ -81,7 +81,7 @@ class TestPublisherRemoteGuard:
         monkeypatch.setattr(
             Publisher, "_probe_remote_registry_id", staticmethod(lambda e: rid),
         )
-        remote_entry = RegistryEntry("remote", "https://example.com/registry.json")
+        remote_entry = CatalogueEntry("remote", "https://example.com/registry.json")
         with pytest.raises(RemoteMirrorMissingError) as excinfo:
             publisher.publish({}, remote_entry)
         assert excinfo.value.reason == "no_local_mirror"
@@ -92,7 +92,7 @@ class TestPublisherRemoteGuard:
         monkeypatch.setattr(
             Publisher, "_probe_remote_registry_id", staticmethod(lambda e: ""),
         )
-        remote_entry = RegistryEntry("remote", "https://example.com/registry.json")
+        remote_entry = CatalogueEntry("remote", "https://example.com/registry.json")
         with pytest.raises(RemoteMirrorMissingError):
             publisher.unpublish("fake-id", remote_entry)
 

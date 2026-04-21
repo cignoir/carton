@@ -271,7 +271,7 @@ class TestEmbeddedPublishStamping:
             assert origin.get("type") == "embedded"
             assert origin.get("catalogue_name") == "studio-main"
             # The stamped registry_id propagates to home_origin too.
-            assert origin.get("catalogue_id") == config.registries[0].registry_id
+            assert origin.get("catalogue_id") == config.registries[0].catalogue_id
 
     def test_caller_home_origin_wins_over_target(self):
         with tempfile.TemporaryDirectory() as tmpdir:

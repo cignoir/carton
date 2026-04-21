@@ -185,7 +185,7 @@ class TestRegistryIdStamping:
             assert is_valid_registry_id(registry.get("registry_id", ""))
             assert registry["schema_version"] == "4.0"
             # The RegistryEntry is updated in-memory to match the stamp.
-            assert config.registries[0].registry_id == registry["registry_id"]
+            assert config.registries[0].catalogue_id == registry["registry_id"]
 
     def test_second_publish_preserves_registry_id(self):
         with tempfile.TemporaryDirectory() as tmpdir:

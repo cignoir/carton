@@ -5,7 +5,7 @@ import os
 
 import pytest
 
-from carton.core.config import Config, RegistryEntry
+from carton.core.config import Config, CatalogueEntry
 from carton.core.profile import InstallerProfile, InvalidProfileError
 
 
@@ -23,8 +23,8 @@ class TestRoundtrip:
         path = tmp_path / "studio.json"
         original = InstallerProfile(
             registries=[
-                RegistryEntry("studio-main", "/srv/studio/registry.json"),
-                RegistryEntry("ari", "https://example.com/registry.json"),
+                CatalogueEntry("studio-main", "/srv/studio/registry.json"),
+                CatalogueEntry("ari", "https://example.com/registry.json"),
             ],
             language="ja",
             auto_check_updates=False,
@@ -43,7 +43,7 @@ class TestRoundtrip:
 
     def test_from_config_snapshots_relevant_fields(self):
         c = Config(
-            registries=[RegistryEntry("a", "/x/registry.json")],
+            registries=[CatalogueEntry("a", "/x/registry.json")],
             language="en",
             proxy="http://p:80",
         )

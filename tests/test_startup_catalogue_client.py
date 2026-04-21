@@ -31,7 +31,7 @@ import pytest
 
 import carton
 from carton.core.catalogue_client import CatalogueClient
-from carton.core.config import Config, RegistryEntry
+from carton.core.config import Config, CatalogueEntry
 
 
 # ---- startup wiring -------------------------------------------------------
@@ -84,7 +84,7 @@ class TestFetchIconsArchive:
     def test_missing_archive_swallowed(self, tmp_path, monkeypatch):
         """A 404 / network error on icons.zip must not raise."""
         config = Config(install_dir=str(tmp_path / "install"))
-        entry = RegistryEntry("remote", "https://example.com/reg/catalogue.json")
+        entry = CatalogueEntry("remote", "https://example.com/reg/catalogue.json")
 
         def _raise(*args, **kwargs):
             raise RuntimeError("offline")
@@ -98,7 +98,7 @@ class TestFetchIconsArchive:
 
     def test_successful_fetch_extracts_into_cache_dir(self, tmp_path, monkeypatch):
         config = Config(install_dir=str(tmp_path / "install"))
-        entry = RegistryEntry("remote", "https://example.com/reg/catalogue.json")
+        entry = CatalogueEntry("remote", "https://example.com/reg/catalogue.json")
         zip_bytes = _build_icons_zip({
             "studio-icon.png": b"fakepng",
             "other.png": b"fake2",
@@ -120,7 +120,7 @@ class TestFetchIconsArchive:
     def test_corrupt_zip_swallowed(self, tmp_path, monkeypatch):
         """Garbage bytes shouldn't crash the fetch either."""
         config = Config(install_dir=str(tmp_path / "install"))
-        entry = RegistryEntry("remote", "https://example.com/reg/catalogue.json")
+        entry = CatalogueEntry("remote", "https://example.com/reg/catalogue.json")
 
         def _fake_urlopen(req, timeout=None):
             return _FakeResponse(b"not a zip at all")

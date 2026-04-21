@@ -111,7 +111,7 @@ class Publisher:
         Args:
             pkg_data: Entry from installed.json. May or may not already carry
                 a ``namespace`` field.
-            registry_entry: Target RegistryEntry to publish to. Local entries
+            registry_entry: Target CatalogueEntry to publish to. Local entries
                 are written to directly; remote entries are redirected to
                 their same-``registry_id`` local mirror (raises
                 :class:`RemoteMirrorMissingError` if no mirror exists).
@@ -255,7 +255,7 @@ class Publisher:
         return result
 
     def _resolve_publish_target(self, registry_entry):
-        """Return a writable LOCAL RegistryEntry to write into.
+        """Return a writable LOCAL CatalogueEntry to write into.
 
         Local entries pass through unchanged. Remote entries are resolved by
         ``registry_id`` to a same-id local mirror from ``self._config``. If
@@ -266,12 +266,12 @@ class Publisher:
         if not registry_entry.is_remote:
             return registry_entry
 
-        remote_id = registry_entry.registry_id
+        remote_id = registry_entry.catalogue_id
         if not remote_id:
             remote_id = self._probe_remote_registry_id(registry_entry)
             if remote_id:
                 # Cache on the live entry so subsequent calls don't re-probe.
-                registry_entry.registry_id = remote_id
+                registry_entry.catalogue_id = remote_id
 
         if not remote_id:
             raise RemoteMirrorMissingError(registry_entry, reason="no_remote_id")
@@ -459,7 +459,7 @@ class Publisher:
 
         registry["schema_version"] = REGISTRY_SCHEMA_VERSION
         registry_id, _ = stamp_registry_id(registry)
-        registry_entry.registry_id = registry_id
+        registry_entry.catalogue_id = registry_id
 
         now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
         warnings = []

@@ -4,7 +4,7 @@ Each section is a small QWidget that operates on a *target* object — either
 a live :class:`carton.core.config.Config` or a
 :class:`carton.core.profile.InstallerProfile`. Both expose the same
 attribute shape (``language``, ``proxy``, ``auto_check_updates``,
-``registries`` as a list of ``RegistryEntry``, plus ``add_registry`` /
+``registries`` as a list of ``CatalogueEntry``, plus ``add_registry`` /
 ``remove_registry`` helpers), so the section code is identical regardless
 of which one it edits.
 
@@ -282,7 +282,7 @@ class StrictVerifySection(QtWidgets.QWidget):
 class RegistriesSection(QtWidgets.QWidget):
     """Registry list editor — list + add/edit/remove + reorder buttons.
 
-    Operates on ``target.registries`` (list of RegistryEntry) via the
+    Operates on ``target.registries`` (list of CatalogueEntry) via the
     ``add_registry`` / ``remove_registry`` helpers both Config and
     InstallerProfile expose.
     """
@@ -415,11 +415,11 @@ class RegistriesSection(QtWidgets.QWidget):
         legacy_path = os.path.join(folder, LEGACY_REGISTRY_FILENAME)
 
         if os.path.exists(cat_path):
-            self._finish_add(cat_path, os.path.basename(folder), registry_id="")
+            self._finish_add(cat_path, os.path.basename(folder), catalogue_id="")
             return
         if os.path.exists(legacy_path):
             # CatalogueClient auto-migrates on first read; just register.
-            self._finish_add(legacy_path, os.path.basename(folder), registry_id="")
+            self._finish_add(legacy_path, os.path.basename(folder), catalogue_id="")
             return
 
         try:
@@ -436,7 +436,7 @@ class RegistriesSection(QtWidgets.QWidget):
         except Exception as e:
             QtWidgets.QMessageBox.warning(self, "Carton", str(e))
             return
-        self._finish_add(cat_path, os.path.basename(folder), registry_id=rid)
+        self._finish_add(cat_path, os.path.basename(folder), catalogue_id=rid)
 
     def _add_local(self):
         from carton.ui._registry_pairing import (
@@ -454,7 +454,7 @@ class RegistriesSection(QtWidgets.QWidget):
         if not rid and data is not None:
             rid = stamp_local_registry_with_prompt(self, path, data)
         default_name = os.path.basename(os.path.dirname(path))
-        self._finish_add(path, default_name, registry_id=rid)
+        self._finish_add(path, default_name, catalogue_id=rid)
 
     def _add_github(self):
         repo, ok = wide_input(self, "GitHub", t("settings_github_placeholder"))
@@ -512,7 +512,7 @@ class RegistriesSection(QtWidgets.QWidget):
             return
         from carton.ui._registry_pairing import probe_remote_registry_id
         rid = probe_remote_registry_id(resolved)
-        self._finish_add(resolved, repo.split("/")[1], registry_id=rid)
+        self._finish_add(resolved, repo.split("/")[1], catalogue_id=rid)
 
     def _try_register_single_package(self, base, repo):
         """Probe ``{base}/package.json`` and register into personal catalogue.
@@ -647,9 +647,9 @@ class RegistriesSection(QtWidgets.QWidget):
         if default_name in ("raw", "main", "master"):
             default_name = parts[-3] if len(parts) >= 3 else "remote"
         rid = probe_remote_registry_id(url)
-        self._finish_add(url, default_name, registry_id=rid)
+        self._finish_add(url, default_name, catalogue_id=rid)
 
-    def _finish_add(self, path, default_name="", registry_id=""):
+    def _finish_add(self, path, default_name="", catalogue_id=""):
         from carton.ui._registry_pairing import (
             DuplicateRegistryChoice,
             find_duplicate_entry,
@@ -658,10 +658,10 @@ class RegistriesSection(QtWidgets.QWidget):
 
         # UUID-based duplicate detection: catches "same registry under a
         # different alias" before asking the user for a name. Falls back
-        # silently when neither side has a registry_id — the legacy
+        # silently when neither side has a catalogue_id — the legacy
         # name-based check below still guards.
         existing = find_duplicate_entry(
-            self._target.registries, registry_id, path,
+            self._target.registries, catalogue_id, path,
         )
         if existing is not None:
             choice = resolve_duplicate_registry(self, existing)
@@ -682,7 +682,7 @@ class RegistriesSection(QtWidgets.QWidget):
                     self, "Carton", t("settings_already_exists", name),
                 )
                 return
-        self._target.add_registry(name, path, registry_id=registry_id)
+        self._target.add_registry(name, path, catalogue_id=catalogue_id)
         self._persist()
         self._list.addItem(str(self._target.registries[-1]))
 
@@ -730,8 +730,8 @@ class RegistriesSection(QtWidgets.QWidget):
             new_path = path_input.text().strip()
             if not new_name or not new_path:
                 return
-            from carton.core.config import RegistryEntry
-            self._target.registries[row] = RegistryEntry(new_name, new_path)
+            from carton.core.config import CatalogueEntry
+            self._target.registries[row] = CatalogueEntry(new_name, new_path)
             self._persist()
             self._refresh()
             self._list.setCurrentRow(row)

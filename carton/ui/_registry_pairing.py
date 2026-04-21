@@ -39,7 +39,7 @@ def probe_remote_registry_id(url, timeout=15):
     """One-off HTTP GET to a URL; return the registry_id it exposes.
 
     Any network / parse error yields ``""``. No retry, no caching — callers
-    that need persistence should store the result on a RegistryEntry.
+    that need persistence should store the result on a CatalogueEntry.
     """
     try:
         req = Request(url)
@@ -130,7 +130,7 @@ def find_duplicate_entry(registries, rid, new_path, ignore=None):
             continue
         if normalized and entry.path == normalized:
             continue
-        entry_rid = getattr(entry, "registry_id", "")
+        entry_rid = getattr(entry, "catalogue_id", "")
         if entry_rid and entry_rid == rid:
             return entry
     return None
@@ -139,7 +139,7 @@ def find_duplicate_entry(registries, rid, new_path, ignore=None):
 def resolve_duplicate_registry(parent, existing_entry):
     """Ask the user what to do when a registry is already known.
 
-    ``existing_entry`` is the matched :class:`RegistryEntry`. Returns one
+    ``existing_entry`` is the matched :class:`CatalogueEntry`. Returns one
     of the :class:`DuplicateRegistryChoice` constants.
     """
     box = QtWidgets.QMessageBox(parent)
@@ -163,7 +163,7 @@ def resolve_duplicate_registry(parent, existing_entry):
 
 
 def normalize_registry_path(path):
-    """Mirror ``RegistryEntry``'s path normalisation for comparisons."""
+    """Mirror ``CatalogueEntry``'s path normalisation for comparisons."""
     if path.startswith(("http://", "https://")):
         return path
     return os.path.normpath(path)

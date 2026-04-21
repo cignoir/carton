@@ -53,7 +53,7 @@ class CatalogueClient(object):
     Args:
         config: :class:`carton.core.config.Config`. We read
             ``config.registries`` as the list of catalogue entries
-            (still named ``RegistryEntry`` in Phase A).
+            (a :class:`~carton.core.config.CatalogueEntry`).
         cache: Optional :class:`SourceCache`. Defaults to one rooted at
             ``~/.carton/source_cache/``. Tests pass a temp dir.
     """
@@ -114,7 +114,7 @@ class CatalogueClient(object):
     def _load_personal_catalogue(self):
         """Fold personal catalogue packages into the merged dict.
 
-        Builds a synthetic :class:`RegistryEntry` with ``name="Personal"``
+        Builds a synthetic :class:`CatalogueEntry` with ``name="Personal"``
         and an empty path so the existing :meth:`_merge_catalogue` path
         can consume it without special-casing. ``is_remote`` becomes
         False (the store lives under ``~/.carton/``), which is the
@@ -123,7 +123,7 @@ class CatalogueClient(object):
         local catalogues can match on ``_registry_name == 'Personal'``
         or on the fixed virtual entry path.
         """
-        from carton.core.config import RegistryEntry
+        from carton.core.config import CatalogueEntry
         from carton.core.personal_catalogue import (
             PERSONAL_DISPLAY_NAME,
             PersonalCatalogue,
@@ -137,10 +137,10 @@ class CatalogueClient(object):
         if not cat.packages:
             return
 
-        virtual = RegistryEntry(
+        virtual = CatalogueEntry(
             name=PERSONAL_DISPLAY_NAME,
             path="",
-            registry_id=cat.catalogue_id,
+            catalogue_id=cat.catalogue_id,
         )
         self._merge_catalogue(virtual, cat.to_dict(), base_dir="")
 
@@ -280,21 +280,20 @@ class CatalogueClient(object):
     def _cache_catalogue_id(entry, data):
         """Mirror ``catalogue_id`` from the loaded data onto the entry.
 
-        Uses :func:`read_registry_id` (the v4.0 helper) since UUID format
-        validation is identical between registry_id and catalogue_id.
-        Stored on ``entry.registry_id`` for now so existing UI code that
-        keys off that attribute keeps working.
+        Uses :func:`read_registry_id` (UUID format validation) by passing
+        the value through a temporary ``registry_id``-keyed dict — the
+        helper itself is concerned only with UUID shape, not naming.
         """
         cid = read_registry_id({"registry_id": data.get("catalogue_id", "")})
         if cid:
-            entry.registry_id = cid
+            entry.catalogue_id = cid
 
     # ---- merge logic ---------------------------------------------------
 
     def _merge_catalogue(self, entry, data, base_dir):
         is_remote = entry.is_remote
         catalogue_name = entry.name
-        catalogue_id = getattr(entry, "registry_id", "") or ""
+        catalogue_id = getattr(entry, "catalogue_id", "") or ""
         for pkg_id, pkg_data in (data.get("packages") or {}).items():
             if pkg_id in self._packages:
                 # First catalogue wins — same dedupe rule as v0.4.
@@ -366,7 +365,7 @@ class CatalogueClient(object):
             item["versions"] = {}
 
         item["_registry_name"] = entry.name
-        item["_registry_id"] = getattr(entry, "registry_id", "")
+        item["_registry_id"] = getattr(entry, "catalogue_id", "")
         item["_registry_base_dir"] = base_dir
         item["_registry_remote"] = is_remote
         item["_origin"] = origin.to_dict()

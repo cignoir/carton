@@ -22,7 +22,7 @@ overwriting an existing config.
 import json
 import os
 
-from carton.core.config import RegistryEntry
+from carton.core.config import CatalogueEntry
 from carton.core.registry_id import is_valid_registry_id
 
 
@@ -62,17 +62,17 @@ class InstallerProfile:
         github_repo="cignoir/carton",
         proxy="",
     ):
-        # Use RegistryEntry so the shared settings widgets can treat
+        # Use CatalogueEntry so the shared settings widgets can treat
         # Config and InstallerProfile interchangeably.
         self.registries = []
         for r in registries or []:
-            if isinstance(r, RegistryEntry):
+            if isinstance(r, CatalogueEntry):
                 self.registries.append(r)
             else:
-                self.registries.append(RegistryEntry(
+                self.registries.append(CatalogueEntry(
                     name=r.get("name", ""),
                     path=r.get("path", ""),
-                    registry_id=r.get("registry_id", ""),
+                    catalogue_id=r.get("catalogue_id", ""),
                 ))
         self.language = language
         self.auto_check_updates = bool(auto_check_updates)
@@ -81,8 +81,8 @@ class InstallerProfile:
 
     # ---- mutation helpers (mirror Config so widgets can call either) ----
 
-    def add_registry(self, name, path, registry_id=""):
-        self.registries.append(RegistryEntry(name, path, registry_id))
+    def add_registry(self, name, path, catalogue_id=""):
+        self.registries.append(CatalogueEntry(name, path, catalogue_id))
 
     def remove_registry(self, name):
         self.registries = [r for r in self.registries if r.name != name]
@@ -125,9 +125,9 @@ class InstallerProfile:
         """
         return cls(
             registries=[
-                RegistryEntry(
+                CatalogueEntry(
                     name=r.name, path=r.path,
-                    registry_id=getattr(r, "registry_id", ""),
+                    catalogue_id=getattr(r, "catalogue_id", ""),
                 )
                 for r in getattr(config, "registries", []) or []
             ],
@@ -192,23 +192,20 @@ class InstallerProfile:
                 raise InvalidProfileError(
                     "{}[{}].path is required".format(list_key, i)
                 )
-            # Accept either id key on the inner entry too. catalogue_id
-            # wins only if registry_id isn't present — matches the
-            # precedence in RegistryEntry.__init__ so there's one rule.
-            rid_raw = entry.get("registry_id", "") or entry.get("catalogue_id", "")
-            registry_id = rid_raw or ""
-            if registry_id:
-                if not isinstance(registry_id, str):
+            cid_raw = entry.get("catalogue_id", "")
+            catalogue_id = cid_raw or ""
+            if catalogue_id:
+                if not isinstance(catalogue_id, str):
                     raise InvalidProfileError(
-                        "{}[{}].registry_id must be a string".format(list_key, i)
+                        "{}[{}].catalogue_id must be a string".format(list_key, i)
                     )
-                if not is_valid_registry_id(registry_id):
+                if not is_valid_registry_id(catalogue_id):
                     raise InvalidProfileError(
-                        "{}[{}].registry_id must be a UUID".format(list_key, i)
+                        "{}[{}].catalogue_id must be a UUID".format(list_key, i)
                     )
-                registry_id = registry_id.strip().lower()
+                catalogue_id = catalogue_id.strip().lower()
             normalized.append({
-                "name": name, "path": path, "registry_id": registry_id,
+                "name": name, "path": path, "catalogue_id": catalogue_id,
             })
 
         language = data.get("language", "auto")

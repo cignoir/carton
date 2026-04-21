@@ -48,86 +48,48 @@ class InstallDirChangeError(RuntimeError):
     """Raised when switching install_dir fails (validation or move error)."""
 
 
-class RegistryEntry:
-    """Registry / catalogue configuration entry.
+class CatalogueEntry:
+    """v5.0 catalogue configuration entry.
 
-    ``registry_id`` is a client-side cache of the UUID stored inside the
-    registry's ``registry.json`` (or, under v5.0, the ``catalogue_id`` of
-    its ``catalogue.json``). It is populated on fetch (see
+    ``catalogue_id`` is a client-side cache of the UUID stored inside the
+    catalogue's ``catalogue.json``. It is populated on fetch (see
     :class:`carton.core.catalogue_client.CatalogueClient`) and persisted
     alongside ``name`` / ``path`` so duplicate detection can work before
     the first network round trip. Empty means "not yet known" — the
     hosted file is always the source of truth.
-
-    v5.0 transition: the class is additionally exposed at module scope
-    as :class:`CatalogueEntry`, and carries a :attr:`catalogue_id`
-    property that mirrors :attr:`registry_id`. Both names refer to the
-    same underlying storage — callers can migrate to the new vocabulary
-    at their own pace without breaking the old one. The ``catalogue_id``
-    kwarg on :meth:`from_dict` is accepted too so config.json files
-    written by a future v0.5+ UI already round-trip cleanly through an
-    older reader.
     """
 
-    def __init__(self, name, path, registry_id="", catalogue_id=""):
+    def __init__(self, name, path, catalogue_id=""):
         self.name = name
         self.path = path if _is_url(path) else os.path.normpath(path)
-        # Precedence: explicit registry_id wins if both are passed,
-        # since every live call site in the code still uses that name.
-        # The catalogue_id kwarg is purely a forward-compat seam for
-        # profile/config files written after the rename lands.
-        rid = registry_id or catalogue_id or ""
-        self.registry_id = rid.strip().lower()
-
-    @property
-    def catalogue_id(self):
-        """v5.0 alias for :attr:`registry_id` — same storage, new name.
-
-        Reads return whatever ``registry_id`` currently holds. Writes go
-        through the same normalisation (lowercase + strip) so either
-        name is safe to set from callers that have already adopted the
-        v5.0 vocabulary.
-        """
-        return self.registry_id
-
-    @catalogue_id.setter
-    def catalogue_id(self, value):
-        self.registry_id = (value or "").strip().lower()
+        self.catalogue_id = (catalogue_id or "").strip().lower()
 
     def to_dict(self):
         d = {"name": self.name, "path": self.path}
-        if self.registry_id:
-            # v5.0 dual-emit: write both legacy (registry_id) and the
-            # v5.0 key (catalogue_id) so a v0.4.x reader still resolves
-            # identity and a v0.5.x reader sees the new vocabulary. The
-            # values are identical — same underlying storage. Step 4-C
-            # (post v0.5.0 rollout) drops the legacy key.
-            d["registry_id"] = self.registry_id
-            d["catalogue_id"] = self.registry_id
+        if self.catalogue_id:
+            d["catalogue_id"] = self.catalogue_id
         return d
 
     @classmethod
     def from_dict(cls, d):
-        # Accept both key names. Both the pre-v5.0 writer (registry_id
-        # only) and the dual-emit writer (registry_id + catalogue_id
-        # both present) deserialise cleanly — ``registry_id`` wins when
-        # both are there since they point at the same storage anyway.
         return cls(
             name=d.get("name", ""),
             path=d.get("path", ""),
-            registry_id=d.get("registry_id", "") or d.get("catalogue_id", ""),
+            catalogue_id=d.get("catalogue_id", ""),
         )
 
     def to_home_meta(self):
-        """Build a ``home_registry`` payload for embedding in package metadata.
+        """Build a legacy ``home_registry`` payload for embedding in package metadata.
 
         Single source of truth so publisher / script_manager / UI never
-        construct home_registry dicts ad hoc — that's how the
-        ``registry_id`` field used to drift between encode sites.
+        construct home_registry dicts ad hoc. The output field name
+        ``registry_id`` reflects the on-wire ``home_registry`` shape that
+        v0.4.x consumers expect; v5.0 emitters should prefer
+        :meth:`to_home_origin_meta`.
         """
         meta = {"name": self.name}
-        if self.registry_id:
-            meta["registry_id"] = self.registry_id
+        if self.catalogue_id:
+            meta["registry_id"] = self.catalogue_id
         # An empty path normalises to "." via os.path.normpath in __init__;
         # treat that as "no hint" so the meta dict stays minimal.
         if self.path and self.path != ".":
@@ -145,15 +107,10 @@ class RegistryEntry:
         ``{"type": "embedded", "catalogue_name": ..., "catalogue_id": ...,
         "hint": ...}``. Github/url origins construct their own payload at
         publish time and never go through this helper.
-
-        Kept alongside ``to_home_meta`` for the alias period so consumers
-        migrate one call site at a time; callers that have flipped to the
-        v5.0 vocabulary get the new shape, and older callers keep
-        receiving the legacy one.
         """
         meta = {"type": "embedded", "catalogue_name": self.name}
-        if self.registry_id:
-            meta["catalogue_id"] = self.registry_id
+        if self.catalogue_id:
+            meta["catalogue_id"] = self.catalogue_id
         if self.path and self.path != ".":
             meta["hint"] = self.path
         return meta
@@ -163,29 +120,20 @@ class RegistryEntry:
 
     @property
     def is_remote(self):
-        """True if the registry is a remote URL."""
+        """True if the catalogue is a remote URL."""
         return _is_url(self.path)
 
     @property
     def base_dir(self):
         """Base directory or URL for relative path resolution.
 
-        For local: parent directory of registry.json
-        For remote: parent URL of registry.json
+        For local: parent directory of catalogue.json
+        For remote: parent URL of catalogue.json
         """
         if self.is_remote:
-            # "https://example.com/registry/registry.json" -> "https://example.com/registry/"
+            # "https://example.com/registry/catalogue.json" -> "https://example.com/registry/"
             return self.path.rsplit("/", 1)[0] + "/"
         return os.path.dirname(os.path.normpath(self.path))
-
-
-# v5.0 name for :class:`RegistryEntry`. Identity assignment — both names
-# refer to the exact same class object, so ``isinstance(x, CatalogueEntry)``
-# and ``isinstance(x, RegistryEntry)`` are interchangeable. Consumers can
-# migrate to the new name as the surrounding code is touched; keeping both
-# names working avoids a flag-day rename that would be impossible to land
-# atomically across UI + core + tests.
-CatalogueEntry = RegistryEntry
 
 
 class Config:
@@ -214,12 +162,12 @@ class Config:
         # auto_check_updates) are persisted to the profile file too, so
         # switching profiles restores those values.
         self.active_profile = active_profile
-        # When True, refuse to install any package whose registry entry
+        # When True, refuse to install any package whose catalogue entry
         # lacks a sha256, and treat hash mismatches as fatal (default
         # downloader already raises on mismatch). On by default — every
-        # zip Carton publishes carries a sha256, so the only registries
+        # zip Carton publishes carries a sha256, so the only catalogues
         # this affects are very old or hand-rolled ones. Disable in
-        # Settings if you need to install from such a registry.
+        # Settings if you need to install from such a catalogue.
         self.strict_verify = bool(strict_verify)
         # User-facing ordering of profiles in the sidebar dropdown.
         # Names not in this list (newly created profiles, or profiles
@@ -241,17 +189,8 @@ class Config:
         if os.path.exists(path):
             with open(path, "r", encoding="utf-8") as f:
                 data = json.load(f)
-            # v5.0 reader: accept either top-level key. Our own writer
-            # dual-emits both, but a future Step 4-C writer may drop the
-            # legacy ``registries`` in favour of ``catalogues`` only, and
-            # we want today's reader to already handle that file. Same
-            # precedence as the dict-level rule in
-            # :meth:`RegistryEntry.from_dict` — legacy wins when both
-            # are present, since they point at the same list anyway.
-            entries_raw = data.get("registries")
-            if entries_raw is None:
-                entries_raw = data.get("catalogues", [])
-            registries = [RegistryEntry.from_dict(r) for r in entries_raw]
+            entries_raw = data.get("registries", [])
+            registries = [CatalogueEntry.from_dict(r) for r in entries_raw]
             cfg = cls(
                 registries=registries,
                 install_dir=data.get("install_dir", _DEFAULT_INSTALL_DIR),
@@ -282,7 +221,7 @@ class Config:
         ``"default"`` name. If the corresponding profile file is missing
         (first run, or the user is upgrading from a pre-profile build),
         seed it from the current snapshot so the user's existing
-        registries become the default profile's contents.
+        catalogues become the default profile's contents.
         """
         try:
             from carton.core import profile_store
@@ -333,7 +272,7 @@ class Config:
         if path is None:
             path = default_config_path()
         # Diagnostic: log every canonical save with caller info so we can
-        # track down phantom writes that clobber the user's registries.
+        # track down phantom writes that clobber the user's catalogues.
         if is_canonical:
             try:
                 import traceback
@@ -456,16 +395,8 @@ class Config:
             )
 
     def to_dict(self):
-        # v5.0 dual-emit: write both the legacy ``registries`` array and
-        # the v5.0 ``catalogues`` array (same dicts), so a v0.4.x reader
-        # finds the old key and a v0.5.x reader sees the new name. Both
-        # lists share entry dicts that themselves carry ``registry_id``
-        # and ``catalogue_id`` via :meth:`RegistryEntry.to_dict`. Step
-        # 4-C (post v0.5.0 rollout) drops the legacy ``registries`` key.
-        entries = [r.to_dict() for r in self.registries]
         return {
-            "registries": entries,
-            "catalogues": entries,
+            "registries": [r.to_dict() for r in self.registries],
             "install_dir": self.install_dir,
             "auto_check_updates": self.auto_check_updates,
             "github_repo": self.github_repo,
@@ -484,9 +415,9 @@ class Config:
         profiles via the UI.
         """
         self.registries = [
-            RegistryEntry(
+            CatalogueEntry(
                 name=r.name, path=r.path,
-                registry_id=getattr(r, "registry_id", ""),
+                catalogue_id=getattr(r, "catalogue_id", ""),
             )
             for r in profile.registries
         ]
@@ -512,41 +443,41 @@ class Config:
         os.environ["http_proxy"] = self.proxy
         os.environ["https_proxy"] = self.proxy
 
-    def add_registry(self, name, path, registry_id=""):
-        """Add a registry."""
-        self.registries.append(RegistryEntry(name, path, registry_id))
+    def add_registry(self, name, path, catalogue_id=""):
+        """Add a catalogue entry."""
+        self.registries.append(CatalogueEntry(name, path, catalogue_id))
 
     def remove_registry(self, name):
-        """Remove a registry by name."""
+        """Remove a catalogue entry by name."""
         self.registries = [r for r in self.registries if r.name != name]
 
-    def find_registry_by_id(self, registry_id):
-        """Return the first RegistryEntry whose ``registry_id`` matches, or None.
+    def find_registry_by_id(self, catalogue_id):
+        """Return the first CatalogueEntry whose ``catalogue_id`` matches, or None.
 
         Matches local and remote entries alike — callers that need a
         writable target should use :meth:`find_local_mirror` instead.
         """
-        if not registry_id:
+        if not catalogue_id:
             return None
-        rid = registry_id.strip().lower()
+        cid = catalogue_id.strip().lower()
         for entry in self.registries:
-            if entry.registry_id and entry.registry_id == rid:
+            if entry.catalogue_id and entry.catalogue_id == cid:
                 return entry
         return None
 
-    def find_local_mirror(self, registry_id):
-        """Return the first LOCAL RegistryEntry with the given id, or None.
+    def find_local_mirror(self, catalogue_id):
+        """Return the first LOCAL CatalogueEntry with the given id, or None.
 
         Used by :class:`carton.core.publisher.Publisher` to route a publish
         against a remote entry to its writable local counterpart.
         """
-        if not registry_id:
+        if not catalogue_id:
             return None
-        rid = registry_id.strip().lower()
+        cid = catalogue_id.strip().lower()
         for entry in self.registries:
             if entry.is_remote:
                 continue
-            if entry.registry_id and entry.registry_id == rid:
+            if entry.catalogue_id and entry.catalogue_id == cid:
                 return entry
         return None
 

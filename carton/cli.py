@@ -31,11 +31,11 @@ def _list_packages(args):
 
 def _unpublish(args):
     """Force-unpublish a package from a registry."""
-    from carton.core.config import RegistryEntry
+    from carton.core.config import CatalogueEntry
     from carton.core.config import Config
     from carton.core.publisher import Publisher
 
-    reg_entry = RegistryEntry(name="cli", path=args.registry)
+    reg_entry = CatalogueEntry(name="cli", path=args.registry)
     config = Config(registries=[reg_entry])
     publisher = Publisher(config)
 

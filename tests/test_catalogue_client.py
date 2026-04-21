@@ -8,7 +8,7 @@ import pytest
 
 from carton.core import github_api
 from carton.core.catalogue_client import CatalogueClient
-from carton.core.config import Config, RegistryEntry
+from carton.core.config import Config, CatalogueEntry
 from carton.core.migrations import (
     CATALOGUE_FILENAME,
     CATALOGUE_SCHEMA_VERSION,

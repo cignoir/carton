@@ -215,8 +215,8 @@ class _PublishTargetDialog(QtWidgets.QDialog):
         if not entry.is_remote:
             return entry.name, entry.path
         mirror = None
-        if entry.registry_id:
-            mirror = self._config.find_local_mirror(entry.registry_id)
+        if entry.catalogue_id:
+            mirror = self._config.find_local_mirror(entry.catalogue_id)
         if mirror is not None:
             label = "{} → {}".format(entry.name, mirror.name)
             return label, t("publish_mirrors_to", mirror.name, mirror.path)
@@ -612,9 +612,9 @@ class CartonWindow(QtWidgets.QDialog):
         # Decide the id to stamp — either inherit the remote's (pairing
         # intent) or mint a fresh one.
         if paired_remote is not None:
-            rid = paired_remote.registry_id or probe_remote_registry_id(paired_remote.path)
+            rid = paired_remote.catalogue_id or probe_remote_registry_id(paired_remote.path)
             if rid:
-                paired_remote.registry_id = rid
+                paired_remote.catalogue_id = rid
             else:
                 rid = new_registry_id()
                 # Remote doesn't expose an id — the user will need to
@@ -676,12 +676,12 @@ class CartonWindow(QtWidgets.QDialog):
             with open(cat_path, "w", encoding="utf-8") as f:
                 json.dump(data, f, indent=2, ensure_ascii=False)
 
-        self._config.add_registry(name, cat_path, registry_id=rid)
+        self._config.add_registry(name, cat_path, catalogue_id=rid)
         self._config.save()
         return self._config.registries[-1]
 
     def _add_existing_registry(self, paired_remote=None):
-        """Browse for an existing registry.json. Returns the RegistryEntry or None."""
+        """Browse for an existing registry.json. Returns the CatalogueEntry or None."""
         from carton.ui._registry_pairing import (
             DuplicateRegistryChoice,
             find_duplicate_entry,
@@ -713,8 +713,8 @@ class CartonWindow(QtWidgets.QDialog):
             if choice == DuplicateRegistryChoice.CANCEL:
                 return None
             if choice == DuplicateRegistryChoice.USE_EXISTING:
-                if paired_remote is not None and not paired_remote.registry_id:
-                    paired_remote.registry_id = rid
+                if paired_remote is not None and not paired_remote.catalogue_id:
+                    paired_remote.catalogue_id = rid
                     self._config.save()
                 return existing
 
@@ -727,9 +727,9 @@ class CartonWindow(QtWidgets.QDialog):
         if not ok or not name:
             return None
 
-        self._config.add_registry(name, path, registry_id=rid)
-        if paired_remote is not None and rid and not paired_remote.registry_id:
-            paired_remote.registry_id = rid
+        self._config.add_registry(name, path, catalogue_id=rid)
+        if paired_remote is not None and rid and not paired_remote.catalogue_id:
+            paired_remote.catalogue_id = rid
         self._config.save()
         return self._config.registries[-1]
 
@@ -1560,7 +1560,7 @@ class CartonWindow(QtWidgets.QDialog):
     def _pick_publish_target(self, pkg_data):
         """Show the publish-target dialog. Returns ``(kind, payload)`` or None.
 
-        * ``("embedded", RegistryEntry)`` for catalogue publishes
+        * ``("embedded", CatalogueEntry)`` for catalogue publishes
         * ``("github", "owner/repo")`` for GitHub Release publishes
 
         Returns None when the user cancelled. The GitHub branch prompts
@@ -1620,7 +1620,7 @@ class CartonWindow(QtWidgets.QDialog):
         home_meta = pkg_data.get("home_registry") or {}
         home_name = home_meta.get("name", "")
         home_id = home_meta.get("registry_id", "")
-        target_id = getattr(target_registry, "registry_id", "")
+        target_id = getattr(target_registry, "catalogue_id", "")
 
         if home_id and target_id:
             if home_id == target_id:
@@ -1733,7 +1733,7 @@ class CartonWindow(QtWidgets.QDialog):
                             release_notes, embed_source_path):
         """Execute a GitHub Release publish and reflect the result.
 
-        Unlike :meth:`_run_publish`, there's no Config-level RegistryEntry
+        Unlike :meth:`_run_publish`, there's no Config-level CatalogueEntry
         involved — the github origin is purely descriptive. On success we
         stamp ``home_origin = {"type":"github","repo":repo}`` into
         installed.json so a subsequent publish defaults to the same repo.

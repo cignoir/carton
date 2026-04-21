@@ -11,11 +11,11 @@ Covers:
 * Round-trip through installed.json
   (``to_installed_dict`` → ``from_installed_entry``) preserves both
   fields verbatim for embedded, github, url, and local variants.
-* :meth:`RegistryEntry.to_home_origin_meta` produces the v5.0 embedded
+* :meth:`CatalogueEntry.to_home_origin_meta` produces the v5.0 embedded
   payload shape (``type``/``catalogue_name``/``catalogue_id``/``hint``).
 """
 
-from carton.core.config import CatalogueEntry, RegistryEntry
+from carton.core.config import CatalogueEntry, CatalogueEntry
 from carton.models.package_info import PackageInfo
 
 
@@ -150,7 +150,7 @@ class TestCatalogueEntryHomeOriginMeta:
         entry = CatalogueEntry(
             name="studio-main",
             path="/studio/registry/catalogue.json",
-            registry_id=_UUID,
+            catalogue_id=_UUID,
         )
         meta = entry.to_home_origin_meta()
         assert meta["type"] == "embedded"
@@ -162,7 +162,7 @@ class TestCatalogueEntryHomeOriginMeta:
         entry = CatalogueEntry(
             name="public",
             path="https://example.com/registry/catalogue.json",
-            registry_id=_UUID,
+            catalogue_id=_UUID,
         )
         meta = entry.to_home_origin_meta()
         assert meta["hint"] == "https://example.com/registry/catalogue.json"
@@ -176,17 +176,17 @@ class TestCatalogueEntryHomeOriginMeta:
 
     def test_empty_path_omits_hint(self):
         """Same normalisation rule as to_home_meta — ``.`` means no hint."""
-        entry = CatalogueEntry(name="studio-main", path="", registry_id=_UUID)
+        entry = CatalogueEntry(name="studio-main", path="", catalogue_id=_UUID)
         meta = entry.to_home_origin_meta()
         assert "hint" not in meta
 
     def test_registry_entry_alias_emits_same_payload(self):
-        """CatalogueEntry and RegistryEntry are the same class — helper
+        """CatalogueEntry and CatalogueEntry are the same class — helper
         works through either name."""
-        entry = RegistryEntry(
+        entry = CatalogueEntry(
             name="studio-main",
             path="/studio/registry/catalogue.json",
-            registry_id=_UUID,
+            catalogue_id=_UUID,
         )
         meta = entry.to_home_origin_meta()
         assert meta["type"] == "embedded"
