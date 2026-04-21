@@ -7,7 +7,6 @@ publishes by a different author trigger a warning (returned in the result dict)
 but are not blocked.
 """
 
-import hashlib
 import json
 import os
 import shutil
@@ -16,6 +15,13 @@ from datetime import datetime, timezone
 
 from carton.compat_urllib import urlopen, Request, URLError
 from carton.core import gh_cli as _default_gh_cli
+from carton.core.catalogue_icons import (
+    copy_icon_to_catalogue,
+    is_icon_file,
+    normalise_icon_for_storage,
+    rebuild_icons_archive,
+)
+from carton.core.hash_verify import compute_sha256
 from carton.core.identity import (
     InvalidIdentityError,
     make_pkg_id,
@@ -196,7 +202,7 @@ class Publisher:
             embed_source_path=embed_source_path,
         )
 
-        sha256 = self._compute_sha256(zip_path)
+        sha256 = compute_sha256(zip_path)
         size_bytes = os.path.getsize(zip_path)
 
         # 2. Copy zip to catalogue directory: packages/<namespace>/<name>/<version>/
@@ -216,9 +222,9 @@ class Publisher:
         # 3. Copy icon file to catalogue icons/ directory.
         # Preserve the original filename so consumers can fetch it verbatim.
         stored_icon = icon
-        if self._is_icon_file(icon):
+        if is_icon_file(icon):
             icon_basename = os.path.basename(icon)
-            self._copy_icon_to_catalogue(icon, icon_basename, catalogue_base)
+            copy_icon_to_catalogue(icon, icon_basename, catalogue_base)
             stored_icon = icon_basename
 
         # 4. Update catalogue.json + rebuild icons.zip
@@ -430,7 +436,7 @@ class Publisher:
             "author": author,
             "maya_versions": list(maya_versions) if maya_versions else list(_DEFAULT_MAYA_VERSIONS),
             "entry_point": entry_point,
-            "icon": self._normalise_icon_for_storage(icon),
+            "icon": normalise_icon_for_storage(icon),
         }
         if embed_source_path:
             # Absolute path of the source files at publish time. The
@@ -547,7 +553,7 @@ class Publisher:
         if entry_point:
             entry["entry_point"] = entry_point
 
-        normalised_icon = self._normalise_icon_for_storage(icon)
+        normalised_icon = normalise_icon_for_storage(icon)
         if normalised_icon is not None and normalised_icon != "":
             entry["icon"] = normalised_icon
         else:
@@ -571,7 +577,7 @@ class Publisher:
         with open(out_path, "w", encoding="utf-8") as f:
             json.dump(catalogue, f, indent=2, ensure_ascii=False)
 
-        self._rebuild_icons_archive(catalogue_entry.base_dir)
+        rebuild_icons_archive(catalogue_entry.base_dir)
         return warnings
 
     def _persist_identity_to_source(self, local_path, namespace, name, is_folder,
@@ -708,7 +714,7 @@ class Publisher:
             include_compiled=include_compiled,
             embed_source_path=embed_source_path,
         )
-        sha256 = self._compute_sha256(zip_path)
+        sha256 = compute_sha256(zip_path)
 
         zip_name = os.path.basename(zip_path)
         sums_path = os.path.join(os.path.dirname(zip_path), "SHA256SUMS")
@@ -838,59 +844,3 @@ class Publisher:
             except (json.JSONDecodeError, OSError):
                 continue
         return results
-
-    @staticmethod
-    def _is_icon_file(icon):
-        """Return True if icon value is an existing image file path."""
-        return (isinstance(icon, str)
-                and icon.endswith((".png", ".jpg", ".svg"))
-                and os.path.isabs(icon)
-                and os.path.exists(icon))
-
-    @staticmethod
-    def _normalise_icon_for_storage(icon):
-        """Coerce an icon value into the on-disk shape (string | null).
-
-        * Empty string / None → ``None`` (omit field).
-        * File path → basename (the publisher copies the file to the
-          catalogue's ``icons/`` directory verbatim).
-        * Anything else (emoji, ``"@auto"``, bare filename) → as-is.
-        """
-        if icon is None or icon == "":
-            return None
-        if Publisher._is_icon_file(icon):
-            return os.path.basename(icon)
-        return icon
-
-    @staticmethod
-    def _copy_icon_to_catalogue(icon_path, dest_filename, catalogue_base):
-        """Copy an icon file to the catalogue's ``icons/`` directory verbatim.
-
-        ``dest_filename`` is the basename to use in the catalogue; passing
-        the original basename keeps the author's filename instead of
-        forcing ``<name>.png``.
-        """
-        icons_dir = os.path.join(catalogue_base, "icons")
-        os.makedirs(icons_dir, exist_ok=True)
-        dest = os.path.join(icons_dir, dest_filename)
-        shutil.copy2(icon_path, dest)
-
-    def _rebuild_icons_archive(self, catalogue_base):
-        """Rebuild icons.zip from all PNGs in the icons/ directory."""
-        icons_dir = os.path.join(catalogue_base, "icons")
-        if not os.path.isdir(icons_dir):
-            return
-        pngs = [f for f in os.listdir(icons_dir) if f.lower().endswith(".png")]
-        if not pngs:
-            return
-        archive_path = os.path.join(catalogue_base, "icons.zip")
-        with zipfile.ZipFile(archive_path, "w", zipfile.ZIP_DEFLATED) as zf:
-            for png in pngs:
-                zf.write(os.path.join(icons_dir, png), png)
-
-    def _compute_sha256(self, file_path):
-        sha = hashlib.sha256()
-        with open(file_path, "rb") as f:
-            for chunk in iter(lambda: f.read(8192), b""):
-                sha.update(chunk)
-        return sha.hexdigest()
