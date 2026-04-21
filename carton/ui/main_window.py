@@ -1011,8 +1011,8 @@ class CartonWindow(QtWidgets.QDialog):
         if not icon_filename:
             return None
 
-        base_dir = pkg_data.get("_registry_base_dir", "")
-        is_remote = pkg_data.get("_registry_remote", False)
+        base_dir = pkg_data.get("_catalogue_base_dir", "")
+        is_remote = pkg_data.get("_catalogue_remote", False)
         if not base_dir:
             return None
         if is_remote:
@@ -1280,8 +1280,8 @@ class CartonWindow(QtWidgets.QDialog):
         icon_path = self._resolve_icon_path(pkg_data)
         if not icon_path:
             icon_filename = _icon_filename(pkg_data)
-            base_dir = pkg_data.get("_registry_base_dir", "")
-            is_remote = pkg_data.get("_registry_remote", False)
+            base_dir = pkg_data.get("_catalogue_base_dir", "")
+            is_remote = pkg_data.get("_catalogue_remote", False)
             if icon_filename and is_remote and base_dir:
                 icon_fetch_tasks.append((pkg_id, base_dir, icon_filename))
 

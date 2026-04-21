@@ -120,7 +120,7 @@ class CatalogueClient(object):
         False (the store lives under ``~/.carton/``), which is the
         honest answer — personal packages don't come from a subscribed
         URL. Consumers that want to distinguish personal from other
-        local catalogues can match on ``_registry_name == 'Personal'``
+        local catalogues can match on ``_catalogue_name == 'Personal'``
         or on the fixed virtual entry path.
         """
         from carton.core.config import CatalogueEntry
@@ -359,10 +359,10 @@ class CatalogueClient(object):
         else:
             item["versions"] = {}
 
-        item["_registry_name"] = entry.name
-        item["_registry_id"] = getattr(entry, "catalogue_id", "")
-        item["_registry_base_dir"] = base_dir
-        item["_registry_remote"] = is_remote
+        item["_catalogue_name"] = entry.name
+        item["_catalogue_id"] = getattr(entry, "catalogue_id", "")
+        item["_catalogue_base_dir"] = base_dir
+        item["_catalogue_remote"] = is_remote
         item["_origin"] = origin.to_dict()
         return item
 

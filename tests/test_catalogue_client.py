@@ -76,8 +76,8 @@ class TestCatalogueClientEmbedded:
             os.path.normpath("packages/test/tool/1.0.0/tool-1.0.0.zip")
         )
         assert pkg["latest_version"] == "1.0.0"
-        assert pkg["_registry_name"] == "studio"
-        assert pkg["_registry_remote"] is False
+        assert pkg["_catalogue_name"] == "studio"
+        assert pkg["_catalogue_remote"] is False
         assert pkg["_origin"]["type"] == "embedded"
 
     def test_auto_migrates_legacy_registry_json(self, tmp_path, isolated_cache):
@@ -156,7 +156,7 @@ class TestCatalogueClientEmbedded:
         client.fetch()
 
         pkg = client.get_packages()["test/tool"]
-        assert pkg["_registry_name"] == "a"
+        assert pkg["_catalogue_name"] == "a"
         assert pkg["versions"]["1.0.0"]["download_url"].endswith("first.zip")
 
 
@@ -271,10 +271,10 @@ class TestCatalogueClientPersonal:
         packages = client.get_packages()
         assert "alice/tool" in packages
         pkg = packages["alice/tool"]
-        assert pkg["_registry_name"] == PERSONAL_DISPLAY_NAME
-        assert pkg["_registry_remote"] is False
+        assert pkg["_catalogue_name"] == PERSONAL_DISPLAY_NAME
+        assert pkg["_catalogue_remote"] is False
         assert pkg["_origin"]["type"] == "github"
-        assert pkg["_registry_id"] == personal.catalogue_id
+        assert pkg["_catalogue_id"] == personal.catalogue_id
 
     def test_empty_personal_is_noop(self, tmp_path, isolated_cache):
         """Empty personal catalogue must not mask subscribed catalogue data."""
@@ -294,7 +294,7 @@ class TestCatalogueClientPersonal:
 
         packages = client.get_packages()
         assert list(packages.keys()) == ["test/tool"]
-        assert packages["test/tool"]["_registry_name"] == "studio"
+        assert packages["test/tool"]["_catalogue_name"] == "studio"
 
     def test_subscribed_catalogue_wins_on_collision(self, tmp_path, isolated_cache, monkeypatch):
         """If a package id exists in both, the subscribed catalogue wins.
@@ -322,7 +322,7 @@ class TestCatalogueClientPersonal:
 
         pkg = client.get_packages()["alice/tool"]
         # Subscribed catalogue's embedded entry, not personal's github.
-        assert pkg["_registry_name"] == "studio"
+        assert pkg["_catalogue_name"] == "studio"
         assert pkg["_origin"]["type"] == "embedded"
 
     def test_loads_personal_from_explicit_path(self, tmp_path, isolated_cache, monkeypatch):
