@@ -105,8 +105,8 @@ class ScriptManager:
         """Activate a My Tools entry at Maya startup.
 
         Activates both pure My Tools (``source="local"``) and double-bound
-        registry installs (``source="registry"`` with ``local_path``) so the
-        original source path keeps participating in import resolution.
+        catalogue installs (``source="registry"`` with ``local_path``) so
+        the original source path keeps participating in import resolution.
         """
         from carton.core.install_state import is_my_tools
 
@@ -140,7 +140,7 @@ class ScriptManager:
 
         # Maya modules: delegate to the dedicated handler so the same logic
         # (free-form command, structured python entry, or userSetup re-exec)
-        # runs for both locally-registered and installed-from-registry modules.
+        # runs for both locally-registered and installed-from-catalogue modules.
         if pkg_data.get("type") == "maya_module":
             from carton.core.handlers.maya_module_handler import MayaModuleHandler
             MayaModuleHandler().launch(pkg_data)
@@ -240,7 +240,7 @@ class ScriptManager:
         """Add a path to Maya environment variables."""
         if pkg_type == "maya_module" and is_folder:
             # Delegate to the maya_module handler so locally-registered modules
-            # use the exact same env wiring as installed-from-registry ones.
+            # use the exact same env wiring as installed-from-catalogue ones.
             from carton.core.handlers.maya_module_handler import (
                 resolve_paths, _apply_paths, _exec_user_setup,
                 _ACTIVATED_DIRS,

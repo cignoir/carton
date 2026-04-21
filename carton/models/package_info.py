@@ -4,24 +4,23 @@ from carton.core.identity import split_pkg_id
 
 
 class PackageInfo:
-    """Package information constructed from registry.json / installed.json.
+    """Package information constructed from catalogue / installed.json entries.
 
     Identity model: ``id == "<namespace>/<name>"``. Both are required for any
-    package that participates in a registry; locally-registered tools that the
-    user has not yet decided to publish may have an empty namespace.
+    package that participates in a catalogue; locally-registered tools that
+    the user has not yet decided to publish may have an empty namespace.
 
-    v4.0 source-of-truth split:
-      * ``entry_point`` lives in the inner ``package.json`` for registry
+    Source-of-truth split:
+      * ``entry_point`` lives in the inner ``package.json`` for catalogue
         installs, and in this object only for My Tools (``source="local"``).
-      * ``display_name`` lives on the registry for registry installs, and
+      * ``display_name`` lives on the catalogue for catalogue installs, and
         on this object only for My Tools.
-      * ``sha256`` lives only on the registry — never persisted in
-        installed.json.
+      * ``sha256`` lives only on the catalogue version entry — never
+        persisted in installed.json.
 
-    v5.0 addition: ``origin`` (optional) is an :class:`Origin` instance
-    describing where this package's bytes live (embedded catalogue, GitHub
-    repo, url, local path). v4.0 flows leave it ``None`` so behaviour is
-    identical; v5.0 catalogue_client attaches it so downstream code can
+    ``origin`` (optional) is an :class:`Origin` instance describing where
+    this package's bytes live (embedded catalogue, GitHub repo, url, local
+    path). CatalogueClient attaches it on load so downstream code can
     re-resolve artifacts on reinstall / upgrade without re-reading the
     catalogue.
 
@@ -92,11 +91,15 @@ class PackageInfo:
 
     @classmethod
     def from_registry_entry(cls, pkg_id, pkg_data, version_key=None):
-        """Create from a registry.json entry. Key is '<namespace>/<name>'.
+        """Create from a catalogue package entry. Key is '<namespace>/<name>'.
 
-        ``platform`` follows the v4.0 override rule: the version-level
-        platform (if present) wins, otherwise the package-level platform
-        is inherited.
+        (The ``_registry_`` in the method name is historical — it's the
+        public entry point used by CatalogueClient to project a catalogue
+        row into a ``PackageInfo``.)
+
+        ``platform`` follows the override rule: the version-level platform
+        (if present) wins, otherwise the package-level platform is
+        inherited.
         """
         version_key = version_key or pkg_data.get("latest_version", "0.0.0")
         version_info = pkg_data.get("versions", {}).get(version_key, {})
@@ -157,12 +160,12 @@ class PackageInfo:
         )
 
     def to_installed_dict(self):
-        """Dictionary for writing to installed.json (v4.0 shape).
+        """Dictionary for writing to installed.json (schema v4.0).
 
         ``entry_point`` and ``display_name`` are only emitted for My Tools
-        (``source="local"``); registry-installed packages defer to the inner
-        package.json and the registry respectively. ``sha256`` is never
-        emitted — the registry is the SoT.
+        (``source="local"``); catalogue-installed packages defer to the
+        inner package.json and the catalogue respectively. ``sha256`` is
+        never emitted — the catalogue version entry is the SoT.
         """
         d = {
             "namespace": self.namespace,
@@ -175,7 +178,7 @@ class PackageInfo:
         if self.path:
             d["path"] = self.path
         if self.source == "local":
-            # My Tools only — registry SoT for registry installs.
+            # My Tools only — catalogue is SoT for catalogue installs.
             if self.entry_point:
                 d["entry_point"] = self.entry_point
             if self.display_name:
