@@ -452,9 +452,6 @@ python -m carton catalogue migrate path/to/registry.json
 # v5.0 カタログの UUID を確認・stamp
 python -m carton catalogue id path/to/catalogue.json
 python -m carton catalogue id path/to/catalogue.json --stamp
-
-# legacy v4.0 registry_id helper（移行前の registry.json 用）
-python -m carton registry id path/to/registry.json --stamp
 ```
 
 ## 開発

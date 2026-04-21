@@ -567,9 +567,6 @@ python -m carton catalogue migrate path/to/registry.json
 # Inspect or stamp a v5.0 catalogue's UUID
 python -m carton catalogue id path/to/catalogue.json
 python -m carton catalogue id path/to/catalogue.json --stamp
-
-# Legacy v4.0 registry_id helper (use only on pre-migration registry.json files)
-python -m carton registry id path/to/registry.json --stamp
 ```
 
 ## Development

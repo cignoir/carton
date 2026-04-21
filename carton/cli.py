@@ -63,40 +63,6 @@ def _unpublish(args):
     print("Unpublished: {}".format(result["name"]))
 
 
-def _registry_id(args):
-    """Show or stamp a registry's ``registry_id``.
-
-    Vendor-neutral: only reads/writes the local registry.json. Useful for
-    admins migrating pre-UUID registries (e.g. ones already mirrored to a
-    remote host) — stamp locally, then re-upload the file.
-    """
-    from carton.core.uuid_id import (
-        read_uuid,
-        stamp_uuid,
-    )
-
-    from carton.core.migrations import REGISTRY_SCHEMA_VERSION, migrate_registry_data
-
-    registry, path = _load_registry(args.registry)
-    registry, _ = migrate_registry_data(registry)
-    current = read_uuid(registry, "registry_id")
-    if args.stamp:
-        rid, was_new = stamp_uuid(registry, "registry_id")
-        registry["schema_version"] = REGISTRY_SCHEMA_VERSION
-        if was_new or current != rid:
-            with open(path, "w", encoding="utf-8") as f:
-                json.dump(registry, f, indent=2, ensure_ascii=False)
-            print("Stamped: {}".format(rid))
-        else:
-            print("Already has registry_id: {}".format(rid))
-        return
-    if current:
-        print(current)
-    else:
-        print("(no registry_id)")
-        sys.exit(2)
-
-
 def _catalogue_id(args):
     """Show or stamp a v5.0 catalogue's ``catalogue_id``.
 
@@ -186,18 +152,6 @@ def main():
     unpub.add_argument("--force", "-f", action="store_true",
                        help="Skip confirmation prompt")
 
-    # registry subgroup
-    reg = sub.add_parser("registry", help="Registry inspection utilities")
-    reg_sub = reg.add_subparsers(dest="registry_command")
-    rid_p = reg_sub.add_parser(
-        "id", help="Print or stamp a registry's registry_id (UUID)",
-    )
-    rid_p.add_argument("registry", help="Path to registry.json")
-    rid_p.add_argument(
-        "--stamp", action="store_true",
-        help="Write a fresh UUID into the file if it doesn't already have one",
-    )
-
     # catalogue subgroup (v5.0)
     cat = sub.add_parser("catalogue", help="Catalogue (v5.0) utilities")
     cat_sub = cat.add_subparsers(dest="catalogue_command")
@@ -225,8 +179,6 @@ def main():
         _list_packages(args)
     elif args.command == "unpublish":
         _unpublish(args)
-    elif args.command == "registry" and getattr(args, "registry_command", None) == "id":
-        _registry_id(args)
     elif args.command == "catalogue" and getattr(args, "catalogue_command", None) == "migrate":
         _catalogue_migrate(args)
     elif args.command == "catalogue" and getattr(args, "catalogue_command", None) == "id":
