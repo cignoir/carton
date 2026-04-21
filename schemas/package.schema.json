@@ -140,6 +140,7 @@
       "description": "publish 時に記録される、source がフォルダかファイルかの区別"
     },
     "dependencies": {
+      "deprecated": true,
       "type": "array",
       "items": {
         "type": "object",
@@ -149,7 +150,7 @@
           "version": { "type": "string" }
         }
       },
-      "description": "他パッケージへの依存"
+      "description": "【非推奨・解決されません】他パッケージへの依存を表示用に宣言できるが、Carton は依存解決を行いません。DCC ツールはファット配布が前提のため、必要なモジュールはパッケージ内に同梱してください。詳細は docs/design-faq.md 参照。"
     },
     "tags": {
       "type": "array",
