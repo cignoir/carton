@@ -14,12 +14,11 @@ from datetime import datetime, timezone
 
 from carton.compat_urllib import urlopen, Request, URLError
 from carton.core import gh_cli as _default_gh_cli
+from carton.core._publisher_catalogue import update_catalogue
 from carton.core._publisher_zip import create_zip
 from carton.core.catalogue_icons import (
     copy_icon_to_catalogue,
     is_icon_file,
-    normalise_icon_for_storage,
-    rebuild_icons_archive,
 )
 from carton.core.hash_verify import compute_sha256
 from carton.core.identity import (
@@ -30,13 +29,12 @@ from carton.core.identity import (
 )
 from carton.core.migrations import (
     CATALOGUE_FILENAME,
-    CATALOGUE_SCHEMA_VERSION,
     LEGACY_REGISTRY_FILENAME,
     migrate_local_registry_file_to_catalogue,
     migrate_registry_to_catalogue,
 )
 from carton.core.path_utils import resolve_local_path
-from carton.core.uuid_id import read_uuid, stamp_uuid
+from carton.core.uuid_id import read_uuid
 from carton.core.sidecar import write_sidecar, read_sidecar
 
 
@@ -229,7 +227,7 @@ class Publisher:
             stored_icon = icon_basename
 
         # 4. Update catalogue.json + rebuild icons.zip
-        warnings = self._update_catalogue(
+        warnings = update_catalogue(
             catalogue_path=catalogue_path,
             catalogue_entry=target_entry,
             pkg_id=pkg_id,
@@ -415,101 +413,6 @@ class Publisher:
         origin = entry.get("origin") or {}
         if version in (origin.get("versions") or {}):
             raise VersionConflictError(version)
-
-    def _update_catalogue(self, catalogue_path, catalogue_entry, pkg_id,
-                          namespace, name, display_name, version, pkg_type,
-                          description, icon, author, sha256, size_bytes,
-                          entry_point, maya_versions, tags, release_notes=""):
-        """Update catalogue.json in place. Returns a list of warning strings."""
-        out_path = os.path.normpath(catalogue_path)
-
-        if os.path.exists(out_path):
-            with open(out_path, "r", encoding="utf-8") as f:
-                catalogue = json.load(f)
-            # In-memory upgrade of any lingering v4.0 registry shape so the
-            # rest of this function only has to think about v5.0.
-            catalogue, _ = migrate_registry_to_catalogue(catalogue)
-        else:
-            catalogue = {
-                "schema_version": CATALOGUE_SCHEMA_VERSION,
-                "catalogue_id": "",
-                "packages": {},
-            }
-
-        catalogue["schema_version"] = CATALOGUE_SCHEMA_VERSION
-        catalogue_id, _ = stamp_uuid(catalogue, "catalogue_id")
-        catalogue_entry.catalogue_id = catalogue_id
-
-        now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
-        warnings = []
-
-        packages = catalogue.setdefault("packages", {})
-        if pkg_id not in packages:
-            packages[pkg_id] = {
-                "origin": {"type": "embedded", "versions": {}},
-                "first_published_by": author,
-                "first_published_at": now,
-            }
-
-        entry = packages[pkg_id]
-        # Ensure origin is present and of the embedded type. A pkg_id that
-        # previously lived as a non-embedded origin in this catalogue is
-        # a configuration error — we'd silently break consumers if we
-        # let it slide, so reset to embedded.
-        origin = entry.get("origin")
-        if not isinstance(origin, dict) or origin.get("type") != "embedded":
-            origin = {"type": "embedded", "versions": {}}
-            entry["origin"] = origin
-
-        # Author mismatch warning (don't block — just inform)
-        first_author = entry.get("first_published_by", "")
-        if first_author and author and first_author != author:
-            warnings.append(
-                "author '{}' is publishing a package first published by '{}'".format(
-                    author, first_author)
-            )
-        entry.setdefault("first_published_by", author)
-        entry.setdefault("first_published_at", now)
-
-        entry["namespace"] = namespace
-        entry["name"] = name
-        entry["display_name"] = display_name
-        entry["type"] = pkg_type
-        entry["description"] = description
-        entry["author"] = author
-        entry["tags"] = tags
-        # Mirror entry_point as a preview hint so the card UI can show
-        # Launch / Activate without installing first. The inner zip's
-        # package.json remains the runtime SoT.
-        if entry_point:
-            entry["entry_point"] = entry_point
-
-        normalised_icon = normalise_icon_for_storage(icon)
-        if normalised_icon is not None and normalised_icon != "":
-            entry["icon"] = normalised_icon
-        else:
-            entry.pop("icon", None)
-
-        rel_path = "packages/{}/{}/{}/{}-{}.zip".format(namespace, name, version, name, version)
-        versions = origin.setdefault("versions", {})
-        versions[version] = {
-            "maya_versions": list(maya_versions) if maya_versions else list(_DEFAULT_MAYA_VERSIONS),
-            "download_url": rel_path,
-            "sha256": sha256,
-            "size_bytes": size_bytes,
-            "released_at": now,
-            "changelog": release_notes or "",
-        }
-        origin["latest_version"] = version
-
-        catalogue["last_updated"] = now
-
-        os.makedirs(os.path.dirname(out_path), exist_ok=True)
-        with open(out_path, "w", encoding="utf-8") as f:
-            json.dump(catalogue, f, indent=2, ensure_ascii=False)
-
-        rebuild_icons_archive(catalogue_entry.base_dir)
-        return warnings
 
     def _persist_identity_to_source(self, local_path, namespace, name, is_folder,
                                     home_origin=None):
