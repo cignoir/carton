@@ -404,7 +404,7 @@ class RegistriesSection(QtWidgets.QWidget):
             CATALOGUE_SCHEMA_VERSION,
             LEGACY_REGISTRY_FILENAME,
         )
-        from carton.core.registry_id import new_registry_id
+        from carton.core.uuid_id import new_uuid
 
         folder = QtWidgets.QFileDialog.getExistingDirectory(
             self, t("setup_select_folder"),
@@ -423,7 +423,7 @@ class RegistriesSection(QtWidgets.QWidget):
             return
 
         try:
-            rid = new_registry_id()
+            rid = new_uuid()
             os.makedirs(folder, exist_ok=True)
             with open(cat_path, "w", encoding="utf-8") as f:
                 json.dump({

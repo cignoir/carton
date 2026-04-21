@@ -603,7 +603,7 @@ class CartonWindow(QtWidgets.QDialog):
             LEGACY_REGISTRY_FILENAME,
             migrate_local_registry_file_to_catalogue,
         )
-        from carton.core.registry_id import new_registry_id, stamp_registry_id
+        from carton.core.uuid_id import new_uuid, stamp_uuid
         from carton.ui._catalogue_pairing import probe_remote_catalogue_id
 
         cat_path = os.path.join(folder, CATALOGUE_FILENAME)
@@ -616,12 +616,12 @@ class CartonWindow(QtWidgets.QDialog):
             if rid:
                 paired_remote.catalogue_id = rid
             else:
-                rid = new_registry_id()
+                rid = new_uuid()
                 # Remote doesn't expose an id — the user will need to
                 # re-upload this catalogue before the remote can resolve
                 # back.
         else:
-            rid = new_registry_id()
+            rid = new_uuid()
 
         # A pre-existing legacy registry.json gets promoted to v5.0 first
         # so all subsequent reads land on catalogue.json. After migration
@@ -662,10 +662,11 @@ class CartonWindow(QtWidgets.QDialog):
                 data["catalogue_id"] = rid
             else:
                 # Normal stamp path — read whatever id is there, top up
-                # if missing. stamp_registry_id understands the legacy
-                # key so we feed it a bridge dict and copy back.
+                # if missing. We funnel it through stamp_uuid via a
+                # bridge dict so the same helper handles "preserve" and
+                # "generate fresh" without duplicating the logic here.
                 bridge = {"registry_id": current}
-                stamp_registry_id(bridge)
+                stamp_uuid(bridge, "registry_id")
                 rid = bridge["registry_id"]
                 data["catalogue_id"] = rid
             # Drop the legacy key on rewrite so we don't keep a stale

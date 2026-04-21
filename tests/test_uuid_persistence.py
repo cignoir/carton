@@ -161,7 +161,7 @@ class TestRegistryIdStamping:
     """First publish stamps a registry_id; subsequent publishes preserve it."""
 
     def test_first_publish_stamps_registry_id(self):
-        from carton.core.registry_id import is_valid_registry_id
+        from carton.core.uuid_id import is_valid_uuid
 
         with tempfile.TemporaryDirectory() as tmpdir:
             project_root = _make_project(tmpdir, namespace="mystudio")
@@ -182,7 +182,7 @@ class TestRegistryIdStamping:
 
             with open(reg_path, "r", encoding="utf-8") as f:
                 registry = json.load(f)
-            assert is_valid_registry_id(registry.get("registry_id", ""))
+            assert is_valid_uuid(registry.get("registry_id", ""))
             assert registry["schema_version"] == "4.0"
             # The RegistryEntry is updated in-memory to match the stamp.
             assert config.catalogues[0].catalogue_id == registry["registry_id"]

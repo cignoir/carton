@@ -25,7 +25,7 @@ import os
 import pytest
 
 from carton.core import personal_catalogue as pc
-from carton.core.registry_id import is_valid_registry_id
+from carton.core.uuid_id import is_valid_uuid
 
 
 class TestDefaultPath:
@@ -69,7 +69,7 @@ class TestDerivePkgId:
 class TestFreshInstance:
     def test_generates_catalogue_id(self):
         cat = pc.PersonalCatalogue()
-        assert is_valid_registry_id(cat.catalogue_id)
+        assert is_valid_uuid(cat.catalogue_id)
 
     def test_preserves_explicit_catalogue_id(self):
         fixed = "12345678-1234-1234-1234-123456789abc"
@@ -181,7 +181,7 @@ class TestLoadEdgeCases:
         path = tmp_path / "does_not_exist.json"
         cat = pc.PersonalCatalogue.load(str(path))
         assert cat.packages == {}
-        assert is_valid_registry_id(cat.catalogue_id)
+        assert is_valid_uuid(cat.catalogue_id)
 
     def test_corrupt_file_returns_empty(self, tmp_path):
         path = tmp_path / "broken.json"
@@ -190,7 +190,7 @@ class TestLoadEdgeCases:
         assert cat.packages == {}
         # New catalogue_id gets generated so a follow-up save rewrites
         # the broken file with a valid shape.
-        assert is_valid_registry_id(cat.catalogue_id)
+        assert is_valid_uuid(cat.catalogue_id)
 
     def test_preserves_catalogue_id_across_load(self, tmp_path):
         path = tmp_path / "personal_catalogue.json"

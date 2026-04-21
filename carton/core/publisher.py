@@ -27,7 +27,7 @@ from carton.core.migrations import (
     migrate_registry_data,
 )
 from carton.core.path_utils import resolve_local_path
-from carton.core.registry_id import read_registry_id, stamp_registry_id
+from carton.core.uuid_id import read_uuid, stamp_uuid
 from carton.core.sidecar import write_sidecar, read_sidecar
 
 
@@ -297,7 +297,7 @@ class Publisher:
             data = json.loads(resp.read().decode("utf-8"))
         except (URLError, OSError, ValueError):
             return ""
-        return read_registry_id(data)
+        return read_uuid(data, "registry_id")
 
     def _validate_python_package_layout(self, local_path, pkg_type, is_folder, name):
         """Reject python_packages where ``local_path`` is the module folder.
@@ -458,7 +458,7 @@ class Publisher:
             }
 
         registry["schema_version"] = REGISTRY_SCHEMA_VERSION
-        registry_id, _ = stamp_registry_id(registry)
+        registry_id, _ = stamp_uuid(registry, "registry_id")
         registry_entry.catalogue_id = registry_id
 
         now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")

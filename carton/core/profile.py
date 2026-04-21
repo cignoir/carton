@@ -23,7 +23,7 @@ import json
 import os
 
 from carton.core.config import CatalogueEntry
-from carton.core.registry_id import is_valid_registry_id
+from carton.core.uuid_id import is_valid_uuid
 
 
 class InvalidProfileError(ValueError):
@@ -156,7 +156,7 @@ class InstallerProfile:
                     raise InvalidProfileError(
                         "catalogues[{}].catalogue_id must be a string".format(i)
                     )
-                if not is_valid_registry_id(catalogue_id):
+                if not is_valid_uuid(catalogue_id):
                     raise InvalidProfileError(
                         "catalogues[{}].catalogue_id must be a UUID".format(i)
                     )

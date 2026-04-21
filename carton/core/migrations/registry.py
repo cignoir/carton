@@ -8,7 +8,7 @@ Field-level changes:
   string ``"@auto"``; ``false`` becomes ``null``.
 """
 
-from carton.core.registry_id import stamp_registry_id
+from carton.core.uuid_id import stamp_uuid
 
 
 REGISTRY_SCHEMA_VERSION = "4.0"
@@ -32,7 +32,7 @@ def migrate_registry_data(data, stamp_id=True):
             "packages": {},
         }
         if stamp_id:
-            stamp_registry_id(out)
+            stamp_uuid(out, "registry_id")
         return out, True
 
     needs_migration = (
@@ -46,7 +46,7 @@ def migrate_registry_data(data, stamp_id=True):
     out = dict(data)
     out["schema_version"] = REGISTRY_SCHEMA_VERSION
     if stamp_id:
-        stamp_registry_id(out)
+        stamp_uuid(out, "registry_id")
 
     packages = out.get("packages") or {}
     new_packages = {}

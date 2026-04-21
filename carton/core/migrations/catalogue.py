@@ -31,9 +31,9 @@ import json
 import os
 import time
 
-from carton.core.registry_id import (
-    is_valid_registry_id,
-    new_registry_id,
+from carton.core.uuid_id import (
+    is_valid_uuid,
+    new_uuid,
 )
 
 
@@ -56,16 +56,16 @@ def migrate_registry_to_catalogue(data, stamp_id=True):
     if not isinstance(data, dict):
         out = {
             "schema_version": CATALOGUE_SCHEMA_VERSION,
-            "catalogue_id": new_registry_id() if stamp_id else "",
+            "catalogue_id": new_uuid() if stamp_id else "",
             "packages": {},
         }
         return out, True
 
     if data.get("schema_version") == CATALOGUE_SCHEMA_VERSION:
         # Already v5.0 — only stamp a missing id, leave the rest alone.
-        if stamp_id and not is_valid_registry_id(data.get("catalogue_id")):
+        if stamp_id and not is_valid_uuid(data.get("catalogue_id")):
             out = dict(data)
-            out["catalogue_id"] = new_registry_id()
+            out["catalogue_id"] = new_uuid()
             return out, True
         return data, False
 
@@ -91,9 +91,9 @@ def _carry_catalogue_id(registry_data, stamp_id):
     """Return the v5.0 catalogue_id, preserving the v4.0 registry_id when valid."""
     raw = registry_data.get("catalogue_id") or registry_data.get("registry_id") or ""
     raw = (raw or "").strip().lower()
-    if is_valid_registry_id(raw):
+    if is_valid_uuid(raw):
         return raw
-    return new_registry_id() if stamp_id else ""
+    return new_uuid() if stamp_id else ""
 
 
 def _migrate_package(pkg_data):

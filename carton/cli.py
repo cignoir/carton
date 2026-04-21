@@ -70,18 +70,18 @@ def _registry_id(args):
     admins migrating pre-UUID registries (e.g. ones already mirrored to a
     remote host) — stamp locally, then re-upload the file.
     """
-    from carton.core.registry_id import (
-        read_registry_id,
-        stamp_registry_id,
+    from carton.core.uuid_id import (
+        read_uuid,
+        stamp_uuid,
     )
 
     from carton.core.migrations import REGISTRY_SCHEMA_VERSION, migrate_registry_data
 
     registry, path = _load_registry(args.registry)
     registry, _ = migrate_registry_data(registry)
-    current = read_registry_id(registry)
+    current = read_uuid(registry, "registry_id")
     if args.stamp:
-        rid, was_new = stamp_registry_id(registry)
+        rid, was_new = stamp_uuid(registry, "registry_id")
         registry["schema_version"] = REGISTRY_SCHEMA_VERSION
         if was_new or current != rid:
             with open(path, "w", encoding="utf-8") as f:
@@ -104,7 +104,7 @@ def _catalogue_id(args):
     pre-v5.0 files so admins don't silently lose the schema bump — they
     should run ``catalogue migrate`` first.
     """
-    from carton.core.registry_id import is_valid_registry_id, new_registry_id
+    from carton.core.uuid_id import is_valid_uuid, new_uuid
     from carton.core.migrations import CATALOGUE_SCHEMA_VERSION
 
     catalogue, path = _load_registry(args.path)
@@ -117,12 +117,12 @@ def _catalogue_id(args):
         )
         sys.exit(1)
     raw = (catalogue.get("catalogue_id") or "").strip().lower()
-    current = raw if is_valid_registry_id(raw) else ""
+    current = raw if is_valid_uuid(raw) else ""
     if args.stamp:
         if current:
             print("Already has catalogue_id: {}".format(current))
             return
-        new_id = new_registry_id()
+        new_id = new_uuid()
         catalogue["catalogue_id"] = new_id
         with open(path, "w", encoding="utf-8") as f:
             json.dump(catalogue, f, indent=2, ensure_ascii=False)

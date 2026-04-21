@@ -30,7 +30,7 @@ from carton.core.origins import (
     UrlOrigin,
     origin_from_dict,
 )
-from carton.core.registry_id import read_registry_id
+from carton.core.uuid_id import read_uuid
 from carton.core.source_cache import SourceCache
 
 
@@ -278,13 +278,8 @@ class CatalogueClient(object):
 
     @staticmethod
     def _cache_catalogue_id(entry, data):
-        """Mirror ``catalogue_id`` from the loaded data onto the entry.
-
-        Uses :func:`read_registry_id` (UUID format validation) by passing
-        the value through a temporary ``registry_id``-keyed dict — the
-        helper itself is concerned only with UUID shape, not naming.
-        """
-        cid = read_registry_id({"registry_id": data.get("catalogue_id", "")})
+        """Mirror ``catalogue_id`` from the loaded data onto the entry."""
+        cid = read_uuid(data, "catalogue_id")
         if cid:
             entry.catalogue_id = cid
 

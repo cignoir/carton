@@ -22,7 +22,7 @@ catalogue 群と別に "personal catalogue" をローカルに持たせる。
 import json
 import os
 
-from carton.core.registry_id import new_registry_id
+from carton.core.uuid_id import new_uuid
 
 
 PERSONAL_CATALOGUE_FILENAME = "personal_catalogue.json"
@@ -66,7 +66,7 @@ class PersonalCatalogue(object):
     """
 
     def __init__(self, catalogue_id="", display_name=PERSONAL_DISPLAY_NAME, packages=None):
-        self._catalogue_id = (catalogue_id or new_registry_id()).strip().lower()
+        self._catalogue_id = (catalogue_id or new_uuid()).strip().lower()
         self._display_name = display_name or PERSONAL_DISPLAY_NAME
         self._packages = dict(packages or {})
 

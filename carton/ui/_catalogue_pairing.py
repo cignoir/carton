@@ -11,9 +11,9 @@ import json
 import os
 
 from carton.compat_urllib import urlopen, Request, URLError
-from carton.core.registry_id import (
-    read_registry_id,
-    stamp_registry_id,
+from carton.core.uuid_id import (
+    read_uuid,
+    stamp_uuid,
 )
 
 from carton.ui.compat import QtWidgets
@@ -32,7 +32,7 @@ def read_local_catalogue_id(path):
             data = json.load(f)
     except (OSError, json.JSONDecodeError):
         return "", None
-    return read_registry_id(data), data
+    return read_uuid(data, "registry_id"), data
 
 
 def probe_remote_catalogue_id(url, timeout=15):
@@ -48,7 +48,7 @@ def probe_remote_catalogue_id(url, timeout=15):
         data = json.loads(resp.read().decode("utf-8"))
     except (URLError, OSError, ValueError):
         return ""
-    return read_registry_id(data)
+    return read_uuid(data, "registry_id")
 
 
 def probe_github_package_json(base_url, timeout=10):
@@ -93,7 +93,7 @@ def stamp_local_catalogue_with_prompt(parent, path, data):
     # write — leaving an old schema_version in place would re-trigger
     # migration on the next read for no benefit.
     data, _ = migrate_registry_data(data)
-    rid, _ = stamp_registry_id(data)
+    rid, _ = stamp_uuid(data, "registry_id")
     data["schema_version"] = REGISTRY_SCHEMA_VERSION
     try:
         with open(path, "w", encoding="utf-8") as f:
