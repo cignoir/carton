@@ -460,7 +460,8 @@ python -m carton catalogue id path/to/catalogue.json --stamp
 # インストーラのビルド
 python scripts/build_installer.py
 
-# テスト実行
+# テスト実行（Qt スモークテストは pytest-qt が必要。offscreen プラットフォームは自動設定）
+pip install pytest-qt
 python -m pytest tests/ -v
 
 # Maya 上での開発リロード

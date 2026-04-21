@@ -575,7 +575,8 @@ python -m carton catalogue id path/to/catalogue.json --stamp
 # Build installers
 python scripts/build_installer.py
 
-# Run tests
+# Run tests (Qt smoke tests require pytest-qt; offscreen platform is auto-set)
+pip install pytest-qt
 python -m pytest tests/ -v
 
 # Dev reload in Maya
