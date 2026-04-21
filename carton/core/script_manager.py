@@ -22,7 +22,7 @@ class ScriptManager:
 
     def register(self, file_path, name, display_name, icon, description,
                  pkg_type, entry_point, is_folder=False, version="0.0.0",
-                 author="", namespace="", home_registry=None,
+                 author="", namespace="", home_origin=None,
                  include_compiled=False):
         """Register locally.
 
@@ -37,7 +37,8 @@ class ScriptManager:
             is_folder: Whether this is a folder registration
             namespace: Optional namespace. Required to publish; may be empty
                 for personal-only registration.
-            home_registry: Optional dict with at least {"name": ...}.
+            home_origin: Optional v5.0 home origin payload (embedded /
+                github / url / local variant dict).
 
         Returns:
             pkg_id: ``"<namespace>/<name>"`` if namespace is set, else ``name``.
@@ -73,8 +74,8 @@ class ScriptManager:
             "icon": icon,
             "description": description,
         }
-        if home_registry:
-            installed_data["home_registry"] = home_registry
+        if home_origin:
+            installed_data["home_origin"] = home_origin
         if include_compiled:
             installed_data["include_compiled"] = True
 

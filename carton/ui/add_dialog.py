@@ -49,8 +49,8 @@ def _detect_from_folder(folder_path):
                 info["function"] = ep.get("function", ep.get("procedure", "show"))
             if data.get("namespace"):
                 info["namespace"] = data["namespace"]
-            if data.get("home_registry"):
-                info["home_registry"] = data["home_registry"]
+            if data.get("home_origin"):
+                info["home_origin"] = data["home_origin"]
             info["icon"] = data.get("icon", "")
             info["description"] = data.get("description", "")
             info["version"] = data.get("version", "0.0.0")
@@ -416,8 +416,8 @@ class AddDialog(QtWidgets.QDialog):
                     "entry_point": info.get("entry_point", {}),
                     "is_folder": True,
                 }
-                if info.get("home_registry"):
-                    result["home_registry"] = info["home_registry"]
+                if info.get("home_origin"):
+                    result["home_origin"] = info["home_origin"]
                 self._result = result
                 self.accept()
                 return
@@ -426,10 +426,10 @@ class AddDialog(QtWidgets.QDialog):
         else:
             self._result = self._build_file_result(path, display_name, func, icon, description, is_exec_mode)
             self._result["namespace"] = namespace
-            # Carry sidecar's home_registry forward if present
+            # Carry sidecar's home_origin forward if present
             sidecar = (getattr(self, "_detected_info", None) or {}).get("sidecar")
-            if sidecar and sidecar.get("home_registry"):
-                self._result["home_registry"] = sidecar["home_registry"]
+            if sidecar and sidecar.get("home_origin"):
+                self._result["home_origin"] = sidecar["home_origin"]
 
         self.accept()
 

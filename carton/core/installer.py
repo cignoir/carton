@@ -93,7 +93,7 @@ class InstallManager:
             pkg_type = inner.get("type") or meta.get("type", "python_package")
             inner_source_path = inner.get("source_path", "") or ""
             inner_is_folder = inner.get("is_folder")
-            inner_home_registry = inner.get("home_registry")
+            inner_home_origin = inner.get("home_origin")
 
             # If the publisher stamped the source path AND the same path
             # exists on this machine, treat the install as also a My Tools
@@ -115,7 +115,7 @@ class InstallManager:
             entry_dict = self._build_install_entry(
                 meta, pkg_type, rel_path,
                 activated_paths, relink_local_path,
-                inner_is_folder, inner_home_registry,
+                inner_is_folder, inner_home_origin,
             )
             self._persist_install_entry(pkg_id, entry_dict, prev_entry)
 
@@ -216,7 +216,7 @@ class InstallManager:
 
     def _build_install_entry(self, meta, pkg_type, rel_path,
                               activated_paths, relink_local_path,
-                              inner_is_folder, inner_home_registry):
+                              inner_is_folder, inner_home_origin):
         """Construct the installed.json entry dict for a successful install."""
         info = PackageInfo(
             pkg_id=meta["id"],
@@ -230,7 +230,7 @@ class InstallManager:
             activated_paths=activated_paths,
             pinned=meta.get("pinned", False),
             local_path=relink_local_path,
-            home_registry=inner_home_registry or {},
+            home_origin=inner_home_origin or {},
         )
         entry_dict = info.to_installed_dict()
         if relink_local_path:
@@ -348,7 +348,7 @@ class InstallManager:
         """Move an installed entry from ``old_id`` to ``new_id``.
 
         Optional ``fields`` are merged into the entry before it is re-keyed.
-        ``home_registry`` is preserved if already set. No-op if ``old_id`` is
+        ``home_origin`` is preserved if already set. No-op if ``old_id`` is
         not present. Returns True if the entry was re-keyed.
         """
         packages = self._installed.get("packages", {})
