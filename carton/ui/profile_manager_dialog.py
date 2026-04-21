@@ -12,6 +12,7 @@ import os
 from carton.core import profile_store
 from carton.core.profile import InstallerProfile, InvalidProfileError
 from carton.ui.compat import QtWidgets, Qt
+from carton.ui.error_messages import show_error
 from carton.ui.i18n import t
 from carton.ui import theme
 from carton.ui.settings_widgets import (
@@ -97,7 +98,7 @@ class _ProfileEditDialog(QtWidgets.QDialog):
             if new_name != self._name:
                 profile_store.delete_profile(self._name)
         except (OSError, InvalidProfileError) as e:
-            QtWidgets.QMessageBox.warning(self, "Carton", str(e))
+            show_error(self, e)
             return
         self._new_name = new_name
         self.accept()
@@ -243,7 +244,7 @@ class ProfileManagerDialog(QtWidgets.QDialog):
         try:
             profile_store.save_profile(name, profile)
         except (OSError, InvalidProfileError) as e:
-            QtWidgets.QMessageBox.warning(self, "Carton", str(e))
+            show_error(self, e)
             return
         self._refresh()
 
@@ -254,7 +255,7 @@ class ProfileManagerDialog(QtWidgets.QDialog):
         try:
             profile = profile_store.load_profile(name)
         except InvalidProfileError as e:
-            QtWidgets.QMessageBox.warning(self, "Carton", str(e))
+            show_error(self, e)
             return
         dlg = _ProfileEditDialog(name, profile, parent=self)
         if dlg.exec_() == QtWidgets.QDialog.Accepted:
@@ -352,6 +353,6 @@ class ProfileManagerDialog(QtWidgets.QDialog):
         try:
             profile_store.delete_profile(name)
         except OSError as e:
-            QtWidgets.QMessageBox.warning(self, "Carton", str(e))
+            show_error(self, e)
             return
         self._refresh()

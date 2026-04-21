@@ -20,6 +20,7 @@ import os
 from carton.compat_urllib import Request, urlopen
 from carton.ui.compat import QtWidgets, Qt
 from carton.ui import theme
+from carton.ui.error_messages import show_error
 from carton.ui.i18n import t
 
 
@@ -434,7 +435,7 @@ class RegistriesSection(QtWidgets.QWidget):
                 }, f, indent=2, ensure_ascii=False)
             os.makedirs(os.path.join(folder, "packages"), exist_ok=True)
         except Exception as e:
-            QtWidgets.QMessageBox.warning(self, "Carton", str(e))
+            show_error(self, e)
             return
         self._finish_add(cat_path, os.path.basename(folder), catalogue_id=rid)
 
