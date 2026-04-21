@@ -6,49 +6,95 @@ A local-first package manager for Autodesk Maya.
 
 ## What is Carton?
 
-Carton lets you **distribute, install, and update** Maya tools across your team without any cloud services. Everything runs on local directories or shared drives.
+Carton installs, updates, and shares Maya tools. **Packages are first-class**:
+you install a tool by its `namespace/name`, regardless of where its bytes come
+from — a single GitHub repo, a remote URL, a shared-drive index, or a local
+folder. No cloud service required; everything runs on file paths, URLs, or
+shared drives you already have.
 
 ```mermaid
 flowchart LR
-    subgraph You
-        MT["My Tools\n- Rigger\n- Shader"]
+    subgraph Sources
+        G["Single GitHub repo<br>package.json + Release"]
+        U["Remote URL<br>package.json"]
+        C["Catalogue<br>catalogue.json<br>(batch index)"]
     end
-    subgraph "Registry (shared drive)"
-        R["registry.json\npackages/\nicons/"]
+    subgraph You["Your Maya"]
+        LIB["Library<br>mystudio/rigger<br>thirdparty/qbloom<br>community/..."]
+        MT["My Tools<br>your own dev scripts"]
     end
-    subgraph Team
-        A["Artist A\nMaya"]
-        B["Artist B\nMaya"]
-    end
-    MT -- Publish --> R
-    R -- Install --> A
-    R -- Install --> B
+    G -- Install --> LIB
+    U -- Install --> LIB
+    C -- Subscribe --> LIB
+    MT -- Publish --> G
+    MT -- Publish --> C
 ```
 
-**Registry** = A shared folder containing `registry.json` + packaged tools.
-Anyone with access can install tools from it.
+Three ways to get a tool:
 
-## Key Concepts
+1. **Single GitHub repo** — paste `owner/repo`, Carton probes `package.json`
+   and installs.
+2. **Direct URL** — paste a URL to a `package.json` hosted anywhere.
+3. **Catalogue subscription** — add a `catalogue.json` URL / path that indexes
+   many packages at once (useful for studio-internal distribution).
+
+## Concepts
 
 ```mermaid
 flowchart TB
     subgraph Carton["Carton (in Maya)"]
+        direction LR
+        subgraph LIB["Library"]
+            direction TB
+            NS1["mystudio/*<br>(namespace group)"]
+            NS2["thirdparty/*"]
+        end
         subgraph MT["My Tools"]
-            L["Local scripts/folders\nregistered by reference"]
+            L["your local scripts<br>registered by reference"]
         end
-        subgraph RA["Registry A"]
-            PA["Team-shared packages\ninstalled from registry.json"]
-        end
-        subgraph RB["Registry B"]
-            PB["Another team / project"]
-        end
-        L -- Publish --> PA
     end
+    subgraph ORG["Origins — where a package lives"]
+        direction TB
+        E["embedded<br>(catalogue hosts zip)"]
+        GH["github<br>(Releases + SHA256SUMS)"]
+        UR["url<br>(remote package.json)"]
+        LO["local<br>(filesystem path)"]
+    end
+    E -.lists in.-> NS1
+    GH -.lists in.-> NS1
+    UR -.lists in.-> NS2
+    L -- Publish --> E
+    L -- Publish --> GH
 ```
 
-- **My Tools** — Scripts you register locally. Reference-based: edits to the original files take effect immediately.
-- **Registry** — A shared directory of packaged tools. Can be a local folder, network drive, Git repo, or remote URL.
-- **Publish** — Package a local tool and add it to a registry so others can install it.
+- **Package** — identified by `namespace/name` (npm-style, e.g.
+  `mystudio/rigger`). Same package can be indexed in multiple catalogues; it
+  still installs as one thing.
+- **Origin** — *where* a package's bytes live. Four types:
+  `embedded` (catalogue hosts the zip), `github` (GitHub Releases), `url`
+  (arbitrary hosted `package.json`), `local` (filesystem path).
+- **Catalogue** — an *optional* index (`catalogue.json`) that lists multiple
+  packages and where each one's origin is. Useful for studios or communities
+  distributing many tools at once. A package doesn't need to be in a catalogue
+  — you can install it directly from a GitHub repo or URL.
+- **My Tools** — your own local scripts, registered by reference (edits take
+  effect immediately). Publishable to an origin (GitHub Release or embedded
+  catalogue) when you're ready to share.
+
+### Pinned vs. unpinned sources
+
+Every install resolves to an artifact with or without an authoritative SHA256:
+
+- **Pinned** — the catalogue lists a SHA256, or the GitHub Release ships a
+  `SHA256SUMS` sibling. Carton verifies every download against that hash.
+- **Unpinned** — no authoritative hash (typical of GitHub's auto-generated
+  tag archives). Carton records the first-fetch hash (trust-on-first-use) so
+  later installs still detect tampering; **Strict Verify** refuses these
+  entirely.
+
+Library cards show a quiet ✓ when the source is pinned. Unpinned sources
+show nothing — silence is the convention, Strict Verify turns them into a
+visible install refusal.
 
 ## Requirements
 
@@ -63,30 +109,35 @@ flowchart TB
 3. Restart Maya
 4. Menu: **Carton > Open Carton**
 
-### Use a Registry
+### Add a Package
 
 ```
-Settings (⚙) > Add > select registry.json
+Settings (⚙) > Add
 ```
 
-Supports four sources:
-- **Local file** — path to `registry.json`
-- **GitHub repo** — `owner/repo` format
-- **Remote URL** — direct URL to `registry.json`
-- **Create new local registry** — pick an empty folder, Carton scaffolds `registry.json` and `packages/` for you
+Pick the flow that matches what you have:
+
+- **GitHub repository** — `owner/repo`. Carton first probes `package.json`
+  (single-tool repo) and falls back to `catalogue.json` (multi-tool repo).
+- **Single package by URL** — direct URL to a `package.json` hosted anywhere.
+- **Remote catalogue URL** — URL to a `catalogue.json` (batch subscription).
+- **Local catalogue file** — path to a `catalogue.json` on a shared drive or
+  local filesystem.
+- **Create new local catalogue** — scaffold an empty catalogue for your
+  studio to publish into.
+
+Single-package adds go into a machine-local *personal* store at
+`~/.carton/`; catalogue subscriptions land in your Carton profile. Either
+way, the Library view merges everything by namespace so you browse packages
+without worrying about source.
 
 ### Install a Tool
 
-Open Carton, browse packages, click **Install**.
+Open Carton, pick a namespace in the Library sidebar, click **Install**.
 
-Carton verifies the package's SHA256 against the registry at download time,
-and the card shows a small ✔ when the registry entry carries a hash. The
-hash itself lives in the registry's `version_entry.sha256` (single source of
-truth — the installed entry no longer duplicates it). Browse the **Version
-History** from the package detail panel to see release notes for each
-published version, or roll back to an older one — rolled-back packages are
-**pinned** and skipped by future Update prompts so your manual choice isn't
-undone on the next refresh.
+The detail panel has **Version History** for release notes and rollback.
+Rolled-back packages are **pinned** and won't be updated automatically until
+you unpin them.
 
 ### Register & Share Your Script
 
@@ -95,52 +146,66 @@ My Tools > + Add > select file or folder
                  > set name, icon, description
                  > Register
 
-Card > Publish > select target registry, write release notes, ship it
+Card > Publish > pick target (GitHub repo or embedded catalogue)
+              > write release notes > ship it
 ```
 
-See the [Registering tools to My Tools](#registering-tools-to-my-tools) section
-below for per-type details.
+See [Registering tools to My Tools](#registering-tools-to-my-tools) below for
+per-type details. Uninstalling a published tool from the Library view does
+**not** delete its My Tools registration — Carton just demotes it back to a
+local-only entry.
 
-Uninstalling a tool you previously published from the registry view does **not**
-delete its My Tools registration — Carton just demotes the entry back to a
-local-only registration, so your edit/launch state is independent from whether
-the package is currently installed from the registry.
+## Upgrading
 
-## Upgrading from v0.3
+### From v0.4 to v5.0
 
-v0.4.0 bumps the registry / installed.json schemas to **v4.0**. Older files
-are migrated in place on first startup; the original is preserved next to
-the file as `installed.json.bak-v0.3.<ms>` / `registry.json.bak-v0.3.<ms>`.
+v5.0 introduces the **Package-first model**: packages exist independently
+of catalogues, origins are a first-class concept, and single-package GitHub
+repos work without needing a `catalogue.json` wrapper.
 
-Key changes:
+**Automatic migrations on first launch:**
 
-- **Single source of truth per field.** `entry_point` lives only in the
-  zip's inner `package.json`, `display_name` lives only in the registry,
-  and `sha256` lives only in the registry's `version_entry` — the installed
-  entry no longer duplicates any of them.
-- **`source` enum collapsed** to `["registry","local"]`. Legacy values
-  (`"published"`, `"local_script"`) auto-convert; double-bound entries
-  (registry-installed AND My Tools-registered) are now expressed as
-  `source="registry"` plus a non-empty `local_path`.
-- **`registry_id` (UUID) is now required** on `registry.json` and is
-  auto-stamped on first touch. Remote-only registries that ship without one
-  trigger a warning (mirror matching cannot work until the maintainer
-  stamps the canonical file).
-- **`icon` is now `string | null`.** Legacy `"icon": true` (auto-resolve
-  `<name>.png`) becomes the literal string `"@auto"`.
-- **`platform` override.** A version-level `platform` array now overrides
-  the package-level default; absent means inherit.
+- `registry.json` → `catalogue.json` in place; the original is preserved as
+  `registry.json.bak-v0.4.<ms>` for rollback. Each package entry is rewritten
+  to the new shape with `origin: {"type": "embedded", "versions": {...}}`.
+- `registry_id` → `catalogue_id` (UUID preserved). Config files dual-emit
+  both keys during the transition for backward reading.
+- `home_registry` on published artifacts gets a sibling `home_origin`
+  (tagged union over embedded / github / url / local). Both keys coexist
+  during the alias period.
 
-Registry maintainers should re-upload the migrated `registry.json` to
-their host (S3, GitHub, etc.) so consumers pick up the new shape. Carton
-0.3.x clients still parse a v4.0 registry — they just ignore the new
-fields.
+**UI / terminology changes:**
+
+- "Registries" → "Catalogues" throughout the UI.
+- Library sidebar now groups by namespace instead of per-catalogue row.
+  Catalogue management moves to Settings → Catalogues.
+- `Add` dialog leads with single-package flows (GitHub repo, Single package
+  by URL); catalogue flows (Remote catalogue URL, Local catalogue file,
+  Create new local catalogue) remain available.
+
+**Catalogue maintainers** — re-upload the auto-migrated `catalogue.json` to
+your host so consumers pick up the new shape. v0.4 clients can't read v5.0
+catalogues (filename changed); the migration is a hard cut-over, not a
+coexistence.
+
+CLI helper for catalogue maintainers upgrading by hand:
+
+```bash
+python -m carton catalogue migrate path/to/registry.json
+```
+
+### From v0.3 to v0.4
+
+v0.4.0 bumped the registry schema to v4.0 (SHA256 moved into the registry
+entry as source-of-truth, `registry_id` UUID stamped on first touch, `source`
+enum collapsed to `["registry","local"]`). Files are migrated in place on
+first startup with `.bak-v0.3.<ms>` preserved for rollback.
 
 ## Profiles
 
-A **profile** is a saved set of runtime settings — registries, proxy, language,
-auto-update. Switch profiles to flip your whole Carton between, say, "studio
-work" and "personal" without re-adding registries by hand.
+A **profile** is a saved set of runtime settings — catalogues, proxy,
+language, auto-update. Switch profiles to flip your whole Carton between,
+say, "studio work" and "personal" without re-adding catalogues by hand.
 
 Profiles live as JSON files under `~/Documents/maya/carton/profiles/` (Windows)
 or `~/maya/carton/profiles/` (macOS / Linux). The built-in `default` profile
@@ -150,7 +215,7 @@ profile dropdown in the sidebar).
 From the Profile Manager you can:
 
 - **New** — create a profile seeded from your current Carton settings
-- **Edit** — change registries / proxy / language / name
+- **Edit** — change catalogues / proxy / language / name
 - **Reorder** — drag profiles around in the dropdown order
 - **Build Installer…** — generate a custom drag-and-drop installer that
   pre-seeds the profile on first install. The recipient gets a Carton
@@ -158,36 +223,75 @@ From the Profile Manager you can:
 
 Switching profiles is instant (no Maya restart). Installed packages are
 shared across all profiles — a profile only swaps Carton-wide settings like
-the registry list, proxy, and language.
+the catalogue list, proxy, and language.
 
 ## Strict Integrity Verification
 
 Settings has a **Strict integrity verification** checkbox. When enabled,
-Carton refuses to install any package whose registry entry doesn't carry a
-SHA256, and treats hash mismatches as fatal. Recommended for shared or remote
-registries where you want to be sure nobody has tampered with the bytes
-between publish and install.
+Carton refuses to install any package whose catalogue entry doesn't carry a
+SHA256 and refuses any unpinned origin (GitHub auto archive, etc.); hash
+mismatches become fatal. Recommended for shared or remote catalogues where
+you want to be sure nobody has tampered with the bytes between publish and
+install.
 
-## Registry Structure
+## Catalogue Structure
+
+An **embedded** catalogue (one that hosts its own package zips) looks like:
 
 ```
-my-registry/
-├── registry.json          # Package index
+my-catalogue/
+├── catalogue.json          # Package index (v5.0)
 ├── packages/
 │   └── {namespace}/{name}/{version}/
 │       └── {name}-{version}.zip
 ├── icons/
-│   └── {name}.png         # Per-package icon
-└── icons.zip              # Bundled icons for remote registries
+│   └── {name}.png          # Per-package icon
+└── icons.zip               # Bundled icons for remote catalogues
 ```
 
-Manage it with Git, put it on a network drive, or host it as static files — whatever works for your team.
+`catalogue.json` shape (v5.0):
+
+```json
+{
+  "schema_version": "5.0",
+  "catalogue_id": "<UUID>",
+  "display_name": "MyStudio Tools",
+  "packages": {
+    "mystudio/rigger": {
+      "origin": {"type": "github", "repo": "mystudio/rigger"}
+    },
+    "mystudio/shader-studio": {
+      "origin": {
+        "type": "embedded",
+        "latest_version": "1.0.0",
+        "versions": {
+          "1.0.0": {
+            "download_url": "packages/mystudio/shader-studio/1.0.0/shader-studio-1.0.0.zip",
+            "sha256": "<64hex>",
+            "size_bytes": 12345,
+            "maya_versions": ["2024", "2025", "2026"],
+            "released_at": "2026-03-…"
+          }
+        }
+      }
+    },
+    "thirdparty/qbloom": {
+      "origin": {"type": "url", "url": "https://example.com/qbloom-package.json"}
+    }
+  }
+}
+```
+
+Only `embedded` origins carry `versions` inline — `github` / `url` / `local`
+resolve versions dynamically (GitHub Releases API, remote `package.json`,
+local file). Manage your catalogue with Git, put it on a network drive, or
+host it as static files — whatever works for your team.
 
 ## Registering tools to My Tools
 
 "My Tools" is the local working area where you register tools by reference —
 no copying. Edits to the original files take effect immediately. From My Tools
-you can also Publish a tool to a registry to share it.
+you can also Publish a tool to a catalogue (or a GitHub repo) to share it.
 
 Carton supports several package types and auto-detects which one you're
 adding. Below is what you can register and what to expect for each.
@@ -372,7 +476,7 @@ in `package.json`.
 Every package has an **internal name** (a slug like `quick_rename` or
 `ari-mirror`), shown read-only in the Add and Edit dialogs. It's derived
 from the file or folder name and is the package's stable identifier — it
-cannot be changed after registration without orphaning the registry entry.
+cannot be changed after registration without orphaning the catalogue entry.
 
 The **namespace** field is optional during Add (you can register tools for
 your own use without one) but **required to publish**. If you type
@@ -399,14 +503,14 @@ Place this in your tool's root to define metadata:
     "function": "show"
   },
   "icon": "🔧",
-  "home_registry": { "name": "studio-main" }
+  "home_origin": {"type": "embedded", "catalogue_name": "studio-main"}
 }
 ```
 
 Supported types: `python_package`, `mel_script`, `plugin`, `maya_module`
 
 `package.json` is the **source of truth** for `entry_point`, `maya_versions`,
-and `icon`. The publisher copies them into `registry.json` (as previews)
+and `icon`. The publisher copies them into the target catalogue (as previews)
 and into the package zip; at install time Carton reads them from the zip's
 inner `package.json` rather than trusting any cached copy.
 
@@ -414,8 +518,14 @@ inner `package.json` rather than trusting any cached copy.
 
 - An emoji (e.g. `"🔧"`)
 - A relative file path (e.g. `"resources/icon.png"`)
-- The literal `"@auto"` to use `icons/<name>.png` from the registry
+- The literal `"@auto"` to use `icons/<name>.png` from the catalogue
 - `null` for no icon
+
+`home_origin` records where this package likes to be published (embedded
+catalogue / github repo / url / local). It's a tagged union over the four
+origin types and replaces the v0.4 `home_registry` field. Both coexist
+during the alias period so older clients keep reading the embedded-only
+shape.
 
 ### Identity model
 
@@ -425,7 +535,7 @@ locally-registered tools that you don't intend to share can omit it.
 
 Once `namespace`/`name` live in `package.json`, **commit the file** so that other
 people who clone your source converge on the same identity automatically — Add /
-Publish on their side will update the same registry entry instead of creating a
+Publish on their side will update the same catalogue entry instead of creating a
 duplicate.
 
 ### Single-file scripts (sidecar)
@@ -445,10 +555,16 @@ automatically the first time you publish.
 ## CLI
 
 ```bash
-python -m carton list path/to/registry.json
-python -m carton unpublish --registry path/to/registry.json --id mystudio/rigger
+# List packages in a catalogue or registry
+python -m carton list path/to/catalogue.json
 
-# Inspect or stamp the registry's UUID (required on v4.0 registries)
+# Unpublish a package from a catalogue
+python -m carton unpublish --registry path/to/catalogue.json --id mystudio/rigger
+
+# Migrate a v0.4 registry.json into a v5.0 catalogue.json in place
+python -m carton catalogue migrate path/to/registry.json
+
+# Inspect or stamp a catalogue's UUID (legacy registry_id helper still works)
 python -m carton registry id path/to/registry.json
 python -m carton registry id path/to/registry.json --stamp
 ```
