@@ -49,7 +49,6 @@ _STRINGS = {
         "label_size": "Size",
         "label_released": "Released",
         "label_type": "Type",
-        "open_homepage": "Open Homepage",
 
         # Main window
         "search_placeholder": "Search packages...",
@@ -88,7 +87,6 @@ _STRINGS = {
         "launch_error_hint": "If the traceback below points at a file inside the tool itself, the error comes from the tool — not from Carton. Click Show Details for the full stack.",
         "publish_error": "Publish Error",
         "unpublish": "Unpublish",
-        "unpublishing": "Unpublishing...",
         "confirm_unpublish": "Unpublish {} from '{}'?\nOther users will no longer be able to install this package.",
         "unpublish_success": "{} has been unpublished from '{}'.",
         "unpublish_select_catalogue": "Unpublish from which catalogue?",
@@ -134,8 +132,6 @@ _STRINGS = {
         "pinned_badge": "Pinned",
         "pinned_badge_tooltip": "Held at this version after a rollback. Update is suppressed until you reinstall manually.",
         "history_no_catalogue_data": "No catalogue version history found for this package. Make sure the catalogue containing it is configured.",
-        "edit_include_compiled": "Include .pyc files when publishing",
-        "edit_include_compiled_tooltip": "Carton normally strips compiled .pyc files when zipping a folder package. Turn this on for legacy in-house tools that ship as .pyc only.",
         "edit_module_name": "Module to import (overrides folder name):",
 
         # Edit dialog
@@ -196,7 +192,6 @@ _STRINGS = {
         "library_all": "All",
         "profile_label": "Profile",
         "sidebar_library": "Catalogues",
-        "profile_none": "default",
         "profile_manage": "Manage profiles…",
         "profile_manager_title": "Profile Manager",
         "profile_manager_hint": "Profiles let you swap catalogues / proxy / language as a set. Installed packages are shared.",
@@ -271,7 +266,6 @@ _STRINGS = {
         "label_size": "サイズ",
         "label_released": "リリース日",
         "label_type": "タイプ",
-        "open_homepage": "ホームページを開く",
 
         "close": "閉じる",
         "save": "保存",
@@ -328,7 +322,6 @@ _STRINGS = {
         "launch_error_hint": "下のトレースバックがツール内部のファイルを指している場合、エラーは Carton ではなくツール側の問題です。「詳細を表示」で完全なスタックトレースを確認できます。",
         "publish_error": "公開エラー",
         "unpublish": "公開取消",
-        "unpublishing": "取消中...",
         "confirm_unpublish": "{} を '{}' から取り下げますか？\n他のユーザーはこのパッケージをインストールできなくなります。",
         "unpublish_success": "{} を '{}' から取り下げました。",
         "unpublish_select_catalogue": "どのカタログから取り下げますか？",
@@ -374,8 +367,6 @@ _STRINGS = {
         "pinned_badge": "固定",
         "pinned_badge_tooltip": "ロールバック後にこのバージョンに固定されています。手動で再インストールするまで更新されません。",
         "history_no_catalogue_data": "このパッケージのカタログ側のバージョン履歴が見つかりません。対象カタログが設定されているか確認してください。",
-        "edit_include_compiled": ".pyc ファイルも公開時に含める",
-        "edit_include_compiled_tooltip": "Carton はフォルダパッケージを zip 化する際、デフォルトで .pyc を除外します。.pyc 形式でしか配布できない既存ツールを公開する場合はオンにしてください。",
         "edit_module_name": "import するモジュール名（フォルダ名を上書き）:",
 
         # Edit dialog
@@ -436,7 +427,6 @@ _STRINGS = {
         "library_all": "すべて",
         "profile_label": "プロファイル",
         "sidebar_library": "カタログ",
-        "profile_none": "default",
         "profile_manage": "プロファイルを管理…",
         "profile_manager_title": "プロファイル管理",
         "profile_manager_hint": "プロファイルでカタログ／プロキシ／言語をまとめて切替できます。インストール済みパッケージは共有されます。",

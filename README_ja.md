@@ -449,8 +449,11 @@ python -m carton unpublish --registry path/to/catalogue.json --id mystudio/rigge
 # v0.4 の registry.json を v5.0 の catalogue.json に migrate
 python -m carton catalogue migrate path/to/registry.json
 
-# カタログの UUID を確認・stamp（legacy helper も引き続き動作）
-python -m carton registry id path/to/registry.json
+# v5.0 カタログの UUID を確認・stamp
+python -m carton catalogue id path/to/catalogue.json
+python -m carton catalogue id path/to/catalogue.json --stamp
+
+# legacy v4.0 registry_id helper（移行前の registry.json 用）
 python -m carton registry id path/to/registry.json --stamp
 ```
 
