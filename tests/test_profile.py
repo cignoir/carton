@@ -106,3 +106,72 @@ class TestValidation:
     def test_auto_check_updates_must_be_bool(self):
         with pytest.raises(InvalidProfileError, match="boolean"):
             InstallerProfile.from_dict({"auto_check_updates": "yes"})
+
+
+class TestLegacyKeyAliases:
+    """v0.4.x profiles with ``registries`` / ``registry_id`` must still load.
+
+    Profile files are hand-edited and often git-tracked, so we accept the
+    legacy keys silently and converge to the v5.0 shape on next save.
+    """
+
+    _UUID = "deadbeef-dead-beef-dead-beefdeadbeef"
+
+    def test_registries_alias_accepted(self):
+        profile = InstallerProfile.from_dict({
+            "registries": [{"name": "studio", "path": "https://ex.com/r.json"}],
+        })
+        assert len(profile.catalogues) == 1
+        assert profile.catalogues[0].name == "studio"
+        assert profile.catalogues[0].path == "https://ex.com/r.json"
+
+    def test_registry_id_alias_accepted(self):
+        profile = InstallerProfile.from_dict({
+            "catalogues": [
+                {"name": "studio", "path": "/x/r.json", "registry_id": self._UUID},
+            ],
+        })
+        assert profile.catalogues[0].catalogue_id == self._UUID
+
+    def test_both_legacy_keys_at_once(self):
+        """Full v0.4.x shape: legacy top-level + legacy inner key."""
+        profile = InstallerProfile.from_dict({
+            "registries": [
+                {"name": "studio", "path": "/x/r.json", "registry_id": self._UUID},
+            ],
+        })
+        assert profile.catalogues[0].catalogue_id == self._UUID
+
+    def test_save_rewrites_to_v5_keys(self, tmp_path):
+        """Next save() after migration should emit ``catalogues`` — no
+        residual ``registries`` key. This is what makes the alias a
+        one-shot migration instead of a permanent accommodation."""
+        profile = InstallerProfile.from_dict({
+            "registries": [
+                {"name": "studio", "path": "/x/r.json", "registry_id": self._UUID},
+            ],
+        })
+        path = tmp_path / "out.json"
+        profile.save(str(path))
+        saved = json.loads(path.read_text(encoding="utf-8"))
+        assert "registries" not in saved
+        assert "catalogues" in saved
+        assert "registry_id" not in saved["catalogues"][0]
+        assert saved["catalogues"][0]["catalogue_id"] == self._UUID
+
+    def test_same_file_both_top_level_keys_rejected(self):
+        with pytest.raises(InvalidProfileError, match="drop the legacy 'registries'"):
+            InstallerProfile.from_dict({
+                "catalogues": [{"name": "a", "path": "/a.json"}],
+                "registries": [{"name": "b", "path": "/b.json"}],
+            })
+
+    def test_same_entry_both_id_keys_rejected(self):
+        with pytest.raises(InvalidProfileError, match="drop the legacy key"):
+            InstallerProfile.from_dict({
+                "catalogues": [{
+                    "name": "a", "path": "/a.json",
+                    "catalogue_id": self._UUID,
+                    "registry_id": self._UUID,
+                }],
+            })

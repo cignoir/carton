@@ -118,11 +118,28 @@ class InstallerProfile:
 
     @classmethod
     def from_dict(cls, data):
-        """Build from a dict (e.g. parsed JSON). Validates structure."""
+        """Build from a dict (e.g. parsed JSON). Validates structure.
+
+        v0.4.x profiles used ``registries`` / ``registry_id`` keys; we
+        accept those as aliases for ``catalogues`` / ``catalogue_id`` so
+        hand-edited or git-tracked profile files keep loading across the
+        cutover. The next ``save()`` rewrites the file with v5.0 keys.
+        Same-file co-existence of both keys is rejected — we pick a
+        winner rather than silently preferring one.
+        """
         if not isinstance(data, dict):
             raise InvalidProfileError(
                 "Profile must be a JSON object, got {}".format(type(data).__name__)
             )
+
+        if "registries" in data and "catalogues" in data:
+            raise InvalidProfileError(
+                "profile has both 'catalogues' and 'registries' — drop the "
+                "legacy 'registries' key"
+            )
+        if "registries" in data:
+            data = dict(data)
+            data["catalogues"] = data.pop("registries")
 
         unknown = set(data.keys()) - _ALLOWED_KEYS
         if unknown:
@@ -149,7 +166,12 @@ class InstallerProfile:
                 raise InvalidProfileError(
                     "catalogues[{}].path is required".format(i)
                 )
-            cid_raw = entry.get("catalogue_id", "")
+            if "registry_id" in entry and "catalogue_id" in entry:
+                raise InvalidProfileError(
+                    "catalogues[{}] has both 'catalogue_id' and "
+                    "'registry_id' — drop the legacy key".format(i)
+                )
+            cid_raw = entry.get("catalogue_id") or entry.get("registry_id") or ""
             catalogue_id = cid_raw or ""
             if catalogue_id:
                 if not isinstance(catalogue_id, str):
