@@ -467,6 +467,10 @@ python -m pytest tests/ -v
 exec(open(r"path/to/carton/scripts/dev_reload.py", encoding="utf-8").read())
 ```
 
+意図的に採用していない設計判断 (「依存解決がないのはなぜ？」「Cartonfile は必要ない？」等) は
+[docs/design-faq.md](docs/design-faq.md) にまとめてあります。新機能を提案する前に目を通しておくと
+議論が早いです。
+
 ## ライセンス
 
 MIT

@@ -582,6 +582,10 @@ python -m pytest tests/ -v
 exec(open(r"path/to/carton/scripts/dev_reload.py", encoding="utf-8").read())
 ```
 
+See [docs/design-faq.md](docs/design-faq.md) for intentional non-decisions
+("why isn't dependency resolution a thing?", "why no Cartonfile?", etc.) —
+useful context before proposing new features.
+
 ## License
 
 MIT
