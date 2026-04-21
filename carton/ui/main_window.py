@@ -128,10 +128,10 @@ class _SelfUpdateCheckWorker(QtCore.QThread):
 
 
 class _PublishTargetDialog(QtWidgets.QDialog):
-    """Dialog to choose a publish target registry.
+    """Dialog to choose a publish target catalogue.
 
     Accepts both local and remote entries. Remote rows annotate the mirror
-    mapping so the user can see at a glance which local registry the
+    mapping so the user can see at a glance which local catalogue the
     remote will actually write to.
     """
 
@@ -139,7 +139,7 @@ class _PublishTargetDialog(QtWidgets.QDialog):
         super().__init__(parent)
         self.setWindowTitle(t("publish"))
         self.setMinimumWidth(360)
-        self._result_registry = None
+        self._result_catalogue = None
         self._config = config
 
         layout = QtWidgets.QVBoxLayout(self)
@@ -203,15 +203,15 @@ class _PublishTargetDialog(QtWidgets.QDialog):
 
     def _on_select(self):
         if self._combo:
-            self._result_registry = self._combo.currentData()
+            self._result_catalogue = self._combo.currentData()
         self.accept()
 
     @property
-    def selected_registry(self):
-        return self._result_registry
+    def selected_catalogue(self):
+        return self._result_catalogue
 
     def _describe_target(self, entry):
-        """Return ``(label, tooltip)`` for a registry row in the combo."""
+        """Return ``(label, tooltip)`` for a catalogue row in the combo."""
         if not entry.is_remote:
             return entry.name, entry.path
         mirror = None
@@ -346,7 +346,7 @@ class CartonWindow(QtWidgets.QDialog):
 
         self._build_sidebar_profile_section(layout)
         layout.addSpacing(16)
-        self._build_sidebar_registry_section(layout)
+        self._build_sidebar_catalogue_section(layout)
         layout.addSpacing(16)
         self._build_sidebar_mytools_section(layout)
         layout.addStretch(1)
@@ -386,19 +386,19 @@ class CartonWindow(QtWidgets.QDialog):
         ))
         parent_layout.addWidget(profile_container)
 
-    def _build_sidebar_registry_section(self, parent_layout):
-        self._registry_list = QtWidgets.QListWidget()
-        self._registry_list.setStyleSheet(theme.sidebar_list_style())
-        self._registry_list.setFrameShape(QtWidgets.QFrame.NoFrame)
-        self._registry_list.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
-        self._registry_list.setSizeAdjustPolicy(
+    def _build_sidebar_catalogue_section(self, parent_layout):
+        self._catalogue_list = QtWidgets.QListWidget()
+        self._catalogue_list.setStyleSheet(theme.sidebar_list_style())
+        self._catalogue_list.setFrameShape(QtWidgets.QFrame.NoFrame)
+        self._catalogue_list.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self._catalogue_list.setSizeAdjustPolicy(
             QtWidgets.QAbstractScrollArea.AdjustToContents
         )
-        self._registry_list.currentRowChanged.connect(self._on_registry_row_changed)
+        self._catalogue_list.currentRowChanged.connect(self._on_catalogue_row_changed)
         parent_layout.addLayout(self._make_sidebar_caption_row(
-            t("sidebar_library").upper(), collapsible_target=self._registry_list,
+            t("sidebar_library").upper(), collapsible_target=self._catalogue_list,
         ))
-        parent_layout.addWidget(self._registry_list)
+        parent_layout.addWidget(self._catalogue_list)
 
     def _build_sidebar_mytools_section(self, parent_layout):
         self._mytools_list = QtWidgets.QListWidget()
@@ -573,7 +573,7 @@ class CartonWindow(QtWidgets.QDialog):
         self.refresh()
         self._loading_label.setVisible(False)
 
-    def _create_new_registry(self, paired_remote=None):
+    def _create_new_catalogue(self, paired_remote=None):
         """Create a new empty v5.0 catalogue directory. Returns the CatalogueEntry or None.
 
         If ``paired_remote`` is given, the new catalogue inherits its
@@ -681,8 +681,8 @@ class CartonWindow(QtWidgets.QDialog):
         self._config.save()
         return self._config.catalogues[-1]
 
-    def _add_existing_registry(self, paired_remote=None):
-        """Browse for an existing registry.json. Returns the CatalogueEntry or None."""
+    def _add_existing_catalogue(self, paired_remote=None):
+        """Browse for an existing catalogue.json (legacy registry.json also accepted). Returns the CatalogueEntry or None."""
         from carton.ui._catalogue_pairing import (
             DuplicateCatalogueChoice,
             find_duplicate_entry,
@@ -865,7 +865,7 @@ class CartonWindow(QtWidgets.QDialog):
     def _rebuild_sidebar(self):
         """Rebuild sidebar items from config registries + My Tools."""
         prev = self._sidebar_selection
-        for lst in (self._registry_list, self._mytools_list):
+        for lst in (self._catalogue_list, self._mytools_list):
             lst.blockSignals(True)
             lst.clear()
 
@@ -883,7 +883,7 @@ class CartonWindow(QtWidgets.QDialog):
             "{} ({})".format(t("library_all"), lib_total),
         )
         all_item.setData(Qt.UserRole, self._LIBRARY_KEY)
-        self._registry_list.addItem(all_item)
+        self._catalogue_list.addItem(all_item)
 
         lib_ns_counts = {}
         for pkg_data in packages.values():
@@ -895,7 +895,7 @@ class CartonWindow(QtWidgets.QDialog):
                 "{} ({})".format(label, lib_ns_counts[ns]),
             )
             child.setData(Qt.UserRole, self._LIBRARY_NS_PREFIX + ns)
-            self._registry_list.addItem(child)
+            self._catalogue_list.addItem(child)
 
         # My Tools — All + namespace children
         my_pkgs = [p for p in installed.values() if is_my_tools(p)]
@@ -914,14 +914,14 @@ class CartonWindow(QtWidgets.QDialog):
             child.setData(Qt.UserRole, self._MYTOOLS_NS_PREFIX + ns)
             self._mytools_list.addItem(child)
 
-        for lst in (self._registry_list, self._mytools_list):
+        for lst in (self._catalogue_list, self._mytools_list):
             lst.blockSignals(False)
 
         # Restore or default selection
         if not self._restore_sidebar_selection(prev):
-            # Default: first registry; fall back to My Tools "All"
-            if self._registry_list.count() > 0:
-                self._registry_list.setCurrentRow(0)
+            # Default: first catalogue; fall back to My Tools "All"
+            if self._catalogue_list.count() > 0:
+                self._catalogue_list.setCurrentRow(0)
             elif self._mytools_list.count() > 0:
                 self._mytools_list.setCurrentRow(0)
 
@@ -934,16 +934,16 @@ class CartonWindow(QtWidgets.QDialog):
                     self._mytools_list.setCurrentRow(i)
                     return True
         else:
-            for i in range(self._registry_list.count()):
-                if self._registry_list.item(i).data(Qt.UserRole) == key:
-                    self._registry_list.setCurrentRow(i)
+            for i in range(self._catalogue_list.count()):
+                if self._catalogue_list.item(i).data(Qt.UserRole) == key:
+                    self._catalogue_list.setCurrentRow(i)
                     return True
         return False
 
-    def _on_registry_row_changed(self, row):
+    def _on_catalogue_row_changed(self, row):
         if row < 0:
             return
-        item = self._registry_list.item(row)
+        item = self._catalogue_list.item(row)
         if not item:
             return
         # Clear the My Tools selection so only one row in the sidebar is
@@ -960,10 +960,10 @@ class CartonWindow(QtWidgets.QDialog):
         item = self._mytools_list.item(row)
         if not item:
             return
-        self._registry_list.blockSignals(True)
-        self._registry_list.clearSelection()
-        self._registry_list.setCurrentRow(-1)
-        self._registry_list.blockSignals(False)
+        self._catalogue_list.blockSignals(True)
+        self._catalogue_list.clearSelection()
+        self._catalogue_list.setCurrentRow(-1)
+        self._catalogue_list.blockSignals(False)
         self._apply_sidebar_selection(item.data(Qt.UserRole))
 
     def _apply_sidebar_selection(self, key):
@@ -1068,9 +1068,9 @@ class CartonWindow(QtWidgets.QDialog):
                 self._catalogue_client.get_packages()
                 if self._catalogue_client else {}
             )
-            visible_items = self._collect_registry_items(packages, installed, selection)
+            visible_items = self._collect_catalogue_items(packages, installed, selection)
 
-        # pkg_id -> [writable local registry names], for "Published-to" badges.
+        # pkg_id -> [writable local catalogue names], for "Published-to" badges.
         # Built once per rebuild instead of per-card.
         published_map = self._build_published_map()
 
@@ -1157,7 +1157,7 @@ class CartonWindow(QtWidgets.QDialog):
     def _collect_mytools_items(self, installed, selection):
         """Return ``[(pkg_id, view_data)]`` for the My Tools view, sorted by ns."""
         ns_filter = self._mytools_ns_filter(selection)
-        registry_packages = (
+        catalogue_packages = (
             self._catalogue_client.get_packages() if self._catalogue_client else {}
         )
         items = []
@@ -1171,10 +1171,10 @@ class CartonWindow(QtWidgets.QDialog):
             item = dict(pkg_data)
             item["_installed_ver"] = pkg_data.get("version")
             item["_local_script"] = True
-            # registry SoT for display_name on registry-side entries; My Tools
+            # catalogue SoT for display_name on catalogue-side entries; My Tools
             # rows already carry their own display_name.
             item["display_name"] = resolve_display_name(
-                pkg_id, pkg_data, registry_packages.get(pkg_id),
+                pkg_id, pkg_data, catalogue_packages.get(pkg_id),
             )
             items.append((pkg_id, item))
         items.sort(key=lambda x: (
@@ -1183,7 +1183,7 @@ class CartonWindow(QtWidgets.QDialog):
         ))
         return items
 
-    def _collect_registry_items(self, packages, installed, selection):
+    def _collect_catalogue_items(self, packages, installed, selection):
         """Return ``[(pkg_id, view_data)]`` for the selected Library view.
 
         Library selections in v5.0 are namespace-scoped (or ``All``), so
@@ -1199,9 +1199,9 @@ class CartonWindow(QtWidgets.QDialog):
                 if pkg_ns != ns_filter:
                     continue
             item = dict(pkg_data)
-            # A demoted (uninstalled-from-registry) entry stays in
+            # A demoted (uninstalled-from-catalogue) entry stays in
             # installed.json as source="local" so it remains in My Tools,
-            # but the registry view should show it as not-installed so
+            # but the catalogue view should show it as not-installed so
             # the user can re-install if they want.
             inst_entry = installed.get(pkg_id, {})
             is_installed = (
@@ -1211,7 +1211,7 @@ class CartonWindow(QtWidgets.QDialog):
             if is_installed:
                 inst = installed[pkg_id]
                 item["_installed_ver"] = inst.get("version")
-                # Verified badge: read sha256 from the registry's
+                # Verified badge: read sha256 from the catalogue's
                 # version_entry for the version we actually installed.
                 # installed.json no longer carries a sha256 of its own.
                 inst_ver = inst.get("version", "")
@@ -1285,7 +1285,7 @@ class CartonWindow(QtWidgets.QDialog):
             if icon_filename and is_remote and base_dir:
                 icon_fetch_tasks.append((pkg_id, base_dir, icon_filename))
 
-        # In a registry view we render the same plain consumer card
+        # In a catalogue view we render the same plain consumer card
         # regardless of whether the user happens to own the package:
         # no Publish button, no "published-to" badge, no Edit click.
         # Those affordances only make sense in My Tools.
@@ -1313,7 +1313,7 @@ class CartonWindow(QtWidgets.QDialog):
         card.setCursor(Qt.PointingHandCursor)
         self._card_map[pkg_id] = card
 
-        # Edit only opens from My Tools view. In a registry view the
+        # Edit only opens from My Tools view. In a catalogue view the
         # user is acting as a consumer — even for packages they
         # published — so show the detail panel (with rollback /
         # version history) instead.
@@ -1393,7 +1393,7 @@ class CartonWindow(QtWidgets.QDialog):
         if action == "history":
             self._show_history_for(pkg_id)
         elif action == "unpublish":
-            self._on_unpublish(pkg_id, result["registry"])
+            self._on_unpublish(pkg_id, result["catalogue"])
         elif action == "remove":
             if self._script_manager:
                 self._script_manager.unregister(pkg_id)
@@ -1534,17 +1534,17 @@ class CartonWindow(QtWidgets.QDialog):
             return
 
         if kind == "embedded":
-            target_registry = payload
-            if not self._confirm_home_origin_mismatch(pkg_data, target_registry):
+            target_catalogue = payload
+            if not self._confirm_home_origin_mismatch(pkg_data, target_catalogue):
                 return
             confirm_result = self._confirm_publish_details(
-                pkg_data, target_registry.name,
+                pkg_data, target_catalogue.name,
             )
             if not confirm_result:
                 return
             release_notes, embed_source_path = confirm_result
             self._run_publish(
-                pkg_id, pkg_data, target_registry,
+                pkg_id, pkg_data, target_catalogue,
                 namespace, release_notes, embed_source_path,
             )
         elif kind == "github":
@@ -1570,13 +1570,13 @@ class CartonWindow(QtWidgets.QDialog):
         dlg = _PublishTargetDialog(self._config, parent=self)
         result = dlg.exec_()
         if result == 1:  # Selected from dropdown
-            entry = dlg.selected_registry
+            entry = dlg.selected_catalogue
             return ("embedded", entry) if entry else None
         if result == 2:  # Create new
-            entry = self._create_new_registry()
+            entry = self._create_new_catalogue()
             return ("embedded", entry) if entry else None
         if result == 3:  # Add existing
-            entry = self._add_existing_registry()
+            entry = self._add_existing_catalogue()
             return ("embedded", entry) if entry else None
         if result == 4:  # GitHub publish
             repo = self._prompt_github_repo(pkg_data)
@@ -1608,7 +1608,7 @@ class CartonWindow(QtWidgets.QDialog):
             return ""
         return repo
 
-    def _confirm_home_origin_mismatch(self, pkg_data, target_registry):
+    def _confirm_home_origin_mismatch(self, pkg_data, target_catalogue):
         """Warn if publishing to a different catalogue than the home one.
 
         Only meaningful for packages whose ``home_origin`` is an embedded
@@ -1627,12 +1627,12 @@ class CartonWindow(QtWidgets.QDialog):
 
         home_name = home_origin.get("catalogue_name", "")
         home_id = home_origin.get("catalogue_id", "")
-        target_id = getattr(target_registry, "catalogue_id", "")
+        target_id = getattr(target_catalogue, "catalogue_id", "")
 
         if home_id and target_id:
             if home_id == target_id:
                 return True
-        elif home_name and home_name == target_registry.name:
+        elif home_name and home_name == target_catalogue.name:
             return True
         elif not home_name and not home_id:
             return True
@@ -1640,7 +1640,7 @@ class CartonWindow(QtWidgets.QDialog):
         reply = QtWidgets.QMessageBox.question(
             self, t("publish"),
             t("publish_home_catalogue_mismatch",
-              home_name or home_id, target_registry.name),
+              home_name or home_id, target_catalogue.name),
             QtWidgets.QMessageBox.Yes | QtWidgets.QMessageBox.No,
         )
         return reply == QtWidgets.QMessageBox.Yes
@@ -1686,7 +1686,7 @@ class CartonWindow(QtWidgets.QDialog):
             return None
         return confirm.release_notes(), confirm.embed_source_path()
 
-    def _run_publish(self, pkg_id, pkg_data, target_registry,
+    def _run_publish(self, pkg_id, pkg_data, target_catalogue,
                      namespace, release_notes, embed_source_path):
         """Execute the publish call and reflect the result in installed.json."""
         from carton.core.publisher import RemoteMirrorMissingError
@@ -1696,7 +1696,7 @@ class CartonWindow(QtWidgets.QDialog):
 
         try:
             result = self._publisher.publish(
-                pkg_data, target_registry, namespace=namespace,
+                pkg_data, target_catalogue, namespace=namespace,
                 release_notes=release_notes,
                 embed_source_path=embed_source_path,
             )
@@ -1715,8 +1715,8 @@ class CartonWindow(QtWidgets.QDialog):
         # Re-key the installed entry under the canonical namespace/name.
         # The local path we actually wrote to may differ from the user's
         # selection (remote → mirror), so resolve the name via the result.
-        written_name = result.get("published_via") or target_registry.name
-        written_entry = self._find_registry_by_name(written_name) or target_registry
+        written_name = result.get("published_via") or target_catalogue.name
+        written_entry = self._find_catalogue_by_name(written_name) or target_catalogue
         fields = {
             "namespace": result["namespace"],
             "name": result["name"],
@@ -1820,7 +1820,7 @@ class CartonWindow(QtWidgets.QDialog):
         layout.addLayout(btn_row)
         dlg.exec_()
 
-    def _find_registry_by_name(self, name):
+    def _find_catalogue_by_name(self, name):
         for entry in self._config.catalogues:
             if entry.name == name:
                 return entry
@@ -1857,14 +1857,14 @@ class CartonWindow(QtWidgets.QDialog):
 
         mirror = None
         if clicked is create_btn:
-            mirror = self._create_new_registry(paired_remote=remote)
+            mirror = self._create_new_catalogue(paired_remote=remote)
         elif clicked is pair_btn:
-            mirror = self._add_existing_registry(paired_remote=remote)
+            mirror = self._add_existing_catalogue(paired_remote=remote)
 
         if mirror is None:
             return
         # Retry publish against the original remote — the publisher will now
-        # find the mirror via the shared registry_id.
+        # find the mirror via the shared catalogue_id.
         self._run_publish(
             pkg_id, pkg_data, remote, namespace,
             release_notes, embed_source_path,
@@ -1886,8 +1886,8 @@ class CartonWindow(QtWidgets.QDialog):
         QtWidgets.QMessageBox.warning(self, t("publish_error"), msg)
 
     def _build_published_map(self):
-        """Return ``{pkg_id: [registry_name, ...]}`` for all writable local
-        registries, built from a single pass over each registry.json.
+        """Return ``{pkg_id: [catalogue_name, ...]}`` for all writable local
+        catalogues, built from a single pass over each catalogue.json.
 
         Remote registries are excluded: the user cannot unpublish from them,
         so there's no reason to surface the badge for those.
@@ -1903,14 +1903,14 @@ class CartonWindow(QtWidgets.QDialog):
                 continue
             try:
                 with open(reg_path, "r", encoding="utf-8") as f:
-                    registry = json.load(f)
+                    catalogue_data = json.load(f)
             except (json.JSONDecodeError, OSError):
                 continue
-            for pkg_id in registry.get("packages", {}).keys():
+            for pkg_id in catalogue_data.get("packages", {}).keys():
                 result.setdefault(pkg_id, []).append(entry.name)
         return result
 
-    def _on_card_unpublish(self, pkg_id, registry_name):
+    def _on_card_unpublish(self, pkg_id, catalogue_name):
         """Handle the unpublish action triggered from a card badge menu."""
         if not self._publisher or not self._config:
             return
@@ -1919,18 +1919,18 @@ class CartonWindow(QtWidgets.QDialog):
         for entry in self._config.catalogues:
             if entry.is_remote:
                 continue
-            if entry.name == registry_name:
+            if entry.name == catalogue_name:
                 target = entry
                 break
         if target is None:
             QtWidgets.QMessageBox.warning(
                 self, t("unpublish_error"),
-                "Registry '{}' not found.".format(registry_name),
+                "Registry '{}' not found.".format(catalogue_name),
             )
             return
 
-        # Resolve display via the standard resolver: registry SoT for
-        # registry-side entries, installed.json for My Tools.
+        # Resolve display via the standard resolver: catalogue SoT for
+        # catalogue-side entries, installed.json for My Tools.
         installed = self._install_manager.get_installed_packages() if self._install_manager else {}
         packages = self._catalogue_client.get_packages() if self._catalogue_client else {}
         display = resolve_display_name(
@@ -1939,7 +1939,7 @@ class CartonWindow(QtWidgets.QDialog):
 
         reply = QtWidgets.QMessageBox.question(
             self, t("unpublish"),
-            t("confirm_unpublish", display, registry_name),
+            t("confirm_unpublish", display, catalogue_name),
             QtWidgets.QMessageBox.Yes | QtWidgets.QMessageBox.No,
         )
         if reply != QtWidgets.QMessageBox.Yes:
@@ -1947,7 +1947,7 @@ class CartonWindow(QtWidgets.QDialog):
 
         self._on_unpublish(pkg_id, target)
 
-    def _on_unpublish(self, pkg_id, registry_entry):
+    def _on_unpublish(self, pkg_id, catalogue_entry):
         if not self._publisher:
             return
 
@@ -1957,9 +1957,9 @@ class CartonWindow(QtWidgets.QDialog):
         display = resolve_display_name(pkg_id, pkg_data, packages.get(pkg_id))
 
         try:
-            self._publisher.unpublish(pkg_id, registry_entry)
+            self._publisher.unpublish(pkg_id, catalogue_entry)
 
-            # Demote double-bound entries to pure My Tools — the registry
+            # Demote double-bound entries to pure My Tools — the catalogue
             # bytes are gone but the user's local registration survives.
             self._install_manager.update_package_fields(
                 pkg_id, {"source": "local"}
@@ -1967,7 +1967,7 @@ class CartonWindow(QtWidgets.QDialog):
 
             QtWidgets.QMessageBox.information(
                 self, t("unpublish"),
-                t("unpublish_success", display, registry_entry.name),
+                t("unpublish_success", display, catalogue_entry.name),
             )
             self.refresh()
         except Exception as e:
@@ -1990,8 +1990,8 @@ class CartonWindow(QtWidgets.QDialog):
         """Open the version history dialog for a published package.
 
         Used from the Edit dialog flow, where the click target is the
-        installed-side data (no `versions` map). We pull the registry
-        snapshot via the registry client and reuse the same dialog as
+        installed-side data (no `versions` map). We pull the catalogue
+        snapshot via the catalogue client and reuse the same dialog as
         the detail panel.
         """
         if not self._catalogue_client:
@@ -2141,7 +2141,7 @@ class CartonWindow(QtWidgets.QDialog):
             if not url:
                 raise RuntimeError(t("no_download_url"))
 
-            # Strict verify: refuse to install anything from a registry
+            # Strict verify: refuse to install anything from a catalogue
             # entry that doesn't carry a sha256.
             if self._config and self._config.strict_verify:
                 if not version_info.get("sha256"):
@@ -2226,7 +2226,7 @@ class CartonWindow(QtWidgets.QDialog):
 
         installed = self._install_manager.get_installed_packages()
         pkg_data = installed.get(pkg_id, {})
-        # Resolve entry_point: zip's inner package.json is SoT for registry
+        # Resolve entry_point: zip's inner package.json is SoT for catalogue
         # installs; installed.json carries it for My Tools only.
         package_dir = ""
         rel = pkg_data.get("path", "")
@@ -2234,12 +2234,12 @@ class CartonWindow(QtWidgets.QDialog):
             package_dir = os.path.join(
                 self._install_manager._config.install_dir, rel,
             )
-        registry_packages = (
+        catalogue_packages = (
             self._catalogue_client.get_packages() if self._catalogue_client else {}
         )
         entry_point = resolve_entry_point(
             pkg_data, package_dir=package_dir,
-            registry_data=registry_packages.get(pkg_id),
+            registry_data=catalogue_packages.get(pkg_id),
         )
         # Inject the resolved entry_point back into pkg_data so handlers /
         # script_manager that read meta["entry_point"] still get a value.

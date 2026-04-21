@@ -9,7 +9,7 @@ Callers in the alias period:
 
 * ``main_window._rebuild_cards`` — My Tools card list (per-namespace
   header + cards, collapsible).
-* ``main_window._build_sidebar_registry_section`` — Library sidebar
+* ``main_window._build_sidebar_catalogue_section`` — Library sidebar
   once Step 4-B migrates it to namespace-tree display (second bullet
   of the plan's Step 4-B section).
 

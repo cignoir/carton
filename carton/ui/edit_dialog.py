@@ -345,7 +345,7 @@ class EditDialog(QtWidgets.QDialog):
             QtWidgets.QMessageBox.Yes | QtWidgets.QMessageBox.No,
         )
         if reply == QtWidgets.QMessageBox.Yes:
-            self._result = {"action": "unpublish", "registry": target}
+            self._result = {"action": "unpublish", "catalogue": target}
             self.accept()
 
     def get_result(self):
