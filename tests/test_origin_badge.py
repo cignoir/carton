@@ -1,19 +1,22 @@
 """Tests for the v5.0 origin-verification badge resolver.
 
-Step 4-B: decides whether a Library card shows 🔒 verified-source or
-⚠ unverified-source. Pure logic — isolates the Qt layer from the
-decision so pytest can cover it without a running QApplication.
+Step 4-B: decides whether a Library card shows the ✓ verified-source
+glyph. Pure logic — isolates the Qt layer from the decision so pytest
+can cover it without a running QApplication.
+
+UX convention (matches the existing install-time ``verified`` mark):
+show a single glyph only on the positive state, stay silent on the
+negative. Unpinned origins therefore return ``None`` — strict_verify
+surfaces the refusal at install time, the pre-install card stays quiet.
 
 Invariants:
 
-* No origin info (legacy v0.4 shape) → ``None`` (caller renders
-  nothing rather than guessing).
-* Embedded origin without explicit ``_pinned`` → ``"pinned"`` (embedded
-  catalogues' sha256 is mandatory by schema).
+* No origin info (legacy v0.4 shape) → ``None``.
+* Embedded origin without explicit ``_pinned`` → ``"pinned"``
+  (embedded catalogues' sha256 is mandatory by schema).
 * Github origin with ``_pinned: True`` → ``"pinned"``; ``False`` →
-  ``"unpinned"``.
-* Github origin without the flag → ``None`` (version failed to resolve;
-  don't invent a verdict).
+  ``None`` (silent unpinned state).
+* Github origin without the flag → ``None`` (version failed to resolve).
 * ``installed_version`` takes precedence over ``latest_version`` for
   the per-version lookup.
 """
@@ -47,29 +50,28 @@ class TestEmbeddedOrigin:
         badge = resolve_origin_verification(pkg)
         assert badge is not None
         assert badge["state"] == "pinned"
-        assert badge["text_key"] == "origin_verified_badge"
-        assert badge["glyph"] == "\U0001f512"
+        assert badge["glyph"] == "\u2713"
+        assert badge["tooltip_key"] == "origin_verified_tooltip"
 
-    def test_embedded_explicit_pinned_false_respected(self):
-        """If a future producer explicitly stamps _pinned=False we
-        honour it rather than hard-assuming embedded."""
+    def test_embedded_explicit_pinned_false_is_silent(self):
+        """If a future producer explicitly stamps _pinned=False the
+        unpinned state stays silent (matches the existing 'show only
+        on positive state' convention of the verified mark)."""
         pkg = _pkg("embedded", {"1.0.0": {"_pinned": False}})
-        badge = resolve_origin_verification(pkg)
-        assert badge["state"] == "unpinned"
+        assert resolve_origin_verification(pkg) is None
 
 
 class TestGithubOrigin:
     def test_pinned_true(self):
         pkg = _pkg("github", {"1.0.0": {"_pinned": True, "sha256": "a" * 64}})
         badge = resolve_origin_verification(pkg)
+        assert badge is not None
         assert badge["state"] == "pinned"
 
-    def test_pinned_false(self):
+    def test_pinned_false_is_silent(self):
+        """Unpinned github origin — caller renders nothing."""
         pkg = _pkg("github", {"1.0.0": {"_pinned": False}})
-        badge = resolve_origin_verification(pkg)
-        assert badge["state"] == "unpinned"
-        assert badge["text_key"] == "origin_unverified_badge"
-        assert badge["glyph"] == "\u26a0"
+        assert resolve_origin_verification(pkg) is None
 
     def test_missing_flag_returns_none(self):
         """github version without the flag didn't resolve — silent."""
@@ -83,10 +85,11 @@ class TestVersionSelection:
             "1.0.0": {"_pinned": False},
             "2.0.0": {"_pinned": True},
         }, latest_version="2.0.0")
-        # Installed v1.0.0 (unpinned) — badge reflects *that* version,
-        # not latest.
-        badge = resolve_origin_verification(pkg, installed_version="1.0.0")
-        assert badge["state"] == "unpinned"
+        # Installed v1.0.0 (unpinned) — unpinned is silent now, so we
+        # get None even though latest would have returned pinned.
+        assert resolve_origin_verification(
+            pkg, installed_version="1.0.0",
+        ) is None
 
     def test_falls_back_to_latest_without_installed(self):
         pkg = _pkg("github", {
@@ -94,6 +97,7 @@ class TestVersionSelection:
             "2.0.0": {"_pinned": True},
         }, latest_version="2.0.0")
         badge = resolve_origin_verification(pkg)
+        assert badge is not None
         assert badge["state"] == "pinned"
 
 
@@ -105,4 +109,5 @@ class TestOtherOriginTypes:
     def test_url_with_pinned_true(self):
         pkg = _pkg("url", {"1.0.0": {"_pinned": True}})
         badge = resolve_origin_verification(pkg)
+        assert badge is not None
         assert badge["state"] == "pinned"

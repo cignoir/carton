@@ -1,17 +1,26 @@
-"""Helper for the v5.0 origin-verification (pinned/unpinned) badge.
+"""Helper for the v5.0 origin-verification (pinned) badge.
 
-The badge answers a Library-level question: **can we trust the source
-of this artifact?** — separate from the install-time ``verified`` mark
+The badge answers a Library-level question: **is the source of this
+artifact signed?** — separate from the install-time ``verified`` mark
 (which only says "SHA256 matched at download"). A pinned origin means
 the catalogue / Release SHA256SUMS authoritatively names the bytes
 that should arrive; an unpinned origin means we're TOFU-ing on first
 download (typical of GitHub auto-generated archives). ``strict_verify``
 flips unpinned into install-refused.
 
+UX convention — mirror the existing ``verified`` mark on installed
+packages: show a single ✓ glyph only when the positive state is true.
+Silence on the unpinned side. That keeps the card quiet (no loud pills
+shouting "Verified source" / "Unverified source"); tooltip on the
+pinned glyph still carries the detail for curious users. Unpinned-ness
+surfaces at install time (strict_verify error), not as a pre-install
+warning pill.
+
 The decision is pure logic over ``pkg_data``, separated from the Qt
 layer so it can be unit-tested without a running QApplication.
-Returning ``None`` means "no badge" — e.g. legacy v0.4 registry
-packages that pre-date the concept.
+Returning ``None`` means "no badge" — either a legacy v0.4 package
+without origin info, or an unpinned origin (the UX is deliberately
+silent on the negative state).
 """
 
 
@@ -48,14 +57,16 @@ def resolve_origin_verification(pkg_data, installed_version=None):
             ``latest_version``.
 
     Returns:
-        A dict ``{"state", "text_key", "tooltip_key", "glyph"}`` when
-        the badge applies, or ``None`` when the package pre-dates the
-        origin model (pure v0.4 registry entry with no origin info) so
-        the caller can render nothing rather than a guess.
+        A dict ``{"state", "tooltip_key", "glyph"}`` when the pinned
+        state applies, or ``None`` otherwise — either because the
+        package is unpinned (silent by design), or because there is no
+        origin info at all (legacy v0.4 entry).
 
-        * ``state`` — ``"pinned"`` or ``"unpinned"``.
-        * ``text_key`` / ``tooltip_key`` — i18n keys for
-          ``carton.ui.i18n.t``; ``glyph`` is the leading emoji.
+        * ``state`` — currently always ``"pinned"`` when non-None.
+        * ``tooltip_key`` — i18n key for ``carton.ui.i18n.t``.
+        * ``glyph`` — single checkmark glyph ``"\u2713"``, matching the
+          existing install-time ``verified`` mark so the card's
+          visual grammar stays consistent.
     """
     origin = pkg_data.get("_origin") or {}
     origin_type = origin.get("type")
@@ -82,13 +93,10 @@ def resolve_origin_verification(pkg_data, installed_version=None):
     if pinned:
         return {
             "state": "pinned",
-            "text_key": "origin_verified_badge",
             "tooltip_key": "origin_verified_tooltip",
-            "glyph": "\U0001f512",  # 🔒
+            "glyph": "\u2713",  # ✓ — matches the existing verified mark
         }
-    return {
-        "state": "unpinned",
-        "text_key": "origin_unverified_badge",
-        "tooltip_key": "origin_unverified_tooltip",
-        "glyph": "\u26a0",  # ⚠
-    }
+    # Unpinned: deliberately silent. strict_verify will refuse the
+    # install if the user cares; the pre-install Library card stays
+    # quiet rather than shouting "Unverified source".
+    return None

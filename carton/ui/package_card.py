@@ -184,29 +184,23 @@ class PackageCard(QtWidgets.QFrame):
             )
             title_layout.addWidget(verified)
 
-        # v5.0 origin-verification badge — shown on pre-install library
-        # cards so users see up front whether the catalogue / Release
-        # signed the artifact's SHA256, or whether we'll TOFU-pin on
-        # first download. Suppressed on installed packages to avoid
-        # visual duplication with the ``verified`` mark above.
+        # v5.0 origin-verification mark — shown on pre-install library
+        # cards when the catalogue / Release signed the artifact's
+        # SHA256. Intentionally rendered as the same minimal ✓ glyph as
+        # the install-time ``verified`` mark above (no pill, no label
+        # text) so the card stays quiet — the tooltip carries the
+        # "verified source" explanation for users who hover.
         if not self._installed_version:
             origin_badge = resolve_origin_verification(
                 self._pkg_data, self._installed_version,
             )
             if origin_badge:
-                badge_text = "{glyph} {label}".format(
-                    glyph=origin_badge["glyph"],
-                    label=t(origin_badge["text_key"]),
-                )
-                color = (theme.ACCENT_GREEN if origin_badge["state"] == "pinned"
-                         else theme.ACCENT_ORANGE)
-                origin_label = QtWidgets.QLabel(badge_text)
+                origin_label = QtWidgets.QLabel(origin_badge["glyph"])
                 origin_label.setToolTip(t(origin_badge["tooltip_key"]))
                 origin_label.setStyleSheet(
-                    "font-size: 10px; font-weight: 600; color: {color};"
-                    " background: transparent; padding: 1px 6px;"
-                    " border: 1px solid {color}; border-radius: 3px;".format(
-                        color=color)
+                    "font-size: 10px; color: {color};"
+                    " background: transparent; padding: 0 2px;".format(
+                        color=theme.ACCENT_GREEN)
                 )
                 title_layout.addWidget(origin_label)
 
