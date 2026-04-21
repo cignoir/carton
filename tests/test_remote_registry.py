@@ -67,7 +67,7 @@ class TestPublisherRemoteGuard:
         publisher = self._make_publisher()
         # Prevent the probe from making a real network call.
         monkeypatch.setattr(
-            Publisher, "_probe_remote_registry_id", staticmethod(lambda e: ""),
+            Publisher, "_probe_remote_catalogue_id", staticmethod(lambda e: ""),
         )
         remote_entry = CatalogueEntry("remote", "https://example.com/registry.json")
         with pytest.raises(RemoteMirrorMissingError) as excinfo:
@@ -79,7 +79,7 @@ class TestPublisherRemoteGuard:
         publisher = self._make_publisher()
         rid = "11111111-2222-4333-8444-555555555555"
         monkeypatch.setattr(
-            Publisher, "_probe_remote_registry_id", staticmethod(lambda e: rid),
+            Publisher, "_probe_remote_catalogue_id", staticmethod(lambda e: rid),
         )
         remote_entry = CatalogueEntry("remote", "https://example.com/registry.json")
         with pytest.raises(RemoteMirrorMissingError) as excinfo:
@@ -90,7 +90,7 @@ class TestPublisherRemoteGuard:
     def test_unpublish_from_remote_without_mirror_raises(self, monkeypatch):
         publisher = self._make_publisher()
         monkeypatch.setattr(
-            Publisher, "_probe_remote_registry_id", staticmethod(lambda e: ""),
+            Publisher, "_probe_remote_catalogue_id", staticmethod(lambda e: ""),
         )
         remote_entry = CatalogueEntry("remote", "https://example.com/registry.json")
         with pytest.raises(RemoteMirrorMissingError):

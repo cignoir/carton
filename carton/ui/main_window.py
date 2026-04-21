@@ -604,7 +604,7 @@ class CartonWindow(QtWidgets.QDialog):
             migrate_local_registry_file_to_catalogue,
         )
         from carton.core.registry_id import new_registry_id, stamp_registry_id
-        from carton.ui._registry_pairing import probe_remote_registry_id
+        from carton.ui._catalogue_pairing import probe_remote_catalogue_id
 
         cat_path = os.path.join(folder, CATALOGUE_FILENAME)
         legacy_path = os.path.join(folder, LEGACY_REGISTRY_FILENAME)
@@ -612,7 +612,7 @@ class CartonWindow(QtWidgets.QDialog):
         # Decide the id to stamp — either inherit the remote's (pairing
         # intent) or mint a fresh one.
         if paired_remote is not None:
-            rid = paired_remote.catalogue_id or probe_remote_registry_id(paired_remote.path)
+            rid = paired_remote.catalogue_id or probe_remote_catalogue_id(paired_remote.path)
             if rid:
                 paired_remote.catalogue_id = rid
             else:
@@ -682,12 +682,12 @@ class CartonWindow(QtWidgets.QDialog):
 
     def _add_existing_registry(self, paired_remote=None):
         """Browse for an existing registry.json. Returns the CatalogueEntry or None."""
-        from carton.ui._registry_pairing import (
-            DuplicateRegistryChoice,
+        from carton.ui._catalogue_pairing import (
+            DuplicateCatalogueChoice,
             find_duplicate_entry,
-            read_local_registry_id,
-            resolve_duplicate_registry,
-            stamp_local_registry_with_prompt,
+            read_local_catalogue_id,
+            resolve_duplicate_catalogue,
+            stamp_local_catalogue_with_prompt,
         )
 
         path = QtWidgets.QFileDialog.getOpenFileName(
@@ -697,9 +697,9 @@ class CartonWindow(QtWidgets.QDialog):
         if not path:
             return None
 
-        rid, data = read_local_registry_id(path)
+        rid, data = read_local_catalogue_id(path)
         if not rid and data is not None:
-            rid = stamp_local_registry_with_prompt(self, path, data)
+            rid = stamp_local_catalogue_with_prompt(self, path, data)
 
         # Duplicate detection — skip the paired remote itself, because a
         # pairing flow is supposed to land on the same UUID (that's the
@@ -709,10 +709,10 @@ class CartonWindow(QtWidgets.QDialog):
             ignore=[paired_remote] if paired_remote is not None else None,
         )
         if existing is not None:
-            choice = resolve_duplicate_registry(self, existing)
-            if choice == DuplicateRegistryChoice.CANCEL:
+            choice = resolve_duplicate_catalogue(self, existing)
+            if choice == DuplicateCatalogueChoice.CANCEL:
                 return None
-            if choice == DuplicateRegistryChoice.USE_EXISTING:
+            if choice == DuplicateCatalogueChoice.USE_EXISTING:
                 if paired_remote is not None and not paired_remote.catalogue_id:
                     paired_remote.catalogue_id = rid
                     self._config.save()

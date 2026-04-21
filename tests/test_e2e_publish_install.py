@@ -290,7 +290,7 @@ class TestPublishViaRemoteMirror:
             # The remote exposes the same UUID via the probe path.
             from carton.core.publisher import Publisher as PubCls
             monkeypatch.setattr(
-                PubCls, "_probe_remote_registry_id",
+                PubCls, "_probe_remote_catalogue_id",
                 staticmethod(lambda e: shared_uuid),
             )
 

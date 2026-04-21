@@ -268,7 +268,7 @@ class Publisher:
 
         remote_id = registry_entry.catalogue_id
         if not remote_id:
-            remote_id = self._probe_remote_registry_id(registry_entry)
+            remote_id = self._probe_remote_catalogue_id(registry_entry)
             if remote_id:
                 # Cache on the live entry so subsequent calls don't re-probe.
                 registry_entry.catalogue_id = remote_id
@@ -284,7 +284,7 @@ class Publisher:
         return mirror
 
     @staticmethod
-    def _probe_remote_registry_id(registry_entry):
+    def _probe_remote_catalogue_id(registry_entry):
         """One-off HTTP GET to read ``registry_id`` from a remote registry.
 
         Returns ``""`` on any failure (network, parse, missing field) — the

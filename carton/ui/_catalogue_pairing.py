@@ -1,10 +1,10 @@
-"""Shared helpers for adding registries with UUID awareness.
+"""Shared helpers for adding catalogues with UUID awareness.
 
 Both the main window's "Publish → Add existing" flow and the Settings
-Registries tab need the same logic: peek at the registry.json, offer to
-stamp a missing ``registry_id``, and guard against duplicates already
-known to the Config. This module centralises that so the two UI paths
-can't drift apart.
+Catalogues tab need the same logic: peek at the catalogue.json, offer
+to stamp a missing ``catalogue_id``, and guard against duplicates
+already known to the Config. This module centralises that so the two
+UI paths can't drift apart.
 """
 
 import json
@@ -20,8 +20,8 @@ from carton.ui.compat import QtWidgets
 from carton.ui.i18n import t
 
 
-def read_local_registry_id(path):
-    """Peek at a local registry.json and return its (id, data) tuple.
+def read_local_catalogue_id(path):
+    """Peek at a local catalogue.json and return its (id, data) tuple.
 
     Returns ``(id, data_dict)`` where ``id`` may be empty. Returns
     ``("", None)`` on read / parse failure — callers should surface the
@@ -35,8 +35,8 @@ def read_local_registry_id(path):
     return read_registry_id(data), data
 
 
-def probe_remote_registry_id(url, timeout=15):
-    """One-off HTTP GET to a URL; return the registry_id it exposes.
+def probe_remote_catalogue_id(url, timeout=15):
+    """One-off HTTP GET to a URL; return the catalogue_id it exposes.
 
     Any network / parse error yields ``""``. No retry, no caching — callers
     that need persistence should store the result on a CatalogueEntry.
@@ -72,8 +72,8 @@ def probe_github_package_json(base_url, timeout=10):
     return data if isinstance(data, dict) else None
 
 
-def stamp_local_registry_with_prompt(parent, path, data):
-    """Offer to write a fresh ``registry_id`` into a local registry.json.
+def stamp_local_catalogue_with_prompt(parent, path, data):
+    """Offer to write a fresh ``catalogue_id`` into a local catalogue.json.
 
     Returns the resulting id (empty if the user declined or the write
     failed). The file is only touched when the user accepts. Assumes
@@ -103,44 +103,44 @@ def stamp_local_registry_with_prompt(parent, path, data):
     return rid
 
 
-class DuplicateRegistryChoice:
-    """Enum-like return value for ``resolve_duplicate_registry``."""
+class DuplicateCatalogueChoice:
+    """Enum-like return value for ``resolve_duplicate_catalogue``."""
     CANCEL = "cancel"
     USE_EXISTING = "use_existing"
     ADD_ALIAS = "add_alias"
 
 
-def find_duplicate_entry(registries, rid, new_path, ignore=None):
-    """Return the first registry that collides with ``(rid, new_path)``, or None.
+def find_duplicate_entry(catalogues, cid, new_path, ignore=None):
+    """Return the first catalogue that collides with ``(cid, new_path)``, or None.
 
-    * Entries with a different ``registry_id`` (or none) never collide.
+    * Entries with a different ``catalogue_id`` (or none) never collide.
     * The entry located at the same normalised path as ``new_path`` is not a
-      collision — it's the user re-selecting a registry that's already in
+      collision — it's the user re-selecting a catalogue that's already in
       the list verbatim.
     * Any entry in ``ignore`` is skipped. Used by the pairing flow to pass
       the remote that *should* share the UUID with the new local mirror —
       that's the whole point of pairing, so flagging it would be wrong.
     """
-    if not rid:
+    if not cid:
         return None
     ignore_set = set(id(e) for e in (ignore or []) if e is not None)
-    normalized = normalize_registry_path(new_path) if new_path else ""
-    for entry in registries:
+    normalized = normalize_catalogue_path(new_path) if new_path else ""
+    for entry in catalogues:
         if id(entry) in ignore_set:
             continue
         if normalized and entry.path == normalized:
             continue
-        entry_rid = getattr(entry, "catalogue_id", "")
-        if entry_rid and entry_rid == rid:
+        entry_cid = getattr(entry, "catalogue_id", "")
+        if entry_cid and entry_cid == cid:
             return entry
     return None
 
 
-def resolve_duplicate_registry(parent, existing_entry):
-    """Ask the user what to do when a registry is already known.
+def resolve_duplicate_catalogue(parent, existing_entry):
+    """Ask the user what to do when a catalogue is already known.
 
     ``existing_entry`` is the matched :class:`CatalogueEntry`. Returns one
-    of the :class:`DuplicateRegistryChoice` constants.
+    of the :class:`DuplicateCatalogueChoice` constants.
     """
     box = QtWidgets.QMessageBox(parent)
     box.setIcon(QtWidgets.QMessageBox.Question)
@@ -156,13 +156,13 @@ def resolve_duplicate_registry(parent, existing_entry):
     box.exec_()
     clicked = box.clickedButton()
     if clicked is use_btn:
-        return DuplicateRegistryChoice.USE_EXISTING
+        return DuplicateCatalogueChoice.USE_EXISTING
     if clicked is alias_btn:
-        return DuplicateRegistryChoice.ADD_ALIAS
-    return DuplicateRegistryChoice.CANCEL
+        return DuplicateCatalogueChoice.ADD_ALIAS
+    return DuplicateCatalogueChoice.CANCEL
 
 
-def normalize_registry_path(path):
+def normalize_catalogue_path(path):
     """Mirror ``CatalogueEntry``'s path normalisation for comparisons."""
     if path.startswith(("http://", "https://")):
         return path

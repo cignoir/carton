@@ -439,9 +439,9 @@ class RegistriesSection(QtWidgets.QWidget):
         self._finish_add(cat_path, os.path.basename(folder), catalogue_id=rid)
 
     def _add_local(self):
-        from carton.ui._registry_pairing import (
-            read_local_registry_id,
-            stamp_local_registry_with_prompt,
+        from carton.ui._catalogue_pairing import (
+            read_local_catalogue_id,
+            stamp_local_catalogue_with_prompt,
         )
 
         path = QtWidgets.QFileDialog.getOpenFileName(
@@ -450,9 +450,9 @@ class RegistriesSection(QtWidgets.QWidget):
         )[0]
         if not path:
             return
-        rid, data = read_local_registry_id(path)
+        rid, data = read_local_catalogue_id(path)
         if not rid and data is not None:
-            rid = stamp_local_registry_with_prompt(self, path, data)
+            rid = stamp_local_catalogue_with_prompt(self, path, data)
         default_name = os.path.basename(os.path.dirname(path))
         self._finish_add(path, default_name, catalogue_id=rid)
 
@@ -510,8 +510,8 @@ class RegistriesSection(QtWidgets.QWidget):
                 self, "Carton", t("settings_github_no_catalogue", repo),
             )
             return
-        from carton.ui._registry_pairing import probe_remote_registry_id
-        rid = probe_remote_registry_id(resolved)
+        from carton.ui._catalogue_pairing import probe_remote_catalogue_id
+        rid = probe_remote_catalogue_id(resolved)
         self._finish_add(resolved, repo.split("/")[1], catalogue_id=rid)
 
     def _try_register_single_package(self, base, repo):
@@ -530,7 +530,7 @@ class RegistriesSection(QtWidgets.QWidget):
         needs to change there.
         """
         from carton.core.personal_catalogue import PersonalCatalogue, derive_pkg_id
-        from carton.ui._registry_pairing import probe_github_package_json
+        from carton.ui._catalogue_pairing import probe_github_package_json
 
         pkg_data = probe_github_package_json(base)
         if pkg_data is None:
@@ -631,7 +631,7 @@ class RegistriesSection(QtWidgets.QWidget):
         )
 
     def _add_remote(self):
-        from carton.ui._registry_pairing import probe_remote_registry_id
+        from carton.ui._catalogue_pairing import probe_remote_catalogue_id
 
         url, ok = wide_input(
             self, t("settings_add_url"), t("settings_url_placeholder"), width=560,
@@ -646,14 +646,14 @@ class RegistriesSection(QtWidgets.QWidget):
         default_name = parts[-2] if len(parts) >= 2 else "remote"
         if default_name in ("raw", "main", "master"):
             default_name = parts[-3] if len(parts) >= 3 else "remote"
-        rid = probe_remote_registry_id(url)
+        rid = probe_remote_catalogue_id(url)
         self._finish_add(url, default_name, catalogue_id=rid)
 
     def _finish_add(self, path, default_name="", catalogue_id=""):
-        from carton.ui._registry_pairing import (
-            DuplicateRegistryChoice,
+        from carton.ui._catalogue_pairing import (
+            DuplicateCatalogueChoice,
             find_duplicate_entry,
-            resolve_duplicate_registry,
+            resolve_duplicate_catalogue,
         )
 
         # UUID-based duplicate detection: catches "same registry under a
@@ -664,10 +664,10 @@ class RegistriesSection(QtWidgets.QWidget):
             self._target.catalogues, catalogue_id, path,
         )
         if existing is not None:
-            choice = resolve_duplicate_registry(self, existing)
-            if choice == DuplicateRegistryChoice.CANCEL:
+            choice = resolve_duplicate_catalogue(self, existing)
+            if choice == DuplicateCatalogueChoice.CANCEL:
                 return
-            if choice == DuplicateRegistryChoice.USE_EXISTING:
+            if choice == DuplicateCatalogueChoice.USE_EXISTING:
                 return
             # ADD_ALIAS → fall through to the name prompt.
 

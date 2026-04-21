@@ -12,7 +12,7 @@ import os
 
 from carton.compat_urllib import URLError
 from carton.core.config import Config, CatalogueEntry
-from carton.ui._registry_pairing import (
+from carton.ui._catalogue_pairing import (
     find_duplicate_entry,
     probe_github_package_json,
 )
@@ -120,7 +120,7 @@ class TestProbeGithubPackageJson:
         def _fake_urlopen(req, timeout=None):
             return _FakeResponse(payload)
         monkeypatch.setattr(
-            "carton.ui._registry_pairing.urlopen", _fake_urlopen,
+            "carton.ui._catalogue_pairing.urlopen", _fake_urlopen,
         )
 
         data = probe_github_package_json(
@@ -134,7 +134,7 @@ class TestProbeGithubPackageJson:
         def _raise(*args, **kwargs):
             raise URLError("offline")
         monkeypatch.setattr(
-            "carton.ui._registry_pairing.urlopen", _raise,
+            "carton.ui._catalogue_pairing.urlopen", _raise,
         )
         assert probe_github_package_json(
             "https://raw.githubusercontent.com/ghost/tool/main",
@@ -144,7 +144,7 @@ class TestProbeGithubPackageJson:
         def _fake_urlopen(req, timeout=None):
             return _FakeResponse(b"not-json-at-all")
         monkeypatch.setattr(
-            "carton.ui._registry_pairing.urlopen", _fake_urlopen,
+            "carton.ui._catalogue_pairing.urlopen", _fake_urlopen,
         )
         assert probe_github_package_json(
             "https://raw.githubusercontent.com/alice/tool/main",
@@ -155,7 +155,7 @@ class TestProbeGithubPackageJson:
         def _fake_urlopen(req, timeout=None):
             return _FakeResponse(b"{}", code=404)
         monkeypatch.setattr(
-            "carton.ui._registry_pairing.urlopen", _fake_urlopen,
+            "carton.ui._catalogue_pairing.urlopen", _fake_urlopen,
         )
         assert probe_github_package_json(
             "https://raw.githubusercontent.com/alice/tool/main",
@@ -166,7 +166,7 @@ class TestProbeGithubPackageJson:
         def _fake_urlopen(req, timeout=None):
             return _FakeResponse(b"[1, 2, 3]")
         monkeypatch.setattr(
-            "carton.ui._registry_pairing.urlopen", _fake_urlopen,
+            "carton.ui._catalogue_pairing.urlopen", _fake_urlopen,
         )
         assert probe_github_package_json(
             "https://raw.githubusercontent.com/alice/tool/main",
@@ -181,7 +181,7 @@ class TestProbeGithubPackageJson:
             seen["url"] = req.get_full_url() if hasattr(req, "get_full_url") else str(req)
             return _FakeResponse(b'{"namespace": "a", "name": "b"}')
         monkeypatch.setattr(
-            "carton.ui._registry_pairing.urlopen", _fake_urlopen,
+            "carton.ui._catalogue_pairing.urlopen", _fake_urlopen,
         )
 
         probe_github_package_json(
