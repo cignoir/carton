@@ -77,9 +77,21 @@ class Origin(object):
     Subclasses must set the class attribute ``type`` (one of
     ``"embedded"``, ``"github"``, ``"url"``, ``"local"``) and implement
     :meth:`list_versions`, :meth:`get_artifact`, and :classmethod:`from_dict`.
+
+    Subclasses auto-register themselves into :attr:`_registry` at class
+    creation time via :meth:`__init_subclass__`, so adding a new origin
+    type (e.g. ``GitlabOrigin``) only requires importing it from
+    ``origins/__init__.py`` — no edits to :func:`origin_from_dict`.
     """
 
     type = None
+
+    _registry = {}
+
+    def __init_subclass__(cls, **kwargs):
+        super().__init_subclass__(**kwargs)
+        if cls.type:
+            Origin._registry[cls.type] = cls
 
     def list_versions(self):
         raise NotImplementedError
@@ -105,6 +117,11 @@ def origin_from_dict(data, base_dir=""):
 
     ``base_dir`` is the directory (or URL) of the parent catalogue.json,
     used by embedded origins to resolve relative ``download_url`` values.
+
+    Lookup uses :attr:`Origin._registry`, which is populated automatically
+    when each subclass module is imported. Importing
+    ``carton.core.origins`` (the package) is sufficient; this function does
+    so defensively in case a caller imported ``origins.base`` directly.
     """
     if not isinstance(data, dict):
         raise OriginError("origin must be an object, got {!r}".format(type(data).__name__))
@@ -112,19 +129,11 @@ def origin_from_dict(data, base_dir=""):
     if not type_:
         raise OriginError("origin missing required 'type' field")
 
-    # Lazy imports to avoid base.py ↔ subclass circular import at module load.
-    from carton.core.origins.embedded_origin import EmbeddedOrigin
-    from carton.core.origins.github_origin import GithubOrigin
-    from carton.core.origins.local_origin import LocalOrigin
-    from carton.core.origins.url_origin import UrlOrigin
+    # Ensure all Origin subclasses are loaded so the registry is populated.
+    # Cheap after the first call — Python caches module imports.
+    import carton.core.origins  # noqa: F401
 
-    registry = {
-        EmbeddedOrigin.type: EmbeddedOrigin,
-        GithubOrigin.type: GithubOrigin,
-        LocalOrigin.type: LocalOrigin,
-        UrlOrigin.type: UrlOrigin,
-    }
-    cls = registry.get(type_)
+    cls = Origin._registry.get(type_)
     if cls is None:
         raise OriginError("unsupported origin type: {!r}".format(type_))
     return cls.from_dict(data, base_dir=base_dir)
