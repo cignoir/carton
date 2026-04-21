@@ -1,20 +1,19 @@
-"""Tests for v0.3.x → v0.4.0 schema migrations."""
+"""Tests for v0.3.x → v0.4.0 installed.json migration.
+
+v0.3.x → v0.4.0 ``registry.json`` handling is covered by
+:mod:`tests.test_catalogue_v5_migration` (which exercises the single-
+step ``registry → catalogue`` path that replaced the intermediate
+v4.0 migrator).
+"""
 
 import json
 import os
-import tempfile
 
 from carton.core.migrations import (
     INSTALLED_SCHEMA_VERSION,
-    REGISTRY_SCHEMA_VERSION,
     migrate_installed_data,
     migrate_installed_file,
-    migrate_local_registry_file,
-    migrate_registry_data,
 )
-
-
-_VALID_UUID = "aaaaaaaa-1111-4111-8111-aaaaaaaaaaaa"
 
 
 class TestMigrateInstalledData:
@@ -128,66 +127,6 @@ class TestMigrateInstalledData:
         assert twice is once
 
 
-class TestMigrateRegistryData:
-    def test_passthrough_when_already_v4(self):
-        data = {
-            "schema_version": REGISTRY_SCHEMA_VERSION,
-            "registry_id": _VALID_UUID,
-            "packages": {},
-        }
-        out, was = migrate_registry_data(data)
-        assert was is False
-        assert out is data
-
-    def test_v3_1_with_registry_id_only_bumps_version(self):
-        data = {
-            "schema_version": "3.1",
-            "registry_id": _VALID_UUID,
-            "packages": {},
-        }
-        out, was = migrate_registry_data(data)
-        assert was is True
-        assert out["schema_version"] == REGISTRY_SCHEMA_VERSION
-        assert out["registry_id"] == _VALID_UUID
-
-    def test_missing_registry_id_gets_stamped(self):
-        data = {"schema_version": "3.0", "packages": {}}
-        out, was = migrate_registry_data(data)
-        assert was is True
-        assert out["registry_id"]  # non-empty UUID
-        assert out["schema_version"] == REGISTRY_SCHEMA_VERSION
-
-    def test_stamp_id_false_keeps_id_empty(self):
-        """Remote-only reads must not generate ephemeral UUIDs."""
-        data = {"schema_version": "3.0", "packages": {}}
-        out, _ = migrate_registry_data(data, stamp_id=False)
-        assert out.get("registry_id", "") == ""
-        assert out["schema_version"] == REGISTRY_SCHEMA_VERSION
-
-    def test_legacy_icon_true_becomes_at_auto(self):
-        data = {
-            "schema_version": "3.1",
-            "registry_id": _VALID_UUID,
-            "packages": {
-                "a/b": {"name": "b", "icon": True},
-            },
-        }
-        out, was = migrate_registry_data(data)
-        assert was is True
-        assert out["packages"]["a/b"]["icon"] == "@auto"
-
-    def test_legacy_icon_false_becomes_null(self):
-        data = {
-            "schema_version": "3.1",
-            "registry_id": _VALID_UUID,
-            "packages": {
-                "a/b": {"name": "b", "icon": False},
-            },
-        }
-        out, _ = migrate_registry_data(data)
-        assert out["packages"]["a/b"]["icon"] is None
-
-
 class TestFileMigrations:
     def test_installed_file_round_trip(self, tmp_path):
         path = tmp_path / "installed.json"
@@ -230,18 +169,3 @@ class TestFileMigrations:
             if p.startswith("installed.json.bak-")
         ]
         assert backups == []
-
-    def test_registry_file_round_trip(self, tmp_path):
-        path = tmp_path / "registry.json"
-        path.write_text(json.dumps({
-            "schema_version": "3.0",
-            "packages": {"a/b": {"name": "b", "icon": True}},
-        }), encoding="utf-8")
-
-        wrote = migrate_local_registry_file(str(path))
-        assert wrote is True
-        with open(path, "r", encoding="utf-8") as f:
-            data = json.load(f)
-        assert data["schema_version"] == REGISTRY_SCHEMA_VERSION
-        assert data["registry_id"]
-        assert data["packages"]["a/b"]["icon"] == "@auto"
