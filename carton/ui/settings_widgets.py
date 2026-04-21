@@ -4,8 +4,8 @@ Each section is a small QWidget that operates on a *target* object — either
 a live :class:`carton.core.config.Config` or a
 :class:`carton.core.profile.InstallerProfile`. Both expose the same
 attribute shape (``language``, ``proxy``, ``auto_check_updates``,
-``registries`` as a list of ``CatalogueEntry``, plus ``add_registry`` /
-``remove_registry`` helpers), so the section code is identical regardless
+``catalogues`` as a list of ``CatalogueEntry``, plus ``add_catalogue`` /
+``remove_catalogue`` helpers), so the section code is identical regardless
 of which one it edits.
 
 The caller passes a ``persist`` callback that the section invokes after
@@ -282,8 +282,8 @@ class StrictVerifySection(QtWidgets.QWidget):
 class RegistriesSection(QtWidgets.QWidget):
     """Registry list editor — list + add/edit/remove + reorder buttons.
 
-    Operates on ``target.registries`` (list of CatalogueEntry) via the
-    ``add_registry`` / ``remove_registry`` helpers both Config and
+    Operates on ``target.catalogues`` (list of CatalogueEntry) via the
+    ``add_catalogue`` / ``remove_catalogue`` helpers both Config and
     InstallerProfile expose.
     """
 
@@ -301,7 +301,7 @@ class RegistriesSection(QtWidgets.QWidget):
         layout.addWidget(label)
 
         self._list = QtWidgets.QListWidget()
-        for entry in self._target.registries:
+        for entry in self._target.catalogues:
             self._list.addItem(str(entry))
         self._list.itemDoubleClicked.connect(self._edit)
         layout.addWidget(self._list)
@@ -357,7 +357,7 @@ class RegistriesSection(QtWidgets.QWidget):
 
     def _refresh(self):
         self._list.clear()
-        for entry in self._target.registries:
+        for entry in self._target.catalogues:
             self._list.addItem(str(entry))
 
     def _add(self):
@@ -524,7 +524,7 @@ class RegistriesSection(QtWidgets.QWidget):
 
         On a successful hit we mutate ``~/.carton/personal_catalogue.json``
         and surface a message box — we intentionally do NOT touch
-        ``_target.registries`` because plan v5.0 keeps personal-catalogue
+        ``_target.catalogues`` because plan v5.0 keeps personal-catalogue
         entries separate from subscribed catalogues. The live UI list
         (``self._list``) only reflects subscribed catalogues, so nothing
         needs to change there.
@@ -572,7 +572,7 @@ class RegistriesSection(QtWidgets.QWidget):
         and stores a ``url`` origin in the personal catalogue so the
         Library view can merge it in alongside subscribed catalogues.
 
-        No ``_target.registries`` mutation — personal catalogue lives
+        No ``_target.catalogues`` mutation — personal catalogue lives
         under ``~/.carton/`` and is machine-local (plan v5.0 spec).
         """
         from carton.core.personal_catalogue import (
@@ -661,7 +661,7 @@ class RegistriesSection(QtWidgets.QWidget):
         # silently when neither side has a catalogue_id — the legacy
         # name-based check below still guards.
         existing = find_duplicate_entry(
-            self._target.registries, catalogue_id, path,
+            self._target.catalogues, catalogue_id, path,
         )
         if existing is not None:
             choice = resolve_duplicate_registry(self, existing)
@@ -676,21 +676,21 @@ class RegistriesSection(QtWidgets.QWidget):
         )
         if not ok or not name:
             return
-        for r in self._target.registries:
+        for r in self._target.catalogues:
             if r.name == name:
                 QtWidgets.QMessageBox.warning(
                     self, "Carton", t("settings_already_exists", name),
                 )
                 return
-        self._target.add_registry(name, path, catalogue_id=catalogue_id)
+        self._target.add_catalogue(name, path, catalogue_id=catalogue_id)
         self._persist()
-        self._list.addItem(str(self._target.registries[-1]))
+        self._list.addItem(str(self._target.catalogues[-1]))
 
     def _edit(self, item=None):
         row = self._list.currentRow()
         if row < 0:
             return
-        entry = self._target.registries[row]
+        entry = self._target.catalogues[row]
 
         dialog = QtWidgets.QDialog(self)
         dialog.setWindowTitle(t("settings_edit_catalogue"))
@@ -731,7 +731,7 @@ class RegistriesSection(QtWidgets.QWidget):
             if not new_name or not new_path:
                 return
             from carton.core.config import CatalogueEntry
-            self._target.registries[row] = CatalogueEntry(new_name, new_path)
+            self._target.catalogues[row] = CatalogueEntry(new_name, new_path)
             self._persist()
             self._refresh()
             self._list.setCurrentRow(row)
@@ -740,14 +740,14 @@ class RegistriesSection(QtWidgets.QWidget):
         row = self._list.currentRow()
         if row < 0:
             return
-        entry = self._target.registries[row]
+        entry = self._target.catalogues[row]
         reply = QtWidgets.QMessageBox.question(
             self, "Remove Registry",
             t("settings_confirm_remove", entry.name),
             QtWidgets.QMessageBox.Yes | QtWidgets.QMessageBox.No,
         )
         if reply == QtWidgets.QMessageBox.Yes:
-            self._target.remove_registry(entry.name)
+            self._target.remove_catalogue(entry.name)
             self._persist()
             self._list.takeItem(row)
 
@@ -755,7 +755,7 @@ class RegistriesSection(QtWidgets.QWidget):
         row = self._list.currentRow()
         if row <= 0:
             return
-        regs = self._target.registries
+        regs = self._target.catalogues
         regs[row], regs[row - 1] = regs[row - 1], regs[row]
         self._persist()
         self._refresh()
@@ -763,9 +763,9 @@ class RegistriesSection(QtWidgets.QWidget):
 
     def _move_down(self):
         row = self._list.currentRow()
-        if row < 0 or row >= len(self._target.registries) - 1:
+        if row < 0 or row >= len(self._target.catalogues) - 1:
             return
-        regs = self._target.registries
+        regs = self._target.catalogues
         regs[row], regs[row + 1] = regs[row + 1], regs[row]
         self._persist()
         self._refresh()

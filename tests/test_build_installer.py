@@ -42,7 +42,7 @@ class TestBuilderPlaceholderSubstitution:
         # substring assertions below).
         profile_path = tmp_path / "studio.json"
         profile_path.write_text(json.dumps({
-            "registries": [{"name": "s", "path": "https://example.com/r.json"}],
+            "catalogues": [{"name": "s", "path": "https://example.com/r.json"}],
             "language": "ja",
             "auto_check_updates": False,
             "github_repo": "acme/carton",
@@ -107,7 +107,7 @@ class TestTemplateSeedSemantics:
 
     def test_seed_applied_when_no_existing_config(self, tmp_path, monkeypatch):
         seed = {
-            "registries": [
+            "catalogues": [
                 {"name": "studio", "path": "https://example.com/r.json"},
             ],
             "language": "ja",

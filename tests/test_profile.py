@@ -14,7 +14,7 @@ class TestRoundtrip:
         path = tmp_path / "blank.json"
         InstallerProfile.blank().save(str(path))
         loaded = InstallerProfile.load(str(path))
-        assert loaded.registries == []
+        assert loaded.catalogues == []
         assert loaded.language == "auto"
         assert loaded.auto_check_updates is True
         assert loaded.proxy == ""
@@ -22,7 +22,7 @@ class TestRoundtrip:
     def test_full_profile_round_trip(self, tmp_path):
         path = tmp_path / "studio.json"
         original = InstallerProfile(
-            registries=[
+            catalogues=[
                 CatalogueEntry("studio-main", "/srv/studio/registry.json"),
                 CatalogueEntry("ari", "https://example.com/registry.json"),
             ],
@@ -33,9 +33,9 @@ class TestRoundtrip:
         )
         original.save(str(path))
         loaded = InstallerProfile.load(str(path))
-        assert len(loaded.registries) == 2
-        assert loaded.registries[0].name == "studio-main"
-        assert loaded.registries[1].path == "https://example.com/registry.json"
+        assert len(loaded.catalogues) == 2
+        assert loaded.catalogues[0].name == "studio-main"
+        assert loaded.catalogues[1].path == "https://example.com/registry.json"
         assert loaded.language == "ja"
         assert loaded.auto_check_updates is False
         assert loaded.github_repo == "acme/carton-fork"
@@ -43,15 +43,15 @@ class TestRoundtrip:
 
     def test_from_config_snapshots_relevant_fields(self):
         c = Config(
-            registries=[CatalogueEntry("a", "/x/registry.json")],
+            catalogues=[CatalogueEntry("a", "/x/registry.json")],
             language="en",
             proxy="http://p:80",
         )
         profile = InstallerProfile.from_config(c)
         assert profile.language == "en"
         assert profile.proxy == "http://p:80"
-        assert len(profile.registries) == 1
-        assert profile.registries[0].name == "a"
+        assert len(profile.catalogues) == 1
+        assert profile.catalogues[0].name == "a"
 
     def test_to_dict_omits_install_dir(self):
         # install_dir is intentionally NOT a profile field — verify it
@@ -65,7 +65,7 @@ class TestValidation:
     def test_unknown_field_rejected(self, tmp_path):
         path = tmp_path / "bad.json"
         path.write_text(
-            json.dumps({"registries": [], "weird_key": 1}),
+            json.dumps({"catalogues": [], "weird_key": 1}),
             encoding="utf-8",
         )
         with pytest.raises(InvalidProfileError, match="weird_key"):
@@ -78,13 +78,13 @@ class TestValidation:
     def test_registry_without_name_rejected(self):
         with pytest.raises(InvalidProfileError, match="name is required"):
             InstallerProfile.from_dict({
-                "registries": [{"path": "/x/r.json"}],
+                "catalogues": [{"path": "/x/r.json"}],
             })
 
     def test_registry_without_path_rejected(self):
         with pytest.raises(InvalidProfileError, match="path is required"):
             InstallerProfile.from_dict({
-                "registries": [{"name": "n"}],
+                "catalogues": [{"name": "n"}],
             })
 
     def test_non_object_root_rejected(self, tmp_path):

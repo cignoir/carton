@@ -232,10 +232,10 @@ class TestEmbeddedPublishStamping:
             reg_dir = os.path.join(tmpdir, "registry")
             os.makedirs(reg_dir, exist_ok=True)
             reg_path = os.path.join(reg_dir, "registry.json")
-            config.add_registry("studio-main", reg_path)
+            config.add_catalogue("studio-main", reg_path)
             publisher = Publisher(config)
             pkg_data = install_mgr.get_installed_packages()[pkg_id]
-            publisher.publish(pkg_data, config.registries[0])
+            publisher.publish(pkg_data, config.catalogues[0])
 
             # Zip lands at packages/<ns>/<name>/<version>/<name>-<version>.zip
             zip_path = os.path.join(
@@ -259,10 +259,10 @@ class TestEmbeddedPublishStamping:
 
             reg_dir = os.path.join(tmpdir, "registry")
             os.makedirs(reg_dir, exist_ok=True)
-            config.add_registry("studio-main", os.path.join(reg_dir, "registry.json"))
+            config.add_catalogue("studio-main", os.path.join(reg_dir, "registry.json"))
             publisher = Publisher(config)
             pkg_data = install_mgr.get_installed_packages()[pkg_id]
-            publisher.publish(pkg_data, config.registries[0])
+            publisher.publish(pkg_data, config.catalogues[0])
 
             with open(os.path.join(project_root, "package.json"), "r",
                       encoding="utf-8") as f:
@@ -271,7 +271,7 @@ class TestEmbeddedPublishStamping:
             assert origin.get("type") == "embedded"
             assert origin.get("catalogue_name") == "studio-main"
             # The stamped registry_id propagates to home_origin too.
-            assert origin.get("catalogue_id") == config.registries[0].catalogue_id
+            assert origin.get("catalogue_id") == config.catalogues[0].catalogue_id
 
     def test_caller_home_origin_wins_over_target(self):
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -281,13 +281,13 @@ class TestEmbeddedPublishStamping:
 
             reg_dir = os.path.join(tmpdir, "registry")
             os.makedirs(reg_dir, exist_ok=True)
-            config.add_registry("mirror", os.path.join(reg_dir, "registry.json"))
+            config.add_catalogue("mirror", os.path.join(reg_dir, "registry.json"))
             publisher = Publisher(config)
 
             pkg_data = dict(install_mgr.get_installed_packages()[pkg_id])
             caller_home = {"type": "github", "repo": "mystudio/my_tool"}
             pkg_data["home_origin"] = caller_home
-            publisher.publish(pkg_data, config.registries[0])
+            publisher.publish(pkg_data, config.catalogues[0])
 
             with open(os.path.join(project_root, "package.json"), "r",
                       encoding="utf-8") as f:

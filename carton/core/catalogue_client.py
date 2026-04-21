@@ -52,7 +52,7 @@ class CatalogueClient(object):
 
     Args:
         config: :class:`carton.core.config.Config`. We read
-            ``config.registries`` as the list of catalogue entries
+            ``config.catalogues`` as the list of catalogue entries
             (a :class:`~carton.core.config.CatalogueEntry`).
         cache: Optional :class:`SourceCache`. Defaults to one rooted at
             ``~/.carton/source_cache/``. Tests pass a temp dir.
@@ -82,7 +82,7 @@ class CatalogueClient(object):
         self._packages = {}
         self._origins = {}
         self._catalogue_meta = {}
-        for entry in self._config.registries:
+        for entry in self._config.catalogues:
             try:
                 self._load_entry(entry)
             except Exception as e:
@@ -101,7 +101,7 @@ class CatalogueClient(object):
 
     def get_packages(self):
         """Return merged ``{pkg_id: pkg_data}``. Loads on first call."""
-        if not self._packages and self._config.registries:
+        if not self._packages and self._config.catalogues:
             self.fetch()
         return self._packages
 

@@ -36,7 +36,7 @@ def _unpublish(args):
     from carton.core.publisher import Publisher
 
     reg_entry = CatalogueEntry(name="cli", path=args.registry)
-    config = Config(registries=[reg_entry])
+    config = Config(catalogues=[reg_entry])
     publisher = Publisher(config)
 
     # Show package info before unpublishing

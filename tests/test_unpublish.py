@@ -44,8 +44,8 @@ def _setup_env(tmpdir):
 
     reg_dir = os.path.join(tmpdir, "registry")
     os.makedirs(reg_dir, exist_ok=True)
-    config.add_registry("test", os.path.join(reg_dir, "registry.json"))
-    registry_entry = config.registries[0]
+    config.add_catalogue("test", os.path.join(reg_dir, "registry.json"))
+    registry_entry = config.catalogues[0]
 
     publisher = Publisher(config)
     return config, install_mgr, script_mgr, publisher, registry_entry

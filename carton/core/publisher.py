@@ -772,7 +772,7 @@ class Publisher:
     def find_published_registries(self, pkg_id):
         """Find all local registries that contain a given package id."""
         results = []
-        for entry in self._config.registries:
+        for entry in self._config.catalogues:
             if entry.is_remote:
                 continue
             reg_path = os.path.normpath(entry.path)

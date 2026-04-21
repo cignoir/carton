@@ -63,7 +63,7 @@ class TestCatalogueClientEmbedded:
         )
 
         config = Config(install_dir=str(tmp_path / "install"))
-        config.add_registry("studio", str(catalogue_path))
+        config.add_catalogue("studio", str(catalogue_path))
 
         client = CatalogueClient(config, cache=isolated_cache)
         client.fetch()
@@ -108,7 +108,7 @@ class TestCatalogueClientEmbedded:
         }), encoding="utf-8")
 
         config = Config(install_dir=str(tmp_path / "install"))
-        config.add_registry("studio", str(legacy_path))
+        config.add_catalogue("studio", str(legacy_path))
 
         client = CatalogueClient(config, cache=isolated_cache)
         client.fetch()
@@ -149,8 +149,8 @@ class TestCatalogueClientEmbedded:
         }, catalogue_id="bbbbbbbb-2222-4222-8222-bbbbbbbbbbbb")), encoding="utf-8")
 
         config = Config(install_dir=str(tmp_path / "install"))
-        config.add_registry("a", str(cat_a))
-        config.add_registry("b", str(cat_b))
+        config.add_catalogue("a", str(cat_a))
+        config.add_catalogue("b", str(cat_b))
 
         client = CatalogueClient(config, cache=isolated_cache)
         client.fetch()
@@ -188,7 +188,7 @@ class TestCatalogueClientGithub:
         )
 
         config = Config(install_dir=str(tmp_path / "install"))
-        config.add_registry("studio", str(catalogue_path))
+        config.add_catalogue("studio", str(catalogue_path))
 
         client = CatalogueClient(config, cache=isolated_cache)
         client.fetch()
@@ -209,7 +209,7 @@ class TestCatalogueClientGithub:
         })), encoding="utf-8")
 
         config = Config(install_dir=str(tmp_path / "install"))
-        config.add_registry("studio", str(catalogue_path))
+        config.add_catalogue("studio", str(catalogue_path))
 
         client = CatalogueClient(config, cache=isolated_cache)
         client.fetch()
@@ -231,7 +231,7 @@ class TestCatalogueClientPersonal:
                      github_stub=None, monkeypatch=None):
         config = Config(install_dir=str(tmp_path / "install"))
         for name, catalogue_path in (subscribed or []):
-            config.add_registry(name, str(catalogue_path))
+            config.add_catalogue(name, str(catalogue_path))
         if github_stub is not None:
             # Personal github origins will try to hit the GitHub API via
             # the Origin layer when resolving versions. Stub it out so
@@ -365,7 +365,7 @@ class TestCatalogueClientPersonal:
         )
 
         config = Config(install_dir=str(tmp_path / "install"))
-        config.add_registry("studio", str(catalogue_path))
+        config.add_catalogue("studio", str(catalogue_path))
 
         client = CatalogueClient(
             config, cache=isolated_cache,

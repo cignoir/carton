@@ -12,7 +12,7 @@ from carton.core.config import Config, InstallDirChangeError, CatalogueEntry
 class TestConfig:
     def test_defaults(self):
         c = Config()
-        assert c.registries == []
+        assert c.catalogues == []
         assert c.auto_check_updates is True
         assert c.github_repo == "cignoir/carton"
 
@@ -20,32 +20,32 @@ class TestConfig:
         with tempfile.TemporaryDirectory() as tmpdir:
             path = os.path.join(tmpdir, "config.json")
             c = Config()
-            c.add_registry("test", "/some/path/registry.json")
+            c.add_catalogue("test", "/some/path/registry.json")
             c.save(path)
 
             loaded = Config.load(path)
-            assert len(loaded.registries) == 1
-            assert loaded.registries[0].name == "test"
-            assert loaded.registries[0].path == os.path.normpath("/some/path/registry.json")
+            assert len(loaded.catalogues) == 1
+            assert loaded.catalogues[0].name == "test"
+            assert loaded.catalogues[0].path == os.path.normpath("/some/path/registry.json")
 
     def test_load_missing(self):
         c = Config.load("/nonexistent/path/config.json")
-        assert c.registries == []
+        assert c.catalogues == []
 
     def test_properties(self):
         c = Config(install_dir="/tmp/carton")
         assert c.packages_dir == os.path.join("/tmp/carton", "packages")
         assert c.staging_dir == os.path.join("/tmp/carton", ".staging")
 
-    def test_add_remove_registry(self):
+    def test_add_remove_catalogue(self):
         c = Config()
-        c.add_registry("a", "/path/a.json")
-        c.add_registry("b", "/path/b.json")
-        assert len(c.registries) == 2
+        c.add_catalogue("a", "/path/a.json")
+        c.add_catalogue("b", "/path/b.json")
+        assert len(c.catalogues) == 2
 
-        c.remove_registry("a")
-        assert len(c.registries) == 1
-        assert c.registries[0].name == "b"
+        c.remove_catalogue("a")
+        assert len(c.catalogues) == 1
+        assert c.catalogues[0].name == "b"
 
 
 class TestChangeInstallDir:
@@ -209,37 +209,37 @@ class TestConfigCatalogueIdLookup:
     _UUID_A = "aaaaaaaa-1111-4111-8111-aaaaaaaaaaaa"
     _UUID_B = "bbbbbbbb-2222-4222-8222-bbbbbbbbbbbb"
 
-    def test_find_registry_by_id(self):
+    def test_find_catalogue_by_id(self):
         c = Config()
-        c.add_registry("a", "/p/a.json", catalogue_id=self._UUID_A)
-        c.add_registry("b", "/p/b.json", catalogue_id=self._UUID_B)
-        match = c.find_registry_by_id(self._UUID_B)
+        c.add_catalogue("a", "/p/a.json", catalogue_id=self._UUID_A)
+        c.add_catalogue("b", "/p/b.json", catalogue_id=self._UUID_B)
+        match = c.find_catalogue_by_id(self._UUID_B)
         assert match is not None
         assert match.name == "b"
 
-    def test_find_registry_by_id_missing(self):
+    def test_find_catalogue_by_id_missing(self):
         c = Config()
-        c.add_registry("a", "/p/a.json", catalogue_id=self._UUID_A)
-        assert c.find_registry_by_id("cccccccc-3333-4333-8333-cccccccccccc") is None
-        assert c.find_registry_by_id("") is None
+        c.add_catalogue("a", "/p/a.json", catalogue_id=self._UUID_A)
+        assert c.find_catalogue_by_id("cccccccc-3333-4333-8333-cccccccccccc") is None
+        assert c.find_catalogue_by_id("") is None
 
     def test_find_local_mirror_prefers_local(self):
         c = Config()
-        c.add_registry("remote", "https://example.com/r.json", catalogue_id=self._UUID_A)
-        c.add_registry("local", "/p/a.json", catalogue_id=self._UUID_A)
+        c.add_catalogue("remote", "https://example.com/r.json", catalogue_id=self._UUID_A)
+        c.add_catalogue("local", "/p/a.json", catalogue_id=self._UUID_A)
         mirror = c.find_local_mirror(self._UUID_A)
         assert mirror is not None
         assert mirror.name == "local"
 
     def test_find_local_mirror_none_when_only_remote(self):
         c = Config()
-        c.add_registry("remote", "https://example.com/r.json", catalogue_id=self._UUID_A)
+        c.add_catalogue("remote", "https://example.com/r.json", catalogue_id=self._UUID_A)
         assert c.find_local_mirror(self._UUID_A) is None
 
     def test_registry_id_roundtrips_through_save_load(self, tmp_path):
         path = tmp_path / "config.json"
         c = Config()
-        c.add_registry("a", "/p/a.json", catalogue_id=self._UUID_A)
+        c.add_catalogue("a", "/p/a.json", catalogue_id=self._UUID_A)
         c.save(str(path))
         loaded = Config.load(str(path))
-        assert loaded.registries[0].catalogue_id == self._UUID_A
+        assert loaded.catalogues[0].catalogue_id == self._UUID_A

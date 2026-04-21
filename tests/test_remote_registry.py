@@ -100,10 +100,10 @@ class TestPublisherRemoteGuard:
         """find_published_registries should skip remote registries."""
         with tempfile.TemporaryDirectory() as tmpdir:
             config = Config(install_dir=tmpdir)
-            config.add_registry("remote", "https://example.com/registry.json")
+            config.add_catalogue("remote", "https://example.com/registry.json")
 
             # Also add a local registry that doesn't exist
-            config.add_registry("local", os.path.join(tmpdir, "nonexistent.json"))
+            config.add_catalogue("local", os.path.join(tmpdir, "nonexistent.json"))
 
             publisher = Publisher(config)
             results = publisher.find_published_registries("some-uuid")
@@ -130,11 +130,11 @@ class TestConfigRemoteRegistry:
             url = "https://raw.githubusercontent.com/org/repo/main/registry.json"
 
             c = Config()
-            c.add_registry("github", url)
+            c.add_catalogue("github", url)
             c.save(path)
 
             loaded = Config.load(path)
-            assert len(loaded.registries) == 1
-            assert loaded.registries[0].name == "github"
-            assert loaded.registries[0].path == url
-            assert loaded.registries[0].is_remote is True
+            assert len(loaded.catalogues) == 1
+            assert loaded.catalogues[0].name == "github"
+            assert loaded.catalogues[0].path == url
+            assert loaded.catalogues[0].is_remote is True

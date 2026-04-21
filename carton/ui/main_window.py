@@ -145,7 +145,7 @@ class _PublishTargetDialog(QtWidgets.QDialog):
         layout = QtWidgets.QVBoxLayout(self)
         layout.setSpacing(12)
 
-        registries = list(config.registries)
+        registries = list(config.catalogues)
 
         # Dropdown for existing registries (local + remote, annotated)
         if registries:
@@ -676,9 +676,9 @@ class CartonWindow(QtWidgets.QDialog):
             with open(cat_path, "w", encoding="utf-8") as f:
                 json.dump(data, f, indent=2, ensure_ascii=False)
 
-        self._config.add_registry(name, cat_path, catalogue_id=rid)
+        self._config.add_catalogue(name, cat_path, catalogue_id=rid)
         self._config.save()
-        return self._config.registries[-1]
+        return self._config.catalogues[-1]
 
     def _add_existing_registry(self, paired_remote=None):
         """Browse for an existing registry.json. Returns the CatalogueEntry or None."""
@@ -705,7 +705,7 @@ class CartonWindow(QtWidgets.QDialog):
         # pairing flow is supposed to land on the same UUID (that's the
         # whole point). Also skip the same normalised path.
         existing = find_duplicate_entry(
-            self._config.registries, rid, path,
+            self._config.catalogues, rid, path,
             ignore=[paired_remote] if paired_remote is not None else None,
         )
         if existing is not None:
@@ -727,11 +727,11 @@ class CartonWindow(QtWidgets.QDialog):
         if not ok or not name:
             return None
 
-        self._config.add_registry(name, path, catalogue_id=rid)
+        self._config.add_catalogue(name, path, catalogue_id=rid)
         if paired_remote is not None and rid and not paired_remote.catalogue_id:
             paired_remote.catalogue_id = rid
         self._config.save()
-        return self._config.registries[-1]
+        return self._config.catalogues[-1]
 
     def set_services(self, registry_client, install_manager, downloader,
                      self_updater=None, config=None, script_manager=None,
@@ -1814,7 +1814,7 @@ class CartonWindow(QtWidgets.QDialog):
         dlg.exec_()
 
     def _find_registry_by_name(self, name):
-        for entry in self._config.registries:
+        for entry in self._config.catalogues:
             if entry.name == name:
                 return entry
         return None
@@ -1888,7 +1888,7 @@ class CartonWindow(QtWidgets.QDialog):
         result = {}
         if not self._config:
             return result
-        for entry in self._config.registries:
+        for entry in self._config.catalogues:
             if entry.is_remote:
                 continue
             reg_path = os.path.normpath(entry.path)
@@ -1909,7 +1909,7 @@ class CartonWindow(QtWidgets.QDialog):
             return
 
         target = None
-        for entry in self._config.registries:
+        for entry in self._config.catalogues:
             if entry.is_remote:
                 continue
             if entry.name == registry_name:

@@ -81,7 +81,7 @@ class TestPublishInstallRoundtrip:
             # --- Publisher side ---
             pub_config = Config(
                 install_dir=publisher_home,
-                registries=[registry_entry],
+                catalogues=[registry_entry],
             )
             publisher = Publisher(pub_config)
 
@@ -139,7 +139,7 @@ class TestPublishInstallRoundtrip:
             # --- Consumer side (different Config, same registry) ---
             cons_config = Config(
                 install_dir=consumer_home,
-                registries=[registry_entry],
+                catalogues=[registry_entry],
             )
             client = CatalogueClient(cons_config)
             client.fetch()
@@ -296,7 +296,7 @@ class TestPublishViaRemoteMirror:
 
             pub_config = Config(
                 install_dir=publisher_home,
-                registries=[mirror_entry, remote_entry],
+                catalogues=[mirror_entry, remote_entry],
             )
             publisher = Publisher(pub_config)
 
