@@ -97,16 +97,16 @@ class TestPublisherRemoteGuard:
             publisher.unpublish("fake-id", remote_entry)
 
     def test_find_published_skips_remote(self):
-        """find_published_registries should skip remote registries."""
+        """find_published_catalogues should skip remote catalogues."""
         with tempfile.TemporaryDirectory() as tmpdir:
             config = Config(install_dir=tmpdir)
             config.add_catalogue("remote", "https://example.com/registry.json")
 
-            # Also add a local registry that doesn't exist
+            # Also add a local catalogue that doesn't exist
             config.add_catalogue("local", os.path.join(tmpdir, "nonexistent.json"))
 
             publisher = Publisher(config)
-            results = publisher.find_published_registries("some-uuid")
+            results = publisher.find_published_catalogues("some-uuid")
             # Both should be skipped (remote skipped, local doesn't exist)
             assert results == []
 

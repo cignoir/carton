@@ -189,25 +189,33 @@ class TestGithubPublishStamping:
             data = json.load(f)
         assert data["home_origin"] == caller_home
 
-    def test_legacy_home_registry_still_stamped(self, publisher, tmp_path):
-        """home_origin addition must not displace the existing
-        home_registry pass-through — the alias period keeps both shapes
-        side-by-side until Step 4-B consumer migration."""
+    def test_legacy_home_registry_is_dropped_on_stamp(self, publisher, tmp_path):
+        """Post-v5.0 the publisher no longer preserves pre-existing
+        ``home_registry`` payloads — only ``home_origin`` survives on
+        the stamped source tree. This protects v5.0 consumers from
+        seeing the obsolete alias on freshly-published trees."""
         local = _make_tool_for_github(tmp_path)
-        legacy = {"name": "studio-main", "registry_id": "a" * 8 + "-" + "a" * 4
-                  + "-" + "a" * 4 + "-" + "a" * 4 + "-" + "a" * 12}
+        # Pre-populate the source package.json with a legacy stub to
+        # prove the publisher actively drops it rather than just
+        # declining to write a new one.
+        pkg_json_path = os.path.join(local, "package.json")
+        with open(pkg_json_path, "r", encoding="utf-8") as f:
+            seed = json.load(f)
+        seed["home_registry"] = {"name": "studio-main",
+                                 "registry_id": "a" * 8 + "-" + "a" * 4
+                                 + "-" + "a" * 4 + "-" + "a" * 4 + "-" + "a" * 12}
+        with open(pkg_json_path, "w", encoding="utf-8") as f:
+            json.dump(seed, f)
+
         gh = _StubGh(available=True)
         publisher.publish_github(
-            _pkg_data_for_github(local, home_registry=legacy),
+            _pkg_data_for_github(local),
             repo="mystudio/my_tool",
             gh_cli_module=gh,
         )
-        with open(os.path.join(local, "package.json"), "r", encoding="utf-8") as f:
+        with open(pkg_json_path, "r", encoding="utf-8") as f:
             data = json.load(f)
-        assert data["home_registry"] == legacy
-        # home_origin is independently auto-built from the repo since
-        # pkg_data didn't carry one; this is the alias-period "no auto-sync"
-        # rule in action.
+        assert "home_registry" not in data
         assert data["home_origin"] == {"type": "github", "repo": "mystudio/my_tool"}
 
 
@@ -229,9 +237,9 @@ class TestEmbeddedPublishStamping:
             config, install_mgr, script_mgr = _make_env(tmpdir)
             pkg_id = _register(script_mgr, project_root)
 
-            reg_dir = os.path.join(tmpdir, "registry")
+            reg_dir = os.path.join(tmpdir, "catalogue")
             os.makedirs(reg_dir, exist_ok=True)
-            reg_path = os.path.join(reg_dir, "registry.json")
+            reg_path = os.path.join(reg_dir, "catalogue.json")
             config.add_catalogue("studio-main", reg_path)
             publisher = Publisher(config)
             pkg_data = install_mgr.get_installed_packages()[pkg_id]
@@ -257,9 +265,9 @@ class TestEmbeddedPublishStamping:
             config, install_mgr, script_mgr = _make_env(tmpdir)
             pkg_id = _register(script_mgr, project_root)
 
-            reg_dir = os.path.join(tmpdir, "registry")
+            reg_dir = os.path.join(tmpdir, "catalogue")
             os.makedirs(reg_dir, exist_ok=True)
-            config.add_catalogue("studio-main", os.path.join(reg_dir, "registry.json"))
+            config.add_catalogue("studio-main", os.path.join(reg_dir, "catalogue.json"))
             publisher = Publisher(config)
             pkg_data = install_mgr.get_installed_packages()[pkg_id]
             publisher.publish(pkg_data, config.catalogues[0])
@@ -279,9 +287,9 @@ class TestEmbeddedPublishStamping:
             config, install_mgr, script_mgr = _make_env(tmpdir)
             pkg_id = _register(script_mgr, project_root)
 
-            reg_dir = os.path.join(tmpdir, "registry")
+            reg_dir = os.path.join(tmpdir, "catalogue")
             os.makedirs(reg_dir, exist_ok=True)
-            config.add_catalogue("mirror", os.path.join(reg_dir, "registry.json"))
+            config.add_catalogue("mirror", os.path.join(reg_dir, "catalogue.json"))
             publisher = Publisher(config)
 
             pkg_data = dict(install_mgr.get_installed_packages()[pkg_id])
