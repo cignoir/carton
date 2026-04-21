@@ -574,11 +574,13 @@ class CartonWindow(QtWidgets.QDialog):
         self._loading_label.setVisible(False)
 
     def _create_new_registry(self, paired_remote=None):
-        """Create a new empty registry directory. Returns the RegistryEntry or None.
+        """Create a new empty v5.0 catalogue directory. Returns the CatalogueEntry or None.
 
-        If ``paired_remote`` is given, the new registry inherits its
-        ``registry_id`` so that publishes to the remote route here via
-        :meth:`Config.find_local_mirror`.
+        If ``paired_remote`` is given, the new catalogue inherits its
+        ``catalogue_id`` so that publishes to the remote route here via
+        :meth:`Config.find_local_mirror`. A pre-existing ``catalogue.json``
+        / ``registry.json`` in the target folder is reused — if it has a
+        mismatched id we rewrite to the remote's id (pairing intent).
         """
         folder = QtWidgets.QFileDialog.getExistingDirectory(
             self, t("setup_select_folder"),
@@ -595,10 +597,20 @@ class CartonWindow(QtWidgets.QDialog):
             return None
 
         import json
-        from carton.core.registry_id import new_registry_id
+        from carton.core.migrations import (
+            CATALOGUE_FILENAME,
+            CATALOGUE_SCHEMA_VERSION,
+            LEGACY_REGISTRY_FILENAME,
+            migrate_local_registry_file_to_catalogue,
+        )
+        from carton.core.registry_id import new_registry_id, stamp_registry_id
         from carton.ui._registry_pairing import probe_remote_registry_id
 
-        reg_path = os.path.join(folder, "registry.json")
+        cat_path = os.path.join(folder, CATALOGUE_FILENAME)
+        legacy_path = os.path.join(folder, LEGACY_REGISTRY_FILENAME)
+
+        # Decide the id to stamp — either inherit the remote's (pairing
+        # intent) or mint a fresh one.
         if paired_remote is not None:
             rid = paired_remote.registry_id or probe_remote_registry_id(paired_remote.path)
             if rid:
@@ -606,47 +618,66 @@ class CartonWindow(QtWidgets.QDialog):
             else:
                 rid = new_registry_id()
                 # Remote doesn't expose an id — the user will need to
-                # re-upload this registry.json before the remote can
-                # resolve back.
+                # re-upload this catalogue before the remote can resolve
+                # back.
         else:
             rid = new_registry_id()
 
-        if not os.path.exists(reg_path):
+        # A pre-existing legacy registry.json gets promoted to v5.0 first
+        # so all subsequent reads land on catalogue.json. After migration
+        # the file below is always cat_path.
+        if not os.path.exists(cat_path) and os.path.exists(legacy_path):
+            migrated = migrate_local_registry_file_to_catalogue(legacy_path)
+            if migrated:
+                cat_path = migrated
+
+        if not os.path.exists(cat_path):
+            # Fresh scaffold — v5.0 directly, skip the v3.1 detour that
+            # only existed to be auto-migrated on next launch.
             os.makedirs(folder, exist_ok=True)
-            with open(reg_path, "w", encoding="utf-8") as f:
+            with open(cat_path, "w", encoding="utf-8") as f:
                 json.dump({
-                    "schema_version": "3.1",
-                    "registry_id": rid,
+                    "schema_version": CATALOGUE_SCHEMA_VERSION,
+                    "catalogue_id": rid,
+                    "display_name": name,
                     "packages": {},
                 }, f, indent=2, ensure_ascii=False)
             os.makedirs(os.path.join(folder, "packages"), exist_ok=True)
         else:
-            # Folder already has a registry.json — stamp if missing so the
-            # pairing still works.
-            from carton.core.registry_id import stamp_registry_id
+            # Existing catalogue — stamp id if missing / mismatched. The
+            # pairing case (rid from remote ≠ existing id) rewrites so
+            # the mirror lookup works; otherwise just ensure an id exists.
             try:
-                with open(reg_path, "r", encoding="utf-8") as f:
+                with open(cat_path, "r", encoding="utf-8") as f:
                     data = json.load(f)
             except (OSError, json.JSONDecodeError):
-                data = {"schema_version": "3.1", "packages": {}}
-            # If we're pairing with a remote and the existing file has a
-            # different id, prefer the remote's (so the pair works).
-            current = data.get("registry_id", "")
+                data = {
+                    "schema_version": CATALOGUE_SCHEMA_VERSION,
+                    "packages": {},
+                }
+            data.setdefault("schema_version", CATALOGUE_SCHEMA_VERSION)
+            current = (data.get("catalogue_id")
+                       or data.get("registry_id") or "").strip().lower()
             if paired_remote is not None and rid and current != rid:
-                data["registry_id"] = rid
-                data["schema_version"] = "3.1"
-                with open(reg_path, "w", encoding="utf-8") as f:
-                    json.dump(data, f, indent=2, ensure_ascii=False)
+                data["catalogue_id"] = rid
             else:
-                stamp_registry_id(data)
-                rid = data["registry_id"]
-                data.setdefault("schema_version", "3.1")
-                with open(reg_path, "w", encoding="utf-8") as f:
-                    json.dump(data, f, indent=2, ensure_ascii=False)
+                # Normal stamp path — read whatever id is there, top up
+                # if missing. stamp_registry_id understands the legacy
+                # key so we feed it a bridge dict and copy back.
+                bridge = {"registry_id": current}
+                stamp_registry_id(bridge)
+                rid = bridge["registry_id"]
+                data["catalogue_id"] = rid
+            # Drop the legacy key on rewrite so we don't keep a stale
+            # duplicate — dual-emit is only appropriate at the Config
+            # level, not inside catalogue.json itself (v5.0 schema
+            # only defines catalogue_id).
+            data.pop("registry_id", None)
+            with open(cat_path, "w", encoding="utf-8") as f:
+                json.dump(data, f, indent=2, ensure_ascii=False)
 
-        self._config.add_registry(name, reg_path, registry_id=rid)
+        self._config.add_registry(name, cat_path, registry_id=rid)
         self._config.save()
-        # Return the newly added entry
         return self._config.registries[-1]
 
     def _add_existing_registry(self, paired_remote=None):

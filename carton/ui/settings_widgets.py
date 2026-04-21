@@ -390,6 +390,20 @@ class RegistriesSection(QtWidgets.QWidget):
             self._create_new_local()
 
     def _create_new_local(self):
+        """Scaffold a fresh v5.0 catalogue in an empty folder.
+
+        Pre-existing ``catalogue.json`` / ``registry.json`` in the picked
+        folder are left alone — we just register the path and let
+        :class:`CatalogueClient` read / auto-migrate them on first fetch.
+        Only the "folder is empty" case creates a new file, and it's
+        always v5.0 (no more v3.1 legacy scaffolds that would just get
+        migrated on the next launch).
+        """
+        from carton.core.migrations import (
+            CATALOGUE_FILENAME,
+            CATALOGUE_SCHEMA_VERSION,
+            LEGACY_REGISTRY_FILENAME,
+        )
         from carton.core.registry_id import new_registry_id
 
         folder = QtWidgets.QFileDialog.getExistingDirectory(
@@ -397,23 +411,32 @@ class RegistriesSection(QtWidgets.QWidget):
         )
         if not folder:
             return
-        reg_path = os.path.join(folder, "registry.json")
-        rid = ""
-        if not os.path.exists(reg_path):
-            try:
-                rid = new_registry_id()
-                os.makedirs(folder, exist_ok=True)
-                with open(reg_path, "w", encoding="utf-8") as f:
-                    json.dump({
-                        "schema_version": "3.1",
-                        "registry_id": rid,
-                        "packages": {},
-                    }, f, indent=2, ensure_ascii=False)
-                os.makedirs(os.path.join(folder, "packages"), exist_ok=True)
-            except Exception as e:
-                QtWidgets.QMessageBox.warning(self, "Carton", str(e))
-                return
-        self._finish_add(reg_path, os.path.basename(folder), registry_id=rid)
+        cat_path = os.path.join(folder, CATALOGUE_FILENAME)
+        legacy_path = os.path.join(folder, LEGACY_REGISTRY_FILENAME)
+
+        if os.path.exists(cat_path):
+            self._finish_add(cat_path, os.path.basename(folder), registry_id="")
+            return
+        if os.path.exists(legacy_path):
+            # CatalogueClient auto-migrates on first read; just register.
+            self._finish_add(legacy_path, os.path.basename(folder), registry_id="")
+            return
+
+        try:
+            rid = new_registry_id()
+            os.makedirs(folder, exist_ok=True)
+            with open(cat_path, "w", encoding="utf-8") as f:
+                json.dump({
+                    "schema_version": CATALOGUE_SCHEMA_VERSION,
+                    "catalogue_id": rid,
+                    "display_name": os.path.basename(folder),
+                    "packages": {},
+                }, f, indent=2, ensure_ascii=False)
+            os.makedirs(os.path.join(folder, "packages"), exist_ok=True)
+        except Exception as e:
+            QtWidgets.QMessageBox.warning(self, "Carton", str(e))
+            return
+        self._finish_add(cat_path, os.path.basename(folder), registry_id=rid)
 
     def _add_local(self):
         from carton.ui._registry_pairing import (
