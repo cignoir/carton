@@ -1,4 +1,4 @@
-"""Carton CLI — admin commands for registry management."""
+"""Carton CLI — admin commands for catalogue management."""
 
 import argparse
 import json
@@ -6,49 +6,62 @@ import os
 import sys
 
 
-def _load_registry(path):
-    """Load and return (registry_dict, normalized_path)."""
+def _load_catalogue(path, migrate=True):
+    """Load a catalogue file and return ``(catalogue_dict, normalized_path)``.
+
+    By default v4.0 registries are migrated in-memory to the v5.0 shape
+    so consumers only need to think in catalogue terms. Pass
+    ``migrate=False`` to inspect the on-disk shape verbatim (used by
+    the ``catalogue id`` command, which needs to reject pre-v5.0 files
+    rather than silently upgrading them).
+    """
     path = os.path.normpath(path)
     if not os.path.exists(path):
-        print("Error: registry not found: {}".format(path))
+        print("Error: catalogue not found: {}".format(path))
         sys.exit(1)
     with open(path, "r", encoding="utf-8") as f:
-        return json.load(f), path
+        data = json.load(f)
+    if migrate:
+        from carton.core.migrations import migrate_registry_to_catalogue
+        data, _ = migrate_registry_to_catalogue(data, stamp_id=False)
+    return data, path
 
 
 def _list_packages(args):
-    """List all packages in a registry."""
-    registry, _ = _load_registry(args.registry)
-    packages = registry.get("packages", {})
+    """List all packages in a catalogue."""
+    catalogue, _ = _load_catalogue(args.catalogue)
+    packages = catalogue.get("packages", {})
     if not packages:
-        print("No packages in registry.")
+        print("No packages in catalogue.")
         return
     for pkg_id, pkg_data in packages.items():
         name = pkg_data.get("display_name", pkg_data.get("name", "?"))
-        latest = pkg_data.get("latest_version", "?")
+        origin = pkg_data.get("origin") or {}
+        latest = origin.get("latest_version", "?")
         print("  {} — {} v{}".format(pkg_id, name, latest))
 
 
 def _unpublish(args):
-    """Force-unpublish a package from a registry."""
+    """Force-unpublish a package from a catalogue."""
     from carton.core.config import CatalogueEntry
     from carton.core.config import Config
     from carton.core.publisher import Publisher
 
-    reg_entry = CatalogueEntry(name="cli", path=args.registry)
-    config = Config(catalogues=[reg_entry])
+    cat_entry = CatalogueEntry(name="cli", path=args.catalogue)
+    config = Config(catalogues=[cat_entry])
     publisher = Publisher(config)
 
     # Show package info before unpublishing
-    registry, _ = _load_registry(args.registry)
-    packages = registry.get("packages", {})
+    catalogue, _ = _load_catalogue(args.catalogue)
+    packages = catalogue.get("packages", {})
     if args.id not in packages:
-        print("Error: package {} not found in registry.".format(args.id))
+        print("Error: package {} not found in catalogue.".format(args.id))
         sys.exit(1)
 
     pkg = packages[args.id]
     display = pkg.get("display_name", pkg.get("name", args.id))
-    versions = list(pkg.get("versions", {}).keys())
+    origin = pkg.get("origin") or {}
+    versions = list((origin.get("versions") or {}).keys())
 
     print("Package: {} ({})".format(display, args.id))
     print("Versions: {}".format(", ".join(versions) if versions else "none"))
@@ -59,7 +72,7 @@ def _unpublish(args):
             print("Cancelled.")
             return
 
-    result = publisher.unpublish(args.id, reg_entry)
+    result = publisher.unpublish(args.id, cat_entry)
     print("Unpublished: {}".format(result["name"]))
 
 
@@ -73,7 +86,7 @@ def _catalogue_id(args):
     from carton.core.uuid_id import is_valid_uuid, new_uuid
     from carton.core.migrations import CATALOGUE_SCHEMA_VERSION
 
-    catalogue, path = _load_registry(args.path)
+    catalogue, path = _load_catalogue(args.path, migrate=False)
     if catalogue.get("schema_version") != CATALOGUE_SCHEMA_VERSION:
         print(
             "Error: not a v{} catalogue. Run "
@@ -141,12 +154,12 @@ def main():
     sub = parser.add_subparsers(dest="command")
 
     # list
-    ls = sub.add_parser("list", help="List packages in a registry")
-    ls.add_argument("registry", help="Path to registry.json")
+    ls = sub.add_parser("list", help="List packages in a catalogue")
+    ls.add_argument("catalogue", help="Path to catalogue.json")
 
     # unpublish
     unpub = sub.add_parser("unpublish", help="Force-unpublish a package")
-    unpub.add_argument("--registry", required=True, help="Path to registry.json")
+    unpub.add_argument("--catalogue", required=True, help="Path to catalogue.json")
     unpub.add_argument("--id", required=True,
                        help="Package id to unpublish ('namespace/name')")
     unpub.add_argument("--force", "-f", action="store_true",
