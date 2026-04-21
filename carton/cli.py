@@ -97,6 +97,44 @@ def _registry_id(args):
         sys.exit(2)
 
 
+def _catalogue_id(args):
+    """Show or stamp a v5.0 catalogue's ``catalogue_id``.
+
+    Vendor-neutral: only reads/writes the local catalogue.json. Refuses
+    pre-v5.0 files so admins don't silently lose the schema bump — they
+    should run ``catalogue migrate`` first.
+    """
+    from carton.core.registry_id import is_valid_registry_id, new_registry_id
+    from carton.core.migrations import CATALOGUE_SCHEMA_VERSION
+
+    catalogue, path = _load_registry(args.path)
+    if catalogue.get("schema_version") != CATALOGUE_SCHEMA_VERSION:
+        print(
+            "Error: not a v{} catalogue. Run "
+            "'python -m carton catalogue migrate {}' first.".format(
+                CATALOGUE_SCHEMA_VERSION, path,
+            )
+        )
+        sys.exit(1)
+    raw = (catalogue.get("catalogue_id") or "").strip().lower()
+    current = raw if is_valid_registry_id(raw) else ""
+    if args.stamp:
+        if current:
+            print("Already has catalogue_id: {}".format(current))
+            return
+        new_id = new_registry_id()
+        catalogue["catalogue_id"] = new_id
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump(catalogue, f, indent=2, ensure_ascii=False)
+        print("Stamped: {}".format(new_id))
+        return
+    if current:
+        print(current)
+    else:
+        print("(no catalogue_id)")
+        sys.exit(2)
+
+
 def _catalogue_migrate(args):
     """Migrate a v4.0 registry.json on disk to a v5.0 catalogue.json.
 
@@ -171,6 +209,15 @@ def main():
         "path",
         help="Path to registry.json (or its containing directory)",
     )
+    cid_p = cat_sub.add_parser(
+        "id",
+        help="Print or stamp a v5.0 catalogue's catalogue_id (UUID)",
+    )
+    cid_p.add_argument("path", help="Path to catalogue.json")
+    cid_p.add_argument(
+        "--stamp", action="store_true",
+        help="Write a fresh UUID into the file if it doesn't already have one",
+    )
 
     args = parser.parse_args()
 
@@ -182,6 +229,8 @@ def main():
         _registry_id(args)
     elif args.command == "catalogue" and getattr(args, "catalogue_command", None) == "migrate":
         _catalogue_migrate(args)
+    elif args.command == "catalogue" and getattr(args, "catalogue_command", None) == "id":
+        _catalogue_id(args)
     else:
         parser.print_help()
 
