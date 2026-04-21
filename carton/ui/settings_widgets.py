@@ -277,6 +277,168 @@ class StrictVerifySection(QtWidgets.QWidget):
         self._persist()
 
 
+# ---------- Add-catalogue method picker -----------------------------------
+
+
+class _AddCatalogueMethodDialog(QtWidgets.QDialog):
+    """Two-step picker: scope (single / catalogue) → transport.
+
+    The add-a-catalogue menu used to flatten five transports into a single
+    list, which hit first-time users cold — single-package flows and
+    catalogue flows were mixed together with no visible grouping.
+    Splitting the question into *what are you adding?* and then *from
+    where?* trades one extra click for a much clearer mental model, and
+    each step stays at ≤3 options.
+    """
+
+    CANCEL = ""
+    GITHUB = "github"
+    PACKAGE_URL = "package_url"
+    REMOTE = "remote"
+    LOCAL = "local"
+    CREATE_NEW = "create_new"
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle(t("add"))
+        self.setMinimumWidth(400)
+        self.setStyleSheet(theme.dialog_style())
+        self._result = self.CANCEL
+
+        outer = QtWidgets.QVBoxLayout(self)
+        outer.setContentsMargins(20, 18, 20, 18)
+
+        self._stack = QtWidgets.QStackedWidget()
+        self._stack.addWidget(self._build_step1())
+        self._stack.addWidget(self._build_step2_single())
+        self._stack.addWidget(self._build_step2_catalogue())
+        outer.addWidget(self._stack)
+
+    def result_method(self):
+        return self._result
+
+    # ---- step 1 ---------------------------------------------------------
+
+    def _build_step1(self):
+        w = QtWidgets.QWidget()
+        lay = QtWidgets.QVBoxLayout(w)
+        lay.setContentsMargins(0, 0, 0, 0)
+        lay.setSpacing(14)
+
+        title = QtWidgets.QLabel(t("settings_add_scope_title"))
+        title.setStyleSheet(theme.LABEL_DIM_BOLD)
+        lay.addWidget(title)
+
+        lay.addLayout(self._make_option(
+            "\U0001F4E6  " + t("settings_add_scope_single"),
+            t("settings_add_scope_single_hint"),
+            lambda: self._stack.setCurrentIndex(1),
+            accent=theme.ACCENT_GREEN,
+            accent_hover=theme.ACCENT_GREEN_HOVER,
+        ))
+        lay.addLayout(self._make_option(
+            "\U0001F4DA  " + t("settings_add_scope_catalogue"),
+            t("settings_add_scope_catalogue_hint"),
+            lambda: self._stack.setCurrentIndex(2),
+            accent=theme.TEXT_SECONDARY,
+            accent_hover=theme.BG_HOVER,
+        ))
+        lay.addStretch()
+        return w
+
+    # ---- step 2 variants ------------------------------------------------
+
+    def _build_step2_single(self):
+        w = QtWidgets.QWidget()
+        lay = QtWidgets.QVBoxLayout(w)
+        lay.setContentsMargins(0, 0, 0, 0)
+        lay.setSpacing(14)
+        lay.addLayout(self._header_with_back(t("settings_add_single_title")))
+
+        lay.addLayout(self._make_option(
+            t("settings_add_github"),
+            t("settings_add_github_hint"),
+            lambda: self._finish(self.GITHUB),
+            accent=theme.ACCENT_GREEN,
+            accent_hover=theme.ACCENT_GREEN_HOVER,
+        ))
+        lay.addLayout(self._make_option(
+            t("settings_add_package_url"),
+            t("settings_add_package_url_hint"),
+            lambda: self._finish(self.PACKAGE_URL),
+            accent=theme.ACCENT_GREEN,
+            accent_hover=theme.ACCENT_GREEN_HOVER,
+        ))
+        lay.addStretch()
+        return w
+
+    def _build_step2_catalogue(self):
+        w = QtWidgets.QWidget()
+        lay = QtWidgets.QVBoxLayout(w)
+        lay.setContentsMargins(0, 0, 0, 0)
+        lay.setSpacing(14)
+        lay.addLayout(self._header_with_back(t("settings_add_catalogue_title")))
+
+        lay.addLayout(self._make_option(
+            t("settings_add_local"),
+            t("settings_add_local_hint"),
+            lambda: self._finish(self.LOCAL),
+            accent=theme.TEXT_SECONDARY,
+            accent_hover=theme.BG_HOVER,
+        ))
+        lay.addLayout(self._make_option(
+            t("settings_add_url"),
+            t("settings_add_url_hint"),
+            lambda: self._finish(self.REMOTE),
+            accent=theme.TEXT_SECONDARY,
+            accent_hover=theme.BG_HOVER,
+        ))
+        lay.addLayout(self._make_option(
+            t("settings_add_create_new"),
+            t("settings_add_create_new_hint"),
+            lambda: self._finish(self.CREATE_NEW),
+            accent=theme.ACCENT_LINK,
+            accent_hover="#1d3040",
+        ))
+        lay.addStretch()
+        return w
+
+    # ---- shared helpers -------------------------------------------------
+
+    def _make_option(self, title, hint, callback, accent, accent_hover):
+        lay = QtWidgets.QVBoxLayout()
+        lay.setSpacing(4)
+        btn = QtWidgets.QPushButton(title)
+        btn.setCursor(Qt.PointingHandCursor)
+        btn.setStyleSheet(theme.btn_outline(accent, accent_hover))
+        btn.clicked.connect(callback)
+        lay.addWidget(btn)
+        hint_lbl = QtWidgets.QLabel(hint)
+        hint_lbl.setStyleSheet(
+            "color: {}; padding-left: 12px; font-size: 11px;".format(theme.TEXT_DIM)
+        )
+        hint_lbl.setWordWrap(True)
+        lay.addWidget(hint_lbl)
+        return lay
+
+    def _header_with_back(self, title_text):
+        row = QtWidgets.QHBoxLayout()
+        back_btn = QtWidgets.QPushButton("\u2190  " + t("settings_add_back"))
+        back_btn.setCursor(Qt.PointingHandCursor)
+        back_btn.setStyleSheet(theme.btn_ghost_text())
+        back_btn.clicked.connect(lambda: self._stack.setCurrentIndex(0))
+        row.addWidget(back_btn)
+        row.addStretch()
+        title = QtWidgets.QLabel(title_text)
+        title.setStyleSheet(theme.LABEL_DIM_BOLD)
+        row.addWidget(title)
+        return row
+
+    def _finish(self, code):
+        self._result = code
+        self.accept()
+
+
 # ---------- RegistriesSection ---------------------------------------------
 
 
@@ -362,33 +524,25 @@ class RegistriesSection(QtWidgets.QWidget):
             self._list.addItem(str(entry))
 
     def _add(self):
-        # Package-first order: single-package flows come first so the
-        # common "just give me this tool" case lands fastest. Catalogue
-        # flows (subscribing to / maintaining a multi-package index) stay
-        # below but visible — catalogue is a useful aggregation feature,
-        # not a hidden power-user thing.
-        choices = [
-            t("settings_add_github"),       # [0] single repo (probes pkg.json first)
-            t("settings_add_package_url"),  # [1] single pkg.json URL
-            t("settings_add_url"),          # [2] remote catalogue URL
-            t("settings_add_local"),        # [3] local catalogue file
-            t("settings_add_create_new"),   # [4] create new local catalogue
-        ]
-        chosen, ok = QtWidgets.QInputDialog.getItem(
-            self, t("add"), t("settings_add_method"), choices, 0, False,
-        )
-        if not ok:
+        # Two-step picker: scope (single / catalogue) → transport. The
+        # previous flat 5-item list mixed single-package flows and
+        # catalogue flows into one menu, which was hostile to first-time
+        # users. Splitting on scope first keeps each step at ≤3 options
+        # and reflects the Package-first UX pledge (single-package above
+        # the fold, catalogue one click deeper as an author/team tool).
+        dlg = _AddCatalogueMethodDialog(self)
+        if dlg.exec_() != QtWidgets.QDialog.Accepted:
             return
-        if chosen == choices[0]:
-            self._add_github()
-        elif chosen == choices[1]:
-            self._add_package_url()
-        elif chosen == choices[2]:
-            self._add_remote()
-        elif chosen == choices[3]:
-            self._add_local()
-        elif chosen == choices[4]:
-            self._create_new_local()
+        dispatch = {
+            _AddCatalogueMethodDialog.GITHUB: self._add_github,
+            _AddCatalogueMethodDialog.PACKAGE_URL: self._add_package_url,
+            _AddCatalogueMethodDialog.REMOTE: self._add_remote,
+            _AddCatalogueMethodDialog.LOCAL: self._add_local,
+            _AddCatalogueMethodDialog.CREATE_NEW: self._create_new_local,
+        }
+        handler = dispatch.get(dlg.result_method())
+        if handler is not None:
+            handler()
 
     def _create_new_local(self):
         """Scaffold a fresh v5.0 catalogue in an empty folder.
