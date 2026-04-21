@@ -651,7 +651,7 @@ class CartonWindow(QtWidgets.QDialog):
 
         path = QtWidgets.QFileDialog.getOpenFileName(
             self, t("settings_select_registry"), "",
-            "Registry (registry.json);;JSON (*.json)",
+            "Catalogue (catalogue.json);;Legacy (registry.json);;JSON (*.json)",
         )[0]
         if not path:
             return None
