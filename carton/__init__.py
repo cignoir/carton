@@ -12,7 +12,7 @@ _initialized = False
 _config = None
 _env_mgr = None
 _install_mgr = None
-_registry_client = None
+_catalogue_client = None
 _downloader = None
 _self_updater = None
 _script_mgr = None
@@ -22,7 +22,7 @@ _publisher = None
 def startup():
     """Initialization called from the bootstrap at Maya startup."""
     global _initialized, _config, _env_mgr, _install_mgr
-    global _registry_client, _downloader, _self_updater, _script_mgr, _publisher
+    global _catalogue_client, _downloader, _self_updater, _script_mgr, _publisher
     if _initialized:
         return
     _initialized = True
@@ -53,11 +53,9 @@ def startup():
 
     _env_mgr = MayaEnvManager()
     _install_mgr = InstallManager(_config, _env_mgr)
-    # The global name stays ``_registry_client`` to avoid a flag-day
-    # rename across set_services / main_window / Updater; it will flip
-    # to ``_catalogue_client`` when Step 4-B's Library-tree work touches
-    # those call sites anyway.
-    _registry_client = CatalogueClient(_config)
+    # CatalogueClient understands v5.0 catalogue.json directly and
+    # auto-migrates v4.0 registry.json on first read.
+    _catalogue_client = CatalogueClient(_config)
     _downloader = Downloader(_config)
     _self_updater = SelfUpdater(_config, _downloader)
     _script_mgr = ScriptManager(_config, _install_mgr, _env_mgr)
@@ -91,7 +89,7 @@ def show():
     from carton.ui.main_window import create_window
     _window = create_window()
     _window.set_services(
-        registry_client=_registry_client,
+        catalogue_client=_catalogue_client,
         install_manager=_install_mgr,
         downloader=_downloader,
         self_updater=_self_updater,

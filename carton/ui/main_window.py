@@ -238,7 +238,7 @@ class CartonWindow(QtWidgets.QDialog):
         self.setMinimumSize(_WINDOW_WIDTH, _WINDOW_HEIGHT)
         self.setStyleSheet(_STYLE)
 
-        self._registry_client = None
+        self._catalogue_client = None
         self._install_manager = None
         self._downloader = None
         self._self_updater = None
@@ -733,10 +733,10 @@ class CartonWindow(QtWidgets.QDialog):
         self._config.save()
         return self._config.catalogues[-1]
 
-    def set_services(self, registry_client, install_manager, downloader,
+    def set_services(self, catalogue_client, install_manager, downloader,
                      self_updater=None, config=None, script_manager=None,
                      publisher=None):
-        self._registry_client = registry_client
+        self._catalogue_client = catalogue_client
         self._install_manager = install_manager
         self._downloader = downloader
         self._self_updater = self_updater
@@ -818,9 +818,9 @@ class CartonWindow(QtWidgets.QDialog):
                 pass
 
     def refresh(self):
-        if not self._registry_client:
+        if not self._catalogue_client:
             return
-        self._registry_client.fetch()
+        self._catalogue_client.fetch()
         self._rebuild_sidebar()
         self._rebuild_cards()
         self._check_self_update()
@@ -868,7 +868,7 @@ class CartonWindow(QtWidgets.QDialog):
             lst.blockSignals(True)
             lst.clear()
 
-        packages = self._registry_client.get_packages() if self._registry_client else {}
+        packages = self._catalogue_client.get_packages() if self._catalogue_client else {}
         installed = self._install_manager.get_installed_packages() if self._install_manager else {}
 
         # Library — All + namespace children. Mirrors the My Tools layout:
@@ -979,7 +979,7 @@ class CartonWindow(QtWidgets.QDialog):
             # Library selection is now namespace-scoped (or "all"), so we
             # filter packages by namespace before checking which have an
             # install on disk.
-            packages = self._registry_client.get_packages() if self._registry_client else {}
+            packages = self._catalogue_client.get_packages() if self._catalogue_client else {}
             installed = self._install_manager.get_installed_packages() if self._install_manager else {}
             ns_filter = self._library_ns_filter(self._sidebar_selection)
             has_installed = any(
@@ -1064,8 +1064,8 @@ class CartonWindow(QtWidgets.QDialog):
             visible_items = self._collect_mytools_items(installed, selection)
         else:
             packages = (
-                self._registry_client.get_packages()
-                if self._registry_client else {}
+                self._catalogue_client.get_packages()
+                if self._catalogue_client else {}
             )
             visible_items = self._collect_registry_items(packages, installed, selection)
 
@@ -1157,7 +1157,7 @@ class CartonWindow(QtWidgets.QDialog):
         """Return ``[(pkg_id, view_data)]`` for the My Tools view, sorted by ns."""
         ns_filter = self._mytools_ns_filter(selection)
         registry_packages = (
-            self._registry_client.get_packages() if self._registry_client else {}
+            self._catalogue_client.get_packages() if self._catalogue_client else {}
         )
         items = []
         for pkg_id, pkg_data in installed.items():
@@ -1359,7 +1359,7 @@ class CartonWindow(QtWidgets.QDialog):
             card.set_icon(icon_path)
 
     def _show_detail(self, pkg_id):
-        packages = self._registry_client.get_packages() if self._registry_client else {}
+        packages = self._catalogue_client.get_packages() if self._catalogue_client else {}
         pkg_data = packages.get(pkg_id, {})
         installed = self._install_manager.get_installed_packages() if self._install_manager else {}
         installed_ver = installed.get(pkg_id, {}).get("version")
@@ -1925,7 +1925,7 @@ class CartonWindow(QtWidgets.QDialog):
         # Resolve display via the standard resolver: registry SoT for
         # registry-side entries, installed.json for My Tools.
         installed = self._install_manager.get_installed_packages() if self._install_manager else {}
-        packages = self._registry_client.get_packages() if self._registry_client else {}
+        packages = self._catalogue_client.get_packages() if self._catalogue_client else {}
         display = resolve_display_name(
             pkg_id, installed.get(pkg_id), packages.get(pkg_id),
         )
@@ -1946,7 +1946,7 @@ class CartonWindow(QtWidgets.QDialog):
 
         installed = self._install_manager.get_installed_packages()
         pkg_data = installed.get(pkg_id, {})
-        packages = self._registry_client.get_packages() if self._registry_client else {}
+        packages = self._catalogue_client.get_packages() if self._catalogue_client else {}
         display = resolve_display_name(pkg_id, pkg_data, packages.get(pkg_id))
 
         try:
@@ -1987,9 +1987,9 @@ class CartonWindow(QtWidgets.QDialog):
         snapshot via the registry client and reuse the same dialog as
         the detail panel.
         """
-        if not self._registry_client:
+        if not self._catalogue_client:
             return
-        packages = self._registry_client.get_packages()
+        packages = self._catalogue_client.get_packages()
         pkg_data = packages.get(pkg_id)
         if not pkg_data:
             QtWidgets.QMessageBox.information(
@@ -2010,8 +2010,8 @@ class CartonWindow(QtWidgets.QDialog):
         self._on_install(pkg_id, version=version, pinned=True)
         # Refresh the detail panel so the new installed version + pin
         # badge are visible without backing out.
-        if self._registry_client:
-            packages = self._registry_client.get_packages()
+        if self._catalogue_client:
+            packages = self._catalogue_client.get_packages()
             pkg_data = packages.get(pkg_id)
             if pkg_data:
                 installed = self._install_manager.get_installed_packages()
@@ -2022,7 +2022,7 @@ class CartonWindow(QtWidgets.QDialog):
                 )
 
     def _on_update(self, pkg_id):
-        packages = self._registry_client.get_packages() if self._registry_client else {}
+        packages = self._catalogue_client.get_packages() if self._catalogue_client else {}
         pkg_data = packages.get(pkg_id)
         if not pkg_data:
             return
@@ -2117,7 +2117,7 @@ class CartonWindow(QtWidgets.QDialog):
         """Install a package. Optionally a specific version and/or pin it."""
         if not self._downloader or not self._install_manager:
             return
-        packages = self._registry_client.get_packages() if self._registry_client else {}
+        packages = self._catalogue_client.get_packages() if self._catalogue_client else {}
         pkg_data = packages.get(pkg_id)
         if not pkg_data:
             return
@@ -2202,7 +2202,7 @@ class CartonWindow(QtWidgets.QDialog):
                         return
 
     def _on_uninstall(self, pkg_id):
-        packages = self._registry_client.get_packages() if self._registry_client else {}
+        packages = self._catalogue_client.get_packages() if self._catalogue_client else {}
         display = packages.get(pkg_id, {}).get("display_name", pkg_id)
         reply = QtWidgets.QMessageBox.question(
             self, t("uninstall"),
@@ -2228,7 +2228,7 @@ class CartonWindow(QtWidgets.QDialog):
                 self._install_manager._config.install_dir, rel,
             )
         registry_packages = (
-            self._registry_client.get_packages() if self._registry_client else {}
+            self._catalogue_client.get_packages() if self._catalogue_client else {}
         )
         entry_point = resolve_entry_point(
             pkg_data, package_dir=package_dir,

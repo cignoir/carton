@@ -2,13 +2,13 @@
 
 The switch from :class:`RegistryClient` to :class:`CatalogueClient` at
 startup is the point where v5.0 actually starts driving the UI — every
-``registry_client.get_packages()`` call in ``main_window`` now goes
+``catalogue_client.get_packages()`` call in ``main_window`` now goes
 through the catalogue-aware client.
 
 What this file verifies:
 
 * :func:`carton.startup` produces a :class:`CatalogueClient` in the
-  ``_registry_client`` slot (name kept for UI compatibility; instance
+  ``_catalogue_client`` slot (name kept for UI compatibility; instance
   type is what changed).
 * :meth:`CatalogueClient._fetch_icons_archive` was ported from
   RegistryClient and preserves the same "network errors are not fatal"
@@ -43,19 +43,19 @@ class TestStartupUsesCatalogueClient:
         carton._config = None
         carton._env_mgr = None
         carton._install_mgr = None
-        carton._registry_client = None
+        carton._catalogue_client = None
         carton._downloader = None
         carton._self_updater = None
         carton._script_mgr = None
         carton._publisher = None
 
-    def test_registry_client_slot_holds_catalogue_client_after_startup(self):
-        """The global name stays ``_registry_client`` (UI compat) but
+    def test_catalogue_client_slot_holds_catalogue_client_after_startup(self):
+        """The global name stays ``_catalogue_client`` (UI compat) but
         the object is now a CatalogueClient."""
         self._reset_globals()
         try:
             carton.startup()
-            assert isinstance(carton._registry_client, CatalogueClient)
+            assert isinstance(carton._catalogue_client, CatalogueClient)
         finally:
             self._reset_globals()
 

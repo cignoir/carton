@@ -17,8 +17,8 @@ class UpdateInfo:
 class Updater:
     """Compare registry with local to detect updates."""
 
-    def __init__(self, registry_client, install_manager):
-        self._registry = registry_client
+    def __init__(self, catalogue_client, install_manager):
+        self._registry = catalogue_client
         self._install_mgr = install_manager
 
     def check_all_updates(self):
