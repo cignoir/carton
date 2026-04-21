@@ -7,8 +7,10 @@ from collections import OrderedDict
 from carton.compat_urllib import urlopen, Request, URLError, urljoin
 from carton.core.display_name_resolver import resolve_display_name
 from carton.core.install_state import is_my_tools, is_pure_local
+from carton.ui._catalogue_crud import add_existing_catalogue, create_new_catalogue
 from carton.ui._install_controller import InstallController
 from carton.ui._publish_controller import PublishController
+from carton.ui._self_update_controller import SelfUpdateController
 from carton.ui._namespace_grouping import (
     arrow_glyph,
     group_by_namespace,
@@ -106,30 +108,6 @@ class _IconFetcher(QtCore.QThread):
         enforce_size_limit(cache_dir)
 
 
-class _SelfUpdateCheckWorker(QtCore.QThread):
-    """Background worker that probes GitHub for a new Carton release.
-
-    Emits ``finished_signal(result, error)`` where ``result`` is either
-    ``None`` (no update) or ``(version, download_url)``, and ``error`` is
-    a string (or ``""`` on success). Running the probe off-thread keeps
-    the UI responsive when the network is slow or unreachable.
-    """
-
-    finished_signal = QtCore.Signal(object, str)
-
-    def __init__(self, self_updater, parent=None):
-        super().__init__(parent)
-        self._self_updater = self_updater
-
-    def run(self):
-        try:
-            result = self._self_updater.check_update()
-        except Exception as e:
-            self.finished_signal.emit(None, str(e))
-            return
-        self.finished_signal.emit(result, "")
-
-
 _STYLE = theme.MAIN_STYLE
 
 
@@ -164,6 +142,7 @@ class CartonWindow(QtWidgets.QDialog):
 
         self._install_ctl = InstallController(self)
         self._publish_ctl = PublishController(self)
+        self._self_update_ctl = SelfUpdateController(self)
 
         self._setup_ui()
 
@@ -482,165 +461,10 @@ class CartonWindow(QtWidgets.QDialog):
         self._loading_label.setVisible(False)
 
     def _create_new_catalogue(self, paired_remote=None):
-        """Create a new empty v5.0 catalogue directory. Returns the CatalogueEntry or None.
-
-        If ``paired_remote`` is given, the new catalogue inherits its
-        ``catalogue_id`` so that publishes to the remote route here via
-        :meth:`Config.find_local_mirror`. A pre-existing ``catalogue.json``
-        / ``registry.json`` in the target folder is reused — if it has a
-        mismatched id we rewrite to the remote's id (pairing intent).
-        """
-        folder = QtWidgets.QFileDialog.getExistingDirectory(
-            self, t("setup_select_folder"),
-        )
-        if not folder:
-            return None
-
-        name, ok = QtWidgets.QInputDialog.getText(
-            self, "Catalogue Name",
-            t("setup_catalogue_name"),
-            text=os.path.basename(folder),
-        )
-        if not ok or not name:
-            return None
-
-        import json
-        from carton.core.migrations import (
-            CATALOGUE_FILENAME,
-            CATALOGUE_SCHEMA_VERSION,
-            LEGACY_REGISTRY_FILENAME,
-            migrate_local_registry_file_to_catalogue,
-        )
-        from carton.core.uuid_id import new_uuid, stamp_uuid
-        from carton.ui._catalogue_pairing import probe_remote_catalogue_id
-
-        cat_path = os.path.join(folder, CATALOGUE_FILENAME)
-        legacy_path = os.path.join(folder, LEGACY_REGISTRY_FILENAME)
-
-        # Decide the id to stamp — either inherit the remote's (pairing
-        # intent) or mint a fresh one.
-        if paired_remote is not None:
-            rid = paired_remote.catalogue_id or probe_remote_catalogue_id(paired_remote.path)
-            if rid:
-                paired_remote.catalogue_id = rid
-            else:
-                rid = new_uuid()
-                # Remote doesn't expose an id — the user will need to
-                # re-upload this catalogue before the remote can resolve
-                # back.
-        else:
-            rid = new_uuid()
-
-        # A pre-existing legacy registry.json gets promoted to v5.0 first
-        # so all subsequent reads land on catalogue.json. After migration
-        # the file below is always cat_path.
-        if not os.path.exists(cat_path) and os.path.exists(legacy_path):
-            migrated = migrate_local_registry_file_to_catalogue(legacy_path)
-            if migrated:
-                cat_path = migrated
-
-        if not os.path.exists(cat_path):
-            # Fresh scaffold — v5.0 directly, skip the v3.1 detour that
-            # only existed to be auto-migrated on next launch.
-            os.makedirs(folder, exist_ok=True)
-            with open(cat_path, "w", encoding="utf-8") as f:
-                json.dump({
-                    "schema_version": CATALOGUE_SCHEMA_VERSION,
-                    "catalogue_id": rid,
-                    "display_name": name,
-                    "packages": {},
-                }, f, indent=2, ensure_ascii=False)
-            os.makedirs(os.path.join(folder, "packages"), exist_ok=True)
-        else:
-            # Existing catalogue — stamp id if missing / mismatched. The
-            # pairing case (rid from remote ≠ existing id) rewrites so
-            # the mirror lookup works; otherwise just ensure an id exists.
-            try:
-                with open(cat_path, "r", encoding="utf-8") as f:
-                    data = json.load(f)
-            except (OSError, json.JSONDecodeError):
-                data = {
-                    "schema_version": CATALOGUE_SCHEMA_VERSION,
-                    "packages": {},
-                }
-            data.setdefault("schema_version", CATALOGUE_SCHEMA_VERSION)
-            current = (data.get("catalogue_id")
-                       or data.get("registry_id") or "").strip().lower()
-            if paired_remote is not None and rid and current != rid:
-                data["catalogue_id"] = rid
-            else:
-                # Normal stamp path — read whatever id is there, top up
-                # if missing. We funnel it through stamp_uuid via a
-                # bridge dict so the same helper handles "preserve" and
-                # "generate fresh" without duplicating the logic here.
-                bridge = {"registry_id": current}
-                stamp_uuid(bridge, "registry_id")
-                rid = bridge["registry_id"]
-                data["catalogue_id"] = rid
-            # Drop the legacy key on rewrite so we don't keep a stale
-            # duplicate — dual-emit is only appropriate at the Config
-            # level, not inside catalogue.json itself (v5.0 schema
-            # only defines catalogue_id).
-            data.pop("registry_id", None)
-            with open(cat_path, "w", encoding="utf-8") as f:
-                json.dump(data, f, indent=2, ensure_ascii=False)
-
-        self._config.add_catalogue(name, cat_path, catalogue_id=rid)
-        self._config.save()
-        return self._config.catalogues[-1]
+        return create_new_catalogue(self, paired_remote=paired_remote)
 
     def _add_existing_catalogue(self, paired_remote=None):
-        """Browse for an existing catalogue.json (legacy registry.json also accepted). Returns the CatalogueEntry or None."""
-        from carton.ui._catalogue_pairing import (
-            DuplicateCatalogueChoice,
-            find_duplicate_entry,
-            read_local_catalogue_id,
-            resolve_duplicate_catalogue,
-            stamp_local_catalogue_with_prompt,
-        )
-
-        path = QtWidgets.QFileDialog.getOpenFileName(
-            self, t("settings_select_catalogue"), "",
-            "Catalogue (catalogue.json);;Legacy (registry.json);;JSON (*.json)",
-        )[0]
-        if not path:
-            return None
-
-        rid, data = read_local_catalogue_id(path)
-        if not rid and data is not None:
-            rid = stamp_local_catalogue_with_prompt(self, path, data)
-
-        # Duplicate detection — skip the paired remote itself, because a
-        # pairing flow is supposed to land on the same UUID (that's the
-        # whole point). Also skip the same normalised path.
-        existing = find_duplicate_entry(
-            self._config.catalogues, rid, path,
-            ignore=[paired_remote] if paired_remote is not None else None,
-        )
-        if existing is not None:
-            choice = resolve_duplicate_catalogue(self, existing)
-            if choice == DuplicateCatalogueChoice.CANCEL:
-                return None
-            if choice == DuplicateCatalogueChoice.USE_EXISTING:
-                if paired_remote is not None and not paired_remote.catalogue_id:
-                    paired_remote.catalogue_id = rid
-                    self._config.save()
-                return existing
-
-        base = os.path.basename(os.path.dirname(path))
-        name, ok = QtWidgets.QInputDialog.getText(
-            self, "Catalogue Name",
-            t("setup_catalogue_name"),
-            text=base,
-        )
-        if not ok or not name:
-            return None
-
-        self._config.add_catalogue(name, path, catalogue_id=rid)
-        if paired_remote is not None and rid and not paired_remote.catalogue_id:
-            paired_remote.catalogue_id = rid
-        self._config.save()
-        return self._config.catalogues[-1]
+        return add_existing_catalogue(self, paired_remote=paired_remote)
 
     def set_services(self, catalogue_client, install_manager, downloader,
                      self_updater=None, config=None, script_manager=None,
@@ -1499,76 +1323,13 @@ class CartonWindow(QtWidgets.QDialog):
         self._on_install(pkg_id)
 
     def _check_self_update(self, force=False):
-        """Poll GitHub for a newer Carton release and update the banner.
-
-        Respects ``config.auto_check_updates``. Pass ``force=True`` to
-        bypass the setting (used by the manual "Check now" button).
-
-        The GitHub probe runs on a background thread so a slow or
-        unreachable network never blocks the UI. The banner is updated
-        from the worker's finished signal.
-        """
-        if not self._self_updater:
-            return
-
-        # Pending staged updates are a pure local file check — do this
-        # synchronously so the banner appears immediately on startup.
-        if self._self_updater.has_pending_update():
-            ver = self._self_updater.get_pending_version()
-            self._update_banner_label.setText(t("update_pending", ver))
-            self._update_banner_btn.setVisible(False)
-            self._update_banner.setVisible(True)
-            return
-
-        if not force and self._config and not self._config.auto_check_updates:
-            # Auto-check disabled and nothing staged — keep the banner
-            # hidden and skip the network entirely.
-            self._update_banner.setVisible(False)
-            return
-
-        # Don't stack multiple in-flight checks if the user mashes refresh.
-        if self._update_check_worker and self._update_check_worker.isRunning():
-            return
-
-        self._update_banner.setVisible(False)
-        self._update_check_worker = _SelfUpdateCheckWorker(
-            self._self_updater, parent=self,
-        )
-        self._update_check_worker.finished_signal.connect(
-            self._on_self_update_check_done
-        )
-        self._update_check_worker.start()
+        self._self_update_ctl.check(force=force)
 
     def _on_self_update_check_done(self, result, error):
-        """Slot for _SelfUpdateCheckWorker. Runs on the UI thread."""
-        if error or not result:
-            # Silent on failure: the banner just stays hidden. The user
-            # can still click "Check for updates now" in Settings to get
-            # an explicit error message.
-            return
-        self._pending_self_update = result  # (version, download_url)
-        self._update_banner_label.setText(t("update_available", result[0]))
-        self._update_banner_btn.setVisible(True)
-        self._update_banner.setVisible(True)
+        self._self_update_ctl.on_check_done(result, error)
 
     def _on_self_update(self):
-        if not hasattr(self, "_pending_self_update") or not self._pending_self_update:
-            return
-        version, download_url = self._pending_self_update
-        self._update_banner_btn.setText(t("updating"))
-        self._update_banner_btn.setEnabled(False)
-        QtWidgets.QApplication.processEvents()
-        try:
-            self._self_updater.stage_update(version, download_url)
-            self._update_banner_label.setText(
-                t("update_pending", version)
-            )
-            self._update_banner_btn.setVisible(False)
-            self._pending_self_update = None
-        except Exception as e:
-            self._update_banner_btn.setText(t("update"))
-            self._update_banner_btn.setEnabled(True)
-            show_error(self, e, operation="update")
+        self._self_update_ctl.apply()
 
     def _on_install(self, pkg_id, version=None, pinned=False):
         self._install_ctl.install(pkg_id, version=version, pinned=pinned)
