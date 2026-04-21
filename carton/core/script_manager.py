@@ -146,6 +146,17 @@ class ScriptManager:
             MayaModuleHandler().launch(pkg_data)
             return
 
+        if not ep_type:
+            # No recognised entry_point shape — usually a legacy / malformed
+            # ``package.json`` whose ``entry_point`` was adopted verbatim at
+            # register time (EditDialog rewrites it into a valid shape, which
+            # is why editing + saving makes the tool launch).
+            hint = self._describe_entry_for_error(entry)
+            raise RuntimeError(
+                "Cannot launch: entry_point has no usable 'type' field. "
+                "Got {}. Open Edit and save to rebuild it.".format(hint)
+            )
+
         if ep_type == "plugin":
             # Maya binary plugin (.mll)
             import maya.cmds
@@ -210,6 +221,20 @@ class ScriptManager:
             mod = importlib.import_module(module_name)
             func = getattr(mod, func_name)
             func()
+        else:
+            raise RuntimeError(
+                "Cannot launch: unknown entry_point type {!r}".format(ep_type)
+            )
+
+    @staticmethod
+    def _describe_entry_for_error(entry):
+        """Compact description of a malformed entry_point for error messages."""
+        if not isinstance(entry, dict):
+            return repr(entry)
+        if not entry:
+            return "{}"
+        keys = ", ".join(sorted(entry.keys()))
+        return "{{{}}}".format(keys)
 
     def _add_to_env(self, path, pkg_type, is_folder):
         """Add a path to Maya environment variables."""

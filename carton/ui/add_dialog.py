@@ -401,8 +401,17 @@ class AddDialog(QtWidgets.QDialog):
                 }
                 self.accept()
                 return
-            # If package.json exists, use its entry_point directly
-            if info and info.get("has_package_json"):
+            # If package.json exists AND carries a dispatchable entry_point,
+            # use it directly. If entry_point is missing/malformed, fall
+            # through to auto-detection — otherwise the tool installs fine
+            # but launches silently no-op because ScriptManager.launch can't
+            # dispatch without a ``type``.
+            pkgjson_ep = info.get("entry_point") if info else None
+            ep_usable = (
+                isinstance(pkgjson_ep, dict)
+                and bool(pkgjson_ep.get("type"))
+            )
+            if info and info.get("has_package_json") and ep_usable:
                 result = {
                     "file_path": path,
                     "namespace": namespace or slugify_namespace(info.get("namespace", "")),
@@ -413,7 +422,7 @@ class AddDialog(QtWidgets.QDialog):
                     "icon": icon,
                     "description": description,
                     "type": info.get("type", "python_package"),
-                    "entry_point": info.get("entry_point", {}),
+                    "entry_point": pkgjson_ep,
                     "is_folder": True,
                 }
                 if info.get("home_origin"):
@@ -423,6 +432,14 @@ class AddDialog(QtWidgets.QDialog):
                 return
             self._result = self._build_folder_result(path, display_name, func, icon, description)
             self._result["namespace"] = namespace
+            # Preserve metadata we *did* get from package.json even when
+            # we fell back to auto-detection for entry_point.
+            if info and info.get("home_origin"):
+                self._result["home_origin"] = info["home_origin"]
+            if info and info.get("has_package_json"):
+                for k in ("version", "author"):
+                    if info.get(k):
+                        self._result[k] = info[k]
         else:
             self._result = self._build_file_result(path, display_name, func, icon, description, is_exec_mode)
             self._result["namespace"] = namespace
