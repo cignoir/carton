@@ -206,7 +206,7 @@ class PackageCard(QtWidgets.QFrame):
                 pub_btn.setText(t("published_to_badge", self._published_registries[0]))
             else:
                 pub_btn.setText(t("published_to_badge_multi", len(self._published_registries)))
-            pub_btn.setToolTip(t("unpublish_select_registry"))
+            pub_btn.setToolTip(t("unpublish_select_catalogue"))
             pub_btn.setCursor(Qt.PointingHandCursor)
             pub_btn.setPopupMode(QtWidgets.QToolButton.InstantPopup)
             pub_btn.setStyleSheet(

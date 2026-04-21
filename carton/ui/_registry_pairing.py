@@ -83,7 +83,7 @@ def stamp_local_registry_with_prompt(parent, path, data):
     if data is None:
         return ""
     reply = QtWidgets.QMessageBox.question(
-        parent, t("publish"), t("registry_stamp_prompt"),
+        parent, t("publish"), t("catalogue_stamp_prompt"),
         QtWidgets.QMessageBox.Yes | QtWidgets.QMessageBox.No,
     )
     if reply != QtWidgets.QMessageBox.Yes:
@@ -144,13 +144,13 @@ def resolve_duplicate_registry(parent, existing_entry):
     """
     box = QtWidgets.QMessageBox(parent)
     box.setIcon(QtWidgets.QMessageBox.Question)
-    box.setWindowTitle(t("registry_duplicate_title"))
-    box.setText(t("registry_duplicate_msg", existing_entry.name, existing_entry.path))
+    box.setWindowTitle(t("catalogue_duplicate_title"))
+    box.setText(t("catalogue_duplicate_msg", existing_entry.name, existing_entry.path))
     use_btn = box.addButton(
-        t("registry_use_existing"), QtWidgets.QMessageBox.AcceptRole,
+        t("catalogue_use_existing"), QtWidgets.QMessageBox.AcceptRole,
     )
     alias_btn = box.addButton(
-        t("registry_add_alias"), QtWidgets.QMessageBox.AcceptRole,
+        t("catalogue_add_alias"), QtWidgets.QMessageBox.AcceptRole,
     )
     box.addButton(t("cancel"), QtWidgets.QMessageBox.RejectRole)
     box.exec_()

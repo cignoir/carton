@@ -149,7 +149,7 @@ class _PublishTargetDialog(QtWidgets.QDialog):
 
         # Dropdown for existing registries (local + remote, annotated)
         if registries:
-            label = QtWidgets.QLabel(t("publish_select_registry"))
+            label = QtWidgets.QLabel(t("publish_select_catalogue"))
             label.setStyleSheet("font-weight: 600;")
             layout.addWidget(label)
 
@@ -187,14 +187,14 @@ class _PublishTargetDialog(QtWidgets.QDialog):
         layout.addWidget(gh_btn)
 
         # Create new / Add existing buttons (catalogue flows)
-        new_btn = QtWidgets.QPushButton(t("publish_create_registry"))
+        new_btn = QtWidgets.QPushButton(t("publish_create_catalogue"))
         new_btn.setStyleSheet(
             theme.btn_outline(theme.ACCENT_LINK, "#1d3040")
         )
         new_btn.clicked.connect(lambda: self.done(2))
         layout.addWidget(new_btn)
 
-        add_btn = QtWidgets.QPushButton(t("publish_add_existing_registry"))
+        add_btn = QtWidgets.QPushButton(t("publish_add_existing_catalogue"))
         add_btn.setStyleSheet(
             theme.btn_outline(theme.TEXT_SECONDARY, theme.BG_HOVER)
         )
@@ -590,7 +590,7 @@ class CartonWindow(QtWidgets.QDialog):
 
         name, ok = QtWidgets.QInputDialog.getText(
             self, "Catalogue Name",
-            t("setup_registry_name"),
+            t("setup_catalogue_name"),
             text=os.path.basename(folder),
         )
         if not ok or not name:
@@ -691,7 +691,7 @@ class CartonWindow(QtWidgets.QDialog):
         )
 
         path = QtWidgets.QFileDialog.getOpenFileName(
-            self, t("settings_select_registry"), "",
+            self, t("settings_select_catalogue"), "",
             "Catalogue (catalogue.json);;Legacy (registry.json);;JSON (*.json)",
         )[0]
         if not path:
@@ -721,7 +721,7 @@ class CartonWindow(QtWidgets.QDialog):
         base = os.path.basename(os.path.dirname(path))
         name, ok = QtWidgets.QInputDialog.getText(
             self, "Catalogue Name",
-            t("setup_registry_name"),
+            t("setup_catalogue_name"),
             text=base,
         )
         if not ok or not name:
@@ -1632,7 +1632,7 @@ class CartonWindow(QtWidgets.QDialog):
 
         reply = QtWidgets.QMessageBox.question(
             self, t("publish"),
-            t("publish_home_registry_mismatch",
+            t("publish_home_catalogue_mismatch",
               home_name or home_id, target_registry.name),
             QtWidgets.QMessageBox.Yes | QtWidgets.QMessageBox.No,
         )
@@ -1993,7 +1993,7 @@ class CartonWindow(QtWidgets.QDialog):
         pkg_data = packages.get(pkg_id)
         if not pkg_data:
             QtWidgets.QMessageBox.information(
-                self, "Carton", t("history_no_registry_data"),
+                self, "Carton", t("history_no_catalogue_data"),
             )
             return
         installed = self._install_manager.get_installed_packages()

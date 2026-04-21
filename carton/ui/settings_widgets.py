@@ -445,7 +445,7 @@ class RegistriesSection(QtWidgets.QWidget):
         )
 
         path = QtWidgets.QFileDialog.getOpenFileName(
-            self, t("settings_select_registry"), "",
+            self, t("settings_select_catalogue"), "",
             "Catalogue (catalogue.json);;Legacy (registry.json);;JSON (*.json)",
         )[0]
         if not path:
@@ -507,7 +507,7 @@ class RegistriesSection(QtWidgets.QWidget):
                 continue
         if not resolved:
             QtWidgets.QMessageBox.warning(
-                self, "Carton", t("settings_github_no_registry", repo),
+                self, "Carton", t("settings_github_no_catalogue", repo),
             )
             return
         from carton.ui._registry_pairing import probe_remote_registry_id
@@ -672,7 +672,7 @@ class RegistriesSection(QtWidgets.QWidget):
             # ADD_ALIAS → fall through to the name prompt.
 
         name, ok = wide_input(
-            self, "Catalogue Name", t("settings_registry_name"), text=default_name,
+            self, "Catalogue Name", t("settings_catalogue_name"), text=default_name,
         )
         if not ok or not name:
             return
@@ -693,14 +693,14 @@ class RegistriesSection(QtWidgets.QWidget):
         entry = self._target.registries[row]
 
         dialog = QtWidgets.QDialog(self)
-        dialog.setWindowTitle(t("settings_edit_registry"))
+        dialog.setWindowTitle(t("settings_edit_catalogue"))
         dialog.setFixedWidth(500)
         dialog.setStyleSheet(theme.dialog_style())
         dlg_layout = QtWidgets.QVBoxLayout(dialog)
         dlg_layout.setContentsMargins(20, 20, 20, 20)
         dlg_layout.setSpacing(12)
 
-        name_label = QtWidgets.QLabel(t("settings_registry_name"))
+        name_label = QtWidgets.QLabel(t("settings_catalogue_name"))
         name_label.setStyleSheet(theme.LABEL_DIM)
         dlg_layout.addWidget(name_label)
         name_input = QtWidgets.QLineEdit(entry.name)

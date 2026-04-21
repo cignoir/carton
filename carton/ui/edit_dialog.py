@@ -332,7 +332,7 @@ class EditDialog(QtWidgets.QDialog):
         else:
             names = [r.name for r in regs]
             chosen, ok = QtWidgets.QInputDialog.getItem(
-                self, t("unpublish"), t("unpublish_select_registry"),
+                self, t("unpublish"), t("unpublish_select_catalogue"),
                 names, 0, False,
             )
             if not ok:
