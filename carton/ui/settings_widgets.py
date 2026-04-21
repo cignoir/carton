@@ -361,28 +361,33 @@ class RegistriesSection(QtWidgets.QWidget):
             self._list.addItem(str(entry))
 
     def _add(self):
+        # Package-first order: single-package flows come first so the
+        # common "just give me this tool" case lands fastest. Catalogue
+        # flows (subscribing to / maintaining a multi-package index) stay
+        # below but visible — catalogue is a useful aggregation feature,
+        # not a hidden power-user thing.
         choices = [
-            t("settings_add_local"),
-            t("settings_add_github"),
-            t("settings_add_url"),
-            t("settings_add_package_url"),
-            t("settings_add_create_new"),
+            t("settings_add_github"),       # [0] single repo (probes pkg.json first)
+            t("settings_add_package_url"),  # [1] single pkg.json URL
+            t("settings_add_url"),          # [2] remote catalogue URL
+            t("settings_add_local"),        # [3] local catalogue file
+            t("settings_add_create_new"),   # [4] create new local catalogue
         ]
         chosen, ok = QtWidgets.QInputDialog.getItem(
             self, t("add"), t("settings_add_method"), choices, 0, False,
         )
         if not ok:
             return
-        if chosen == choices[1]:
+        if chosen == choices[0]:
             self._add_github()
+        elif chosen == choices[1]:
+            self._add_package_url()
         elif chosen == choices[2]:
             self._add_remote()
         elif chosen == choices[3]:
-            self._add_package_url()
+            self._add_local()
         elif chosen == choices[4]:
             self._create_new_local()
-        else:
-            self._add_local()
 
     def _create_new_local(self):
         from carton.core.registry_id import new_registry_id
