@@ -6,48 +6,74 @@ Maya 向けのローカルファースト型パッケージマネージャー。
 
 ## Carton とは
 
-Carton は、Maya ツールの**配布・インストール・更新**をクラウドサービスなしで実現するパッケージマネージャーです。共有ドライブやローカルフォルダだけでチーム運用が完結します。
+Carton は Maya ツールをインストール・更新・共有するためのツールです。**パッケージが主役**の設計で、`namespace/name` でツールを指定すればインストールが完結します — そのバイト列が単一の GitHub リポジトリから来ようが、任意の URL から来ようが、共有ドライブ上のインデックスから来ようが、関係ありません。クラウドサービスは不要で、ファイルパス・URL・共有ドライブだけで運用できます。
 
 ```mermaid
 flowchart LR
-    subgraph "あなた"
-        MT["My Tools\n- Rigger\n- Shader"]
+    subgraph "ソース"
+        G["単品 GitHub リポジトリ<br>package.json + Release"]
+        U["リモート URL<br>package.json"]
+        C["カタログ<br>catalogue.json<br>（一括インデックス）"]
     end
-    subgraph "レジストリ（共有ドライブ）"
-        R["registry.json\npackages/\nicons/"]
+    subgraph You["自分の Maya"]
+        LIB["Library<br>mystudio/rigger<br>thirdparty/qbloom<br>community/..."]
+        MT["My Tools<br>自作スクリプト"]
     end
-    subgraph "チーム"
-        A["アーティスト A\nMaya"]
-        B["アーティスト B\nMaya"]
-    end
-    MT -- 公開 --> R
-    R -- インストール --> A
-    R -- インストール --> B
+    G -- Install --> LIB
+    U -- Install --> LIB
+    C -- Subscribe --> LIB
+    MT -- Publish --> G
+    MT -- Publish --> C
 ```
 
-**レジストリ**とは、`registry.json` とパッケージ群を置いた共有フォルダのこと。アクセス権を持つメンバーなら、誰でもそこからツールをインストールできます。
+ツールの追加方法は 3 通り：
+
+1. **単品 GitHub リポジトリ** — `owner/repo` を貼れば、Carton が `package.json` を探してインストール。
+2. **直接 URL** — 任意の場所に置いた `package.json` の URL を貼ってインストール。
+3. **カタログ購読** — 多数のパッケージを一度にインデックスした `catalogue.json` の URL / パスを追加（スタジオ内部の一括配布に便利）。
 
 ## 主要コンセプト
 
 ```mermaid
 flowchart TB
     subgraph Carton["Carton（Maya 内）"]
+        direction LR
+        subgraph LIB["Library"]
+            direction TB
+            NS1["mystudio/*<br>（namespace グループ）"]
+            NS2["thirdparty/*"]
+        end
         subgraph MT["My Tools"]
-            L["ローカルのスクリプト/フォルダ\n参照方式で登録"]
+            L["自作スクリプト<br>参照方式で登録"]
         end
-        subgraph RA["レジストリ A"]
-            PA["チーム共有のパッケージ\nregistry.json からインストール"]
-        end
-        subgraph RB["レジストリ B"]
-            PB["別チーム / 別プロジェクト"]
-        end
-        L -- 公開 --> PA
     end
+    subgraph ORG["Origin — パッケージの住処"]
+        direction TB
+        E["embedded<br>（カタログが zip を host）"]
+        GH["github<br>（Releases + SHA256SUMS）"]
+        UR["url<br>（リモート package.json）"]
+        LO["local<br>（ファイルシステムパス）"]
+    end
+    E -.lists in.-> NS1
+    GH -.lists in.-> NS1
+    UR -.lists in.-> NS2
+    L -- Publish --> E
+    L -- Publish --> GH
 ```
 
-- **My Tools** — ローカルのスクリプトを登録する作業エリア。参照方式なので、元ファイルを編集すればその場で反映されます。
-- **レジストリ** — パッケージをまとめた共有ディレクトリ。ローカルフォルダ、ネットワークドライブ、Git リポジトリ、リモート URL のいずれにも対応します。
-- **公開（Publish）** — My Tools のツールをパッケージ化してレジストリに追加し、チームメンバーがインストールできる状態にする操作です。
+- **Package（パッケージ）** — `namespace/name` で識別（npm 風、例: `mystudio/rigger`）。同じパッケージが複数のカタログにインデックスされていても、インストールは 1 つのものとして扱われます。
+- **Origin** — パッケージのバイト列が*どこに住んでいるか*。4 種類：`embedded`（カタログが zip を host）、`github`（GitHub Releases）、`url`（任意の場所の `package.json`）、`local`（ファイルシステムパス）。
+- **Catalogue（カタログ）** — 複数のパッケージとそれぞれの origin を列挙した*オプショナルな*インデックス（`catalogue.json`）。スタジオやコミュニティが多数のツールを一括配布したい場合に便利です。パッケージがカタログに載っている必要は**ありません** — GitHub リポジトリや URL から直接インストールできます。
+- **My Tools** — 自分のローカルスクリプトを参照方式で登録（編集が即反映）。共有したくなったら Origin（GitHub Release または embedded カタログ）に Publish できます。
+
+### Pinned と unpinned
+
+すべてのインストールは、正規の SHA256 付き／無しのアーティファクトに解決されます：
+
+- **Pinned** — カタログが SHA256 を記載しているか、GitHub Release が `SHA256SUMS` を同梱している状態。Carton はダウンロード毎に同じハッシュで検証します。
+- **Unpinned** — 正規ハッシュなし（GitHub の自動生成 tag archive などが典型）。Carton は初回 fetch 時のハッシュを記録（TOFU: trust-on-first-use）するので後続 install の改ざんは検出しますが、**厳密検証**モードではこれらを一切拒否します。
+
+Library カードは pinned ソース時のみ控えめな ✓ を表示します。unpinned 側は表示なし — 「検証済の時だけ肯定表示」のコンベンションに従い、厳密検証モードで初めて目に見えるエラーに変わります。
 
 ## 動作環境
 
@@ -62,26 +88,27 @@ flowchart TB
 3. Maya を再起動します。
 4. メニューから **Carton > Open Carton** を選択します。
 
-### レジストリを追加する
+### パッケージを追加する
 
 ```
-Settings（⚙）> Add > registry.json を選択
+Settings（⚙）> Add
 ```
 
-レジストリの追加元は次の 4 種類から選べます。
+手元にあるものに応じて追加方法を選びます：
 
-- **ローカルファイル** — `registry.json` のパスを指定します。
-- **GitHub リポジトリ** — `owner/repo` 形式で指定します。
-- **リモート URL** — `registry.json` の URL を直接指定します。
-- **新規ローカルレジストリの作成** — 空フォルダを選ぶと、Carton が `registry.json` と `packages/` を自動生成します。
+- **GitHub リポジトリ** — `owner/repo`。Carton は `package.json` を先に探し（単品リポジトリ）、無ければ `catalogue.json` にフォールバック（複数パッケージのリポジトリ）。
+- **単品パッケージを URL で追加** — 任意の場所にホスティングされた `package.json` への直 URL。
+- **リモートカタログ URL** — `catalogue.json` の URL（一括購読）。
+- **ローカルカタログファイル** — 共有ドライブやローカルにある `catalogue.json` のパス。
+- **ローカルカタログを新規作成** — 空フォルダを選んで、スタジオが公開先にするカタログを立ち上げる。
+
+単品追加はマシンローカルの *personal* ストア（`~/.carton/`）に保存され、カタログ購読は Carton プロファイルに登録されます。どちらにせよ Library ビューは namespace で統合表示するので、ソースを意識せずにパッケージを見られます。
 
 ### ツールをインストールする
 
-Carton を開き、パッケージを選んで **Install** をクリックするだけです。
+Carton を開き、サイドバーから namespace を選び **Install** をクリック。
 
-ダウンロード時に Carton はレジストリ側の SHA256 と照合し、レジストリエントリにハッシュが記録されていれば、カードに ✔ マークを表示します。ハッシュ自体はレジストリの `version_entry.sha256` のみが正本として保持され（v0.4.0 以降、インストール側に重複保存しなくなりました）、UI はそこを参照します。
-
-詳細パネルから **Version History** を開くと、各バージョンのリリースノートを確認したり、旧バージョンへロールバックしたりできます。ロールバック後のパッケージは自動的に **Pinned（固定）** 扱いとなり、以降の Update プロンプトで対象外になります。これにより、自分で選んだバージョンが意図せず上書きされる心配はありません。
+詳細パネルの **Version History** から各バージョンのリリースノート確認・ロールバックができます。ロールバック後のパッケージは **Pinned（固定）** になり、意図的に unpin するまで自動更新の対象外になります。
 
 ### スクリプトを登録・共有する
 
@@ -90,30 +117,47 @@ My Tools > + Add > ファイルまたはフォルダを選択
                  > 名前、アイコン、説明を設定
                  > Register
 
-カード > Publish > 公開先レジストリを選択し、リリースノートを書いて公開
+カード > Publish > 公開先（GitHub リポジトリ or embedded カタログ）を選択
+              > リリースノートを書いて公開
 ```
 
-タイプ別の詳しい登録手順は、後述の [マイツールへの登録](#マイツールへの登録) を参照してください。
+タイプ別の詳しい登録手順は [マイツールへの登録](#マイツールへの登録) を参照してください。
 
-なお、レジストリビューから「自分が公開したツール」をアンインストールしても、My Tools 側の登録は**消えません**。Carton は単にエントリを「ローカルスクリプト」状態に戻すだけなので、レジストリからのインストール状態とは独立して、編集や起動の設定を保持し続けられます。
+レジストリビューから「自分が公開したツール」をアンインストールしても、My Tools 側の登録は**消えません**。Carton は単にエントリを「ローカルスクリプト」状態に戻すだけなので、インストール状態とは独立して編集や起動の設定を保持し続けます。
 
-## v0.3 からの移行
+## 移行
 
-v0.4.0 では registry / installed.json のスキーマを **v4.0** に bump しました。旧形式のファイルは初回起動時に自動 migrate され、元ファイルは `installed.json.bak-v0.3.<ms>` / `registry.json.bak-v0.3.<ms>` として同じディレクトリにバックアップされます。
+### v0.4 から v5.0 へ
 
-主な変更点：
+v5.0 は **Package-first モデル**を導入しました — パッケージはカタログから独立して存在し、origin が第一級概念となり、単品 GitHub リポジトリは `catalogue.json` ラッパー無しで動きます。
 
-- **各値の Source of Truth を一箇所に集約**しました。`entry_point` は zip 内 `package.json` のみ、`display_name` はレジストリのみ、`sha256` はレジストリの `version_entry` のみで保持され、インストール側で重複保存しなくなりました。
-- **`source` enum を `["registry","local"]` の 2 値に縮約**しました。旧値（`"published"` / `"local_script"`）は自動変換されます。レジストリインストールと My Tools 登録の両方を持つ「双方向リンク」エントリは、`source="registry"` ＋ `local_path` の有無で表現されます。
-- **`registry_id` (UUID) が `registry.json` の必須フィールド**になりました。最初の publish 時に自動 stamp されます。リモートのみで `registry_id` が無いレジストリには警告が出ます（ミラー判定が機能しないため、メンテナーが正本ファイルに stamp する必要があります）。
-- **`icon` が `string | null` に統一**されました。旧来の `"icon": true`（`<name>.png` を自動解決）は文字列リテラル `"@auto"` に変換されます。
-- **`platform` の override** 仕様: version レベルの `platform` 配列が指定されていればその version では package レベルを上書きし、未指定なら継承します。
+**初回起動時に自動 migrate される内容：**
 
-レジストリ管理者の方は、migrate 後の `registry.json` をホスト先（S3、GitHub など）に再 upload してください。Carton 0.3.x クライアントも v4.0 のレジストリを引き続き読めますが、新しいフィールドは無視されます。
+- `registry.json` → `catalogue.json`（同じ場所で rename）、旧ファイルは `registry.json.bak-v0.4.<ms>` として退避。各 package エントリは新しい shape（`origin: {"type": "embedded", "versions": {...}}`）に書き換え。
+- `registry_id` → `catalogue_id`（UUID は保持）。config ファイルは移行期間中、両方のキーを dual-emit します（下位互換読み込みのため）。
+- publish 済みアーティファクトの `home_registry` には兄弟フィールド `home_origin`（embedded / github / url / local のタグドユニオン）が追加されます。alias 期間は両キーが共存します。
+
+**UI / 用語の変更：**
+
+- UI 全体で「Registries」→「Catalogues」(「レジストリ」→「カタログ」)。
+- Library サイドバーはカタログ別行から namespace グループ表示に変更。カタログ管理は Settings → Catalogues に集約。
+- `Add` ダイアログは単品追加フロー（GitHub リポジトリ、単品パッケージを URL で追加）を先頭に配置。カタログ系フロー（リモートカタログ URL、ローカルカタログファイル、ローカルカタログを新規作成）も引き続き利用可能。
+
+**カタログ管理者向け** — 自動 migrate された `catalogue.json` をホスト先に再 upload してください。v0.4 クライアントは v5.0 カタログを読めない（ファイル名が変わったため）ため、移行はハードカットオーバーで共存はしません。
+
+手動で移行したい場合の CLI ヘルパー：
+
+```bash
+python -m carton catalogue migrate path/to/registry.json
+```
+
+### v0.3 から v0.4 へ
+
+v0.4.0 では registry スキーマを v4.0 に bump しました（SHA256 を registry エントリの source-of-truth に移動、`registry_id` UUID を初回接触時に自動 stamp、`source` enum を `["registry","local"]` に縮約）。旧形式のファイルは初回起動時に自動 migrate され、`.bak-v0.3.<ms>` として退避されます。
 
 ## プロファイル
 
-**プロファイル**とは、レジストリ・プロキシ・言語・自動更新といった Carton 全体の設定を、まとめて切り替えるためのセットです。たとえば「会社用」「個人用」のプロファイルを作っておけば、レジストリを毎回入れ直すことなく、ワンクリックで Carton の挙動全体を切り替えられます。
+**プロファイル**とは、カタログ・プロキシ・言語・自動更新といった Carton 全体の設定をまとめて切り替えるためのセットです。たとえば「会社用」「個人用」のプロファイルを作っておけば、カタログを毎回入れ直すことなく、ワンクリックで Carton の挙動全体を切り替えられます。
 
 プロファイルは JSON ファイルとして、次の場所に保存されます。
 
@@ -127,39 +171,75 @@ v0.4.0 では registry / installed.json のスキーマを **v4.0** に bump し
 Profile Manager では、次の操作が行えます。
 
 - **New** — 現在の Carton 設定をベースに、新しいプロファイルを作成します。
-- **Edit** — レジストリ、プロキシ、言語、名前を変更します。
+- **Edit** — カタログ、プロキシ、言語、名前を変更します。
 - **並び替え** — ▲▼ ボタンで、ドロップダウン上の表示順を入れ替えます。
 - **Build Installer…** — 選択中のプロファイルを焼き込んだカスタムインストーラを生成します。配布先で初回起動した時点で、そのプロファイルが選択された状態になります。
 
-プロファイルの切り替えは即時反映され、Maya の再起動は必要ありません。インストール済みのパッケージはすべてのプロファイルで共有され、プロファイルが切り替えるのは参照するレジストリ一覧やプロキシ・言語といった Carton 全体の設定だけです。
+プロファイルの切り替えは即時反映され、Maya の再起動は必要ありません。インストール済みのパッケージはすべてのプロファイルで共有され、プロファイルが切り替えるのは参照するカタログ一覧やプロキシ・言語といった Carton 全体の設定だけです。
 
 ## 厳密な整合性検証
 
 Settings には **「厳密な整合性検証」** チェックボックスがあります。これを有効にすると、Carton は次のように動作します。
 
-- レジストリエントリに SHA256 が記録されていないパッケージのインストールを**拒否**します。
+- カタログエントリに SHA256 が記録されていないパッケージのインストールを**拒否**します。
+- unpinned な origin（GitHub 自動 archive 等）も拒否します。
 - ハッシュの不一致を**致命的なエラー**として扱います。
 
-公開されてからインストールされるまでの間に、誰かがバイト列を改ざんしていないことを保証したいケース、つまり共有レジストリやリモートレジストリを利用する場面で有効化することを推奨します。
+公開されてからインストールされるまでの間に、誰かがバイト列を改ざんしていないことを保証したいケース、つまり共有カタログやリモートカタログを利用する場面で有効化することを推奨します。
 
-## レジストリの構成
+## カタログの構成
+
+**embedded** 型のカタログ（自分で package zip を host するタイプ）は次のような構造になります：
 
 ```
-my-registry/
-├── registry.json          # パッケージ一覧
+my-catalogue/
+├── catalogue.json          # パッケージ一覧（v5.0）
 ├── packages/
 │   └── {namespace}/{name}/{version}/
 │       └── {name}-{version}.zip
 ├── icons/
-│   └── {name}.png         # パッケージごとのアイコン
-└── icons.zip              # リモート配信用のアイコン一括ファイル
+│   └── {name}.png          # パッケージごとのアイコン
+└── icons.zip               # リモート配信用のアイコン一括ファイル
 ```
 
-Git で管理する、ネットワークドライブに置く、静的ファイルとしてホスティングする — チームの運用に合わせて、好きな方法で配信できます。
+`catalogue.json` の shape（v5.0）：
+
+```json
+{
+  "schema_version": "5.0",
+  "catalogue_id": "<UUID>",
+  "display_name": "MyStudio Tools",
+  "packages": {
+    "mystudio/rigger": {
+      "origin": {"type": "github", "repo": "mystudio/rigger"}
+    },
+    "mystudio/shader-studio": {
+      "origin": {
+        "type": "embedded",
+        "latest_version": "1.0.0",
+        "versions": {
+          "1.0.0": {
+            "download_url": "packages/mystudio/shader-studio/1.0.0/shader-studio-1.0.0.zip",
+            "sha256": "<64hex>",
+            "size_bytes": 12345,
+            "maya_versions": ["2024", "2025", "2026"],
+            "released_at": "2026-03-…"
+          }
+        }
+      }
+    },
+    "thirdparty/qbloom": {
+      "origin": {"type": "url", "url": "https://example.com/qbloom-package.json"}
+    }
+  }
+}
+```
+
+`embedded` 型の origin のみが `versions` を inline で持ちます — `github` / `url` / `local` は version を動的に解決します（GitHub Releases API、リモート `package.json`、ローカルファイル）。Git で管理する、ネットワークドライブに置く、静的ファイルとしてホスティングする — チームの運用に合わせて好きな方法で配信できます。
 
 ## マイツールへの登録
 
-「マイツール」は、ローカルにあるツールを**参照方式**で登録する作業エリアです。ファイルのコピーは作らないため、元ファイルを編集すればその場で反映されます。マイツールに登録したツールは、Publish によりレジストリへ共有できます。
+「マイツール」は、ローカルにあるツールを**参照方式**で登録する作業エリアです。ファイルのコピーは作らないため、元ファイルを編集すればその場で反映されます。マイツールに登録したツールは、Publish によりカタログ（または GitHub リポジトリ）へ共有できます。
 
 Carton は複数のパッケージタイプに対応しており、登録時にタイプを自動判定します。以下、登録できるものとタイプごとの挙動を順に説明します。
 
@@ -298,7 +378,7 @@ my_plugin/
 
 ### Namespace と内部名（Internal Name）
 
-すべてのパッケージは、`quick_rename` や `ari-mirror` のような**内部名**（スラッグ）を持ちます。Add / Edit ダイアログでは読み取り専用で表示され、ファイル名やフォルダ名から自動生成されます。内部名はパッケージの安定識別子であり、**登録後は変更できません**（変更するとレジストリのエントリが孤立してしまうためです）。
+すべてのパッケージは、`quick_rename` や `ari-mirror` のような**内部名**（スラッグ）を持ちます。Add / Edit ダイアログでは読み取り専用で表示され、ファイル名やフォルダ名から自動生成されます。内部名はパッケージの安定識別子であり、**登録後は変更できません**（変更するとカタログのエントリが孤立してしまうためです）。
 
 **Namespace** フィールドは Add 時には任意で（個人用途のみのツールなら省略可能）、**公開時には必須**です。`MyStudio` のように入力すると自動的に `mystudio` に正規化され、入力欄の下に正規化後の形式がライブで表示されます。
 
@@ -322,26 +402,28 @@ my_plugin/
     "function": "show"
   },
   "icon": "🔧",
-  "home_registry": { "name": "studio-main" }
+  "home_origin": {"type": "embedded", "catalogue_name": "studio-main"}
 }
 ```
 
 対応タイプ: `python_package`, `mel_script`, `plugin`, `maya_module`
 
-`package.json` は `entry_point`、`maya_versions`、`icon` の **Source of Truth** です。Publisher がこれらを `registry.json`（プレビュー用）とパッケージ zip 内に転写します。インストール後は zip 内の `package.json` を読み直すため、registry や installed.json のキャッシュ値が古くても起動時の挙動には影響しません。
+`package.json` は `entry_point`、`maya_versions`、`icon` の **Source of Truth** です。Publisher がこれらを公開先カタログ（プレビュー用）とパッケージ zip 内に転写します。インストール後は zip 内の `package.json` を読み直すため、カタログや installed.json のキャッシュ値が古くても起動時の挙動には影響しません。
 
 `icon` には次の値を指定できます。
 
 - 絵文字（例: `"🔧"`）
 - 相対ファイルパス（例: `"resources/icon.png"`）
-- 文字列リテラル `"@auto"`（レジストリの `icons/<name>.png` を自動解決）
+- 文字列リテラル `"@auto"`（カタログの `icons/<name>.png` を自動解決）
 - `null`（アイコンなし）
+
+`home_origin` はこのパッケージが通常どこに publish されるかを記録します（embedded カタログ / github リポジトリ / url / local の 4 種のタグドユニオン）。v0.4 の `home_registry` フィールドの後継です。alias 期間中は両方が共存し、古いクライアントは引き続き embedded 形式のみ読めます。
 
 ### 識別子モデル
 
 パッケージは **`namespace/name`** という npm 風の組み合わせで識別されます（例: `mystudio/rigger`）。どちらのフィールドも小文字 `a-z 0-9 - _` のみが使用可能です。`namespace` は**公開時には必須**ですが、共有を想定しないローカル個人用ツールでは省略できます。
 
-`namespace` と `name` を `package.json` に書き込んだら、**そのファイルを必ず VCS にコミット**してください。同じソースをクローンした別のメンバーが Add や Publish を行っても、自動的に同一の識別子に揃うため、レジストリ上では「同じパッケージの更新」として正しく扱われ、重複登録を防げます。
+`namespace` と `name` を `package.json` に書き込んだら、**そのファイルを必ず VCS にコミット**してください。同じソースをクローンした別のメンバーが Add や Publish を行っても、自動的に同一の識別子に揃うため、カタログ上では「同じパッケージの更新」として正しく扱われ、重複登録を防げます。
 
 ### 単体ファイルスクリプト（サイドカー）
 
@@ -358,10 +440,16 @@ tools/
 ## CLI
 
 ```bash
-python -m carton list path/to/registry.json
-python -m carton unpublish --registry path/to/registry.json --id mystudio/rigger
+# カタログ or registry 内のパッケージ一覧
+python -m carton list path/to/catalogue.json
 
-# レジストリの UUID を確認・stamp（v4.0 では必須フィールド）
+# カタログから特定パッケージを unpublish
+python -m carton unpublish --registry path/to/catalogue.json --id mystudio/rigger
+
+# v0.4 の registry.json を v5.0 の catalogue.json に migrate
+python -m carton catalogue migrate path/to/registry.json
+
+# カタログの UUID を確認・stamp（legacy helper も引き続き動作）
 python -m carton registry id path/to/registry.json
 python -m carton registry id path/to/registry.json --stamp
 ```
