@@ -1,8 +1,8 @@
-"""Publisher — write directly to a local registry.
+"""Publisher — write directly to a local v5.0 catalogue.
 
 Identity model: each package is keyed by ``"<namespace>/<name>"``. Both must be
 set; raise :class:`MissingNamespaceError` if not. The first publish records
-``first_published_by`` / ``first_published_at`` on the registry entry; later
+``first_published_by`` / ``first_published_at`` on the catalogue entry; later
 publishes by a different author trigger a warning (returned in the result dict)
 but are not blocked.
 """
@@ -23,8 +23,11 @@ from carton.core.identity import (
     validate_name,
 )
 from carton.core.migrations import (
-    REGISTRY_SCHEMA_VERSION,
-    migrate_registry_data,
+    CATALOGUE_FILENAME,
+    CATALOGUE_SCHEMA_VERSION,
+    LEGACY_REGISTRY_FILENAME,
+    migrate_local_registry_file_to_catalogue,
+    migrate_registry_to_catalogue,
 )
 from carton.core.path_utils import resolve_local_path
 from carton.core.uuid_id import read_uuid, stamp_uuid
@@ -50,8 +53,8 @@ class RemoteMirrorMissingError(RuntimeError):
     """Raised when a publish targets a remote entry that has no local mirror.
 
     ``reason`` is one of:
-      * ``"no_remote_id"`` — the remote registry itself does not expose a
-        ``registry_id`` (so we can't match any local mirror to it).
+      * ``"no_remote_id"`` — the remote catalogue itself does not expose a
+        ``catalogue_id`` (so we can't match any local mirror to it).
       * ``"no_local_mirror"`` — the remote has an id but no local entry in
         the current config shares it.
     """
@@ -98,23 +101,24 @@ class InvalidPythonPackageLayoutError(RuntimeError):
 
 
 class Publisher:
-    """Publish locally registered scripts to a registry."""
+    """Publish locally registered scripts into a v5.0 catalogue."""
 
     def __init__(self, config):
         self._config = config
 
-    def publish(self, pkg_data, registry_entry, namespace=None,
+    def publish(self, pkg_data, catalogue_entry, namespace=None,
                 release_notes="", embed_source_path=True):
         include_compiled = bool(pkg_data.get("include_compiled", False))
-        """Publish to a registry.
+        """Publish to a local catalogue.
 
         Args:
             pkg_data: Entry from installed.json. May or may not already carry
                 a ``namespace`` field.
-            registry_entry: Target CatalogueEntry to publish to. Local entries
-                are written to directly; remote entries are redirected to
-                their same-``registry_id`` local mirror (raises
-                :class:`RemoteMirrorMissingError` if no mirror exists).
+            catalogue_entry: Target CatalogueEntry to publish to. Local
+                entries are written to directly; remote entries are
+                redirected to their same-``catalogue_id`` local mirror
+                (raises :class:`RemoteMirrorMissingError` if no mirror
+                exists).
             namespace: Optional override; if given, takes precedence over
                 ``pkg_data['namespace']``. Required if neither is set.
 
@@ -123,8 +127,8 @@ class Publisher:
             optional ``warnings`` list (e.g. author mismatch). When the user
             selected a remote entry, ``published_via`` carries its name.
         """
-        requested_entry = registry_entry
-        target_entry = self._resolve_publish_target(registry_entry)
+        requested_entry = catalogue_entry
+        target_entry = self._resolve_publish_target(catalogue_entry)
 
         # Stored local_path may be a portable form like ``~/tools/foo.py``;
         # expand before touching the filesystem.
@@ -160,8 +164,16 @@ class Publisher:
         # studio-default tuple.
         maya_versions = self._resolve_maya_versions(pkg_data, local_path, is_folder)
 
-        # Check for same version conflict
-        self._check_version_conflict(pkg_id, version, target_entry)
+        # Resolve the writable catalogue.json path up front. If the entry
+        # still points at a legacy registry.json the file-level migrator
+        # renames the old file to ``registry.json.bak-v0.4.<ms>`` and
+        # creates catalogue.json alongside so subsequent writes land on
+        # the v5.0 file.
+        catalogue_path = self._resolve_catalogue_write_path(target_entry.path)
+
+        # Check for same version conflict before we waste cycles building
+        # the artifact.
+        self._check_version_conflict(pkg_id, version, catalogue_path)
 
         # Reject the "flat" python_package layout before we waste cycles
         # zipping something that will ModuleNotFoundError at import time.
@@ -170,8 +182,7 @@ class Publisher:
         # Build the v5.0 home_origin payload for this embedded publish.
         # pkg_data wins if the caller already carries one (e.g. a tool
         # whose home is elsewhere being published into a mirror), otherwise
-        # we stamp the target catalogue's embedded variant. Parallel to
-        # the existing home_registry precedence a few lines below.
+        # we stamp the target catalogue's embedded variant.
         home_origin_meta = target_entry.to_home_origin_meta()
         home_origin = pkg_data.get("home_origin") or home_origin_meta
 
@@ -180,7 +191,6 @@ class Publisher:
             local_path, ns, name, version, is_folder,
             entry_point, display_name, icon, description, pkg_type, author,
             maya_versions=maya_versions,
-            home_registry=pkg_data.get("home_registry"),
             home_origin=home_origin,
             include_compiled=include_compiled,
             embed_source_path=embed_source_path,
@@ -189,9 +199,9 @@ class Publisher:
         sha256 = self._compute_sha256(zip_path)
         size_bytes = os.path.getsize(zip_path)
 
-        # 2. Copy zip to registry directory: packages/<namespace>/<name>/<version>/
-        registry_base = target_entry.base_dir
-        dest_dir = os.path.join(registry_base, "packages", ns, name, version)
+        # 2. Copy zip to catalogue directory: packages/<namespace>/<name>/<version>/
+        catalogue_base = target_entry.base_dir
+        dest_dir = os.path.join(catalogue_base, "packages", ns, name, version)
         os.makedirs(dest_dir, exist_ok=True)
 
         zip_name = "{}-{}.zip".format(name, version)
@@ -203,17 +213,18 @@ class Publisher:
         except OSError:
             pass
 
-        # 3. Copy icon file to registry icons/ directory.
+        # 3. Copy icon file to catalogue icons/ directory.
         # Preserve the original filename so consumers can fetch it verbatim.
-        registry_icon = icon
+        stored_icon = icon
         if self._is_icon_file(icon):
             icon_basename = os.path.basename(icon)
-            self._copy_icon_to_registry(icon, icon_basename, registry_base)
-            registry_icon = icon_basename
+            self._copy_icon_to_catalogue(icon, icon_basename, catalogue_base)
+            stored_icon = icon_basename
 
-        # 4. Update registry.json + rebuild icons.zip
-        warnings = self._update_registry(
-            registry_entry=target_entry,
+        # 4. Update catalogue.json + rebuild icons.zip
+        warnings = self._update_catalogue(
+            catalogue_path=catalogue_path,
+            catalogue_entry=target_entry,
             pkg_id=pkg_id,
             namespace=ns,
             name=name,
@@ -221,7 +232,7 @@ class Publisher:
             version=version,
             pkg_type=pkg_type,
             description=description,
-            icon=registry_icon,
+            icon=stored_icon,
             author=author,
             sha256=sha256,
             size_bytes=size_bytes,
@@ -232,18 +243,14 @@ class Publisher:
         )
 
         # 5. Persist namespace/name back into source so the next user converges.
-        # Use the canonical to_home_meta() builder so the embedded UUID
-        # stays consistent with anything else encoded by the UI / config.
-        home_meta = target_entry.to_home_meta()
-        # Re-build home_origin *after* _update_registry so the stamped
-        # registry_id (now on target_entry) propagates into catalogue_id.
+        # Re-build home_origin *after* _update_catalogue so the stamped
+        # catalogue_id (now on target_entry) propagates into the payload.
         # The earlier ``home_origin`` was handed to the zip when the
-        # registry_id may still have been blank — same asymmetry as
-        # home_registry, mirrored intentionally.
+        # catalogue_id may still have been blank — first-publish asymmetry
+        # is intentional.
         home_origin_source = pkg_data.get("home_origin") or target_entry.to_home_origin_meta()
         self._persist_identity_to_source(
             local_path, ns, name, is_folder,
-            home_registry=pkg_data.get("home_registry") or home_meta,
             home_origin=home_origin_source,
         )
 
@@ -254,50 +261,83 @@ class Publisher:
             result["warnings"] = warnings
         return result
 
-    def _resolve_publish_target(self, registry_entry):
+    def _resolve_publish_target(self, catalogue_entry):
         """Return a writable LOCAL CatalogueEntry to write into.
 
         Local entries pass through unchanged. Remote entries are resolved by
-        ``registry_id`` to a same-id local mirror from ``self._config``. If
+        ``catalogue_id`` to a same-id local mirror from ``self._config``. If
         the remote has no usable id, or no local mirror matches, raise
         :class:`RemoteMirrorMissingError` so the UI layer can guide the user
         through pairing.
         """
-        if not registry_entry.is_remote:
-            return registry_entry
+        if not catalogue_entry.is_remote:
+            return catalogue_entry
 
-        remote_id = registry_entry.catalogue_id
+        remote_id = catalogue_entry.catalogue_id
         if not remote_id:
-            remote_id = self._probe_remote_catalogue_id(registry_entry)
+            remote_id = self._probe_remote_catalogue_id(catalogue_entry)
             if remote_id:
                 # Cache on the live entry so subsequent calls don't re-probe.
-                registry_entry.catalogue_id = remote_id
+                catalogue_entry.catalogue_id = remote_id
 
         if not remote_id:
-            raise RemoteMirrorMissingError(registry_entry, reason="no_remote_id")
+            raise RemoteMirrorMissingError(catalogue_entry, reason="no_remote_id")
 
         mirror = self._config.find_local_mirror(remote_id)
         if mirror is None:
             raise RemoteMirrorMissingError(
-                registry_entry, reason="no_local_mirror", remote_id=remote_id,
+                catalogue_entry, reason="no_local_mirror", remote_id=remote_id,
             )
         return mirror
 
     @staticmethod
-    def _probe_remote_catalogue_id(registry_entry):
-        """One-off HTTP GET to read ``registry_id`` from a remote registry.
+    def _probe_remote_catalogue_id(catalogue_entry):
+        """One-off HTTP GET to read ``catalogue_id`` from a remote catalogue.
 
         Returns ``""`` on any failure (network, parse, missing field) — the
-        caller treats that as ``no_remote_id``.
+        caller treats that as ``no_remote_id``. Accepts the legacy
+        ``registry_id`` key as a fallback for catalogues that haven't been
+        migrated on the producer side yet.
         """
         try:
-            req = Request(registry_entry.path)
+            req = Request(catalogue_entry.path)
             req.add_header("Accept", "application/json")
             resp = urlopen(req, timeout=15)
             data = json.loads(resp.read().decode("utf-8"))
         except (URLError, OSError, ValueError):
             return ""
+        cid = read_uuid(data, "catalogue_id")
+        if cid:
+            return cid
         return read_uuid(data, "registry_id")
+
+    @staticmethod
+    def _resolve_catalogue_write_path(entry_path):
+        """Return the on-disk path that ``publish`` should read from / write to.
+
+        Accepts paths pointing at ``registry.json``, ``catalogue.json``, or
+        an unrelated filename. If the entry still points at a legacy
+        ``registry.json``, the file-level migrator is invoked to rename
+        it to ``.bak-v0.4.<ms>`` and create ``catalogue.json`` in the
+        same directory — subsequent publishes then write directly to the
+        new file without needing another migration pass.
+        """
+        if not entry_path:
+            return entry_path
+        path = os.path.normpath(entry_path)
+        base = os.path.basename(path).lower()
+        parent = os.path.dirname(path)
+        if base == LEGACY_REGISTRY_FILENAME:
+            catalogue_path = os.path.join(parent, CATALOGUE_FILENAME)
+            if os.path.exists(catalogue_path):
+                return catalogue_path
+            if os.path.exists(path):
+                new_path = migrate_local_registry_file_to_catalogue(path)
+                if new_path:
+                    return new_path
+            # Fresh init — caller will create catalogue.json.
+            return catalogue_path
+        return path
 
     def _validate_python_package_layout(self, local_path, pkg_type, is_folder, name):
         """Reject python_packages where ``local_path`` is the module folder.
@@ -313,7 +353,7 @@ class Publisher:
             raise InvalidPythonPackageLayoutError(local_path, name)
 
     def _resolve_maya_versions(self, pkg_data, local_path, is_folder):
-        """Return the maya_versions list to embed in the zip and registry.
+        """Return the maya_versions list to embed in the zip and catalogue.
 
         Lookup order: in-memory ``pkg_data`` → existing inner
         ``package.json`` / sidecar → process-wide default. Hardcoded Maya
@@ -348,21 +388,31 @@ class Publisher:
             pass
         return None
 
-    def _check_version_conflict(self, pkg_id, version, registry_entry):
-        """Check if the same version has already been published."""
-        reg_path = os.path.normpath(registry_entry.path)
-        if not os.path.exists(reg_path):
+    @staticmethod
+    def _check_version_conflict(pkg_id, version, catalogue_path):
+        """Raise :class:`VersionConflictError` if ``version`` already exists.
+
+        Reads the catalogue.json at ``catalogue_path`` (if any) and
+        checks ``packages[pkg_id]["origin"]["versions"]``. Accepts v4.0
+        registries transparently by running them through the in-memory
+        migrator first.
+        """
+        if not os.path.exists(catalogue_path):
             return
-        with open(reg_path, "r", encoding="utf-8") as f:
-            registry = json.load(f)
-        entry = registry.get("packages", {}).get(pkg_id)
-        if entry and version in entry.get("versions", {}):
+        with open(catalogue_path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        data, _ = migrate_registry_to_catalogue(data, stamp_id=False)
+        entry = (data.get("packages") or {}).get(pkg_id)
+        if not entry:
+            return
+        origin = entry.get("origin") or {}
+        if version in (origin.get("versions") or {}):
             raise VersionConflictError(version)
 
     def _create_zip(self, local_path, namespace, name, version, is_folder,
                     entry_point, display_name, icon, description, pkg_type, author,
                     maya_versions=None,
-                    home_registry=None, home_origin=None,
+                    home_origin=None,
                     include_compiled=False,
                     embed_source_path=True):
         """Create a zip file in the staging directory."""
@@ -371,7 +421,6 @@ class Publisher:
         zip_path = os.path.join(staging, "{}-{}.zip".format(name, version))
 
         pkg_json = {
-            "schema_version": "4.0",
             "namespace": namespace,
             "name": name,
             "display_name": display_name,
@@ -388,16 +437,10 @@ class Publisher:
             # installer uses this to auto-relink My Tools entries when
             # the same user reinstalls Carton on a machine that still
             # has the original sources at this path. Opt-out for public
-            # registries where leaking the publisher's directory layout
+            # catalogues where leaking the publisher's directory layout
             # is undesirable.
             pkg_json["source_path"] = os.path.abspath(local_path)
-        if home_registry:
-            pkg_json["home_registry"] = home_registry
         if home_origin:
-            # v5.0: stamp the generalised home pointer alongside the legacy
-            # ``home_registry`` so consumers that have already migrated to
-            # the ``home_origin`` field don't have to guess the variant
-            # (embedded / github / url / local).
             pkg_json["home_origin"] = home_origin
 
         _EXCLUDE_DIRS = {"__pycache__", ".git", ".svn", ".hg", "tests", "test", "dist", "build", ".vscode", ".idea"}
@@ -436,42 +479,51 @@ class Publisher:
 
         return zip_path
 
-    def _update_registry(self, registry_entry, pkg_id, namespace, name, display_name,
-                         version, pkg_type, description, icon, author,
-                         sha256, size_bytes, entry_point, maya_versions,
-                         tags, release_notes=""):
-        """Update registry.json. Returns a list of warning strings (may be empty)."""
-        reg_path = os.path.normpath(registry_entry.path)
+    def _update_catalogue(self, catalogue_path, catalogue_entry, pkg_id,
+                          namespace, name, display_name, version, pkg_type,
+                          description, icon, author, sha256, size_bytes,
+                          entry_point, maya_versions, tags, release_notes=""):
+        """Update catalogue.json in place. Returns a list of warning strings."""
+        out_path = os.path.normpath(catalogue_path)
 
-        if os.path.exists(reg_path):
-            with open(reg_path, "r", encoding="utf-8") as f:
-                registry = json.load(f)
-            # Auto-migrate legacy registries on touch so the schema_version,
-            # registry_id, and icon shape are all already at v4.0 by the
-            # time we write back.
-            registry, _ = migrate_registry_data(registry)
+        if os.path.exists(out_path):
+            with open(out_path, "r", encoding="utf-8") as f:
+                catalogue = json.load(f)
+            # In-memory upgrade of any lingering v4.0 registry shape so the
+            # rest of this function only has to think about v5.0.
+            catalogue, _ = migrate_registry_to_catalogue(catalogue)
         else:
-            registry = {
-                "schema_version": REGISTRY_SCHEMA_VERSION,
-                "registry_id": "",
+            catalogue = {
+                "schema_version": CATALOGUE_SCHEMA_VERSION,
+                "catalogue_id": "",
                 "packages": {},
             }
 
-        registry["schema_version"] = REGISTRY_SCHEMA_VERSION
-        registry_id, _ = stamp_uuid(registry, "registry_id")
-        registry_entry.catalogue_id = registry_id
+        catalogue["schema_version"] = CATALOGUE_SCHEMA_VERSION
+        catalogue_id, _ = stamp_uuid(catalogue, "catalogue_id")
+        catalogue_entry.catalogue_id = catalogue_id
 
         now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
         warnings = []
 
-        if pkg_id not in registry["packages"]:
-            registry["packages"][pkg_id] = {
-                "versions": {},
+        packages = catalogue.setdefault("packages", {})
+        if pkg_id not in packages:
+            packages[pkg_id] = {
+                "origin": {"type": "embedded", "versions": {}},
                 "first_published_by": author,
                 "first_published_at": now,
             }
 
-        entry = registry["packages"][pkg_id]
+        entry = packages[pkg_id]
+        # Ensure origin is present and of the embedded type. A pkg_id that
+        # previously lived as a non-embedded origin in this catalogue is
+        # a configuration error — we'd silently break consumers if we
+        # let it slide, so reset to embedded.
+        origin = entry.get("origin")
+        if not isinstance(origin, dict) or origin.get("type") != "embedded":
+            origin = {"type": "embedded", "versions": {}}
+            entry["origin"] = origin
+
         # Author mismatch warning (don't block — just inform)
         first_author = entry.get("first_published_by", "")
         if first_author and author and first_author != author:
@@ -489,7 +541,6 @@ class Publisher:
         entry["description"] = description
         entry["author"] = author
         entry["tags"] = tags
-        entry["latest_version"] = version
         # Mirror entry_point as a preview hint so the card UI can show
         # Launch / Activate without installing first. The inner zip's
         # package.json remains the runtime SoT.
@@ -503,7 +554,8 @@ class Publisher:
             entry.pop("icon", None)
 
         rel_path = "packages/{}/{}/{}/{}-{}.zip".format(namespace, name, version, name, version)
-        entry["versions"][version] = {
+        versions = origin.setdefault("versions", {})
+        versions[version] = {
             "maya_versions": list(maya_versions) if maya_versions else list(_DEFAULT_MAYA_VERSIONS),
             "download_url": rel_path,
             "sha256": sha256,
@@ -511,26 +563,25 @@ class Publisher:
             "released_at": now,
             "changelog": release_notes or "",
         }
+        origin["latest_version"] = version
 
-        registry["last_updated"] = now
+        catalogue["last_updated"] = now
 
-        os.makedirs(os.path.dirname(reg_path), exist_ok=True)
-        with open(reg_path, "w", encoding="utf-8") as f:
-            json.dump(registry, f, indent=2, ensure_ascii=False)
+        os.makedirs(os.path.dirname(out_path), exist_ok=True)
+        with open(out_path, "w", encoding="utf-8") as f:
+            json.dump(catalogue, f, indent=2, ensure_ascii=False)
 
-        self._rebuild_icons_archive(registry_entry.base_dir)
+        self._rebuild_icons_archive(catalogue_entry.base_dir)
         return warnings
 
     def _persist_identity_to_source(self, local_path, namespace, name, is_folder,
-                                    home_registry=None, home_origin=None):
+                                    home_origin=None):
         """Write namespace/name back into source so other clones converge.
 
         Folder packages: update or create ``<folder>/package.json``.
         Single files: create or update ``<file>.carton.json`` sidecar.
         """
         updates = {"namespace": namespace, "name": name}
-        if home_registry:
-            updates["home_registry"] = home_registry
         if home_origin:
             updates["home_origin"] = home_origin
 
@@ -543,13 +594,16 @@ class Publisher:
                         data = json.load(f)
                 except (json.JSONDecodeError, OSError):
                     data = {}
-            # Drop legacy id field if present
+            # Drop legacy id / home_registry fields if present — v5.0
+            # source trees should converge on namespace/name + home_origin.
             data.pop("id", None)
+            data.pop("home_registry", None)
             data.update(updates)
             with open(pkg_json_path, "w", encoding="utf-8") as f:
                 json.dump(data, f, indent=2, ensure_ascii=False)
         else:
             existing = read_sidecar(local_path) or {}
+            existing.pop("home_registry", None)
             existing.update(updates)
             write_sidecar(local_path, existing)
 
@@ -560,11 +614,11 @@ class Publisher:
         """Publish a single package to a GitHub repo as a Release (v5.0).
 
         This is the github-origin counterpart to :meth:`publish`: instead
-        of writing into a local registry/catalogue directory, it builds
-        the same zip artifact + a ``SHA256SUMS`` sidecar and uploads them
-        as assets on a GitHub Release. A Release with a matching asset
-        and a parseable SHA256SUMS is what :class:`GithubOrigin` treats
-        as **pinned**, so the resulting origin resolves with is_pinned=True
+        of writing into a local catalogue directory, it builds the same
+        zip artifact + a ``SHA256SUMS`` sidecar and uploads them as
+        assets on a GitHub Release. A Release with a matching asset and
+        a parseable SHA256SUMS is what :class:`GithubOrigin` treats as
+        **pinned**, so the resulting origin resolves with is_pinned=True
         and passes strict_verify gates.
 
         When ``gh`` isn't available (or ``use_gh_cli=False``), the method
@@ -635,11 +689,11 @@ class Publisher:
         maya_versions = self._resolve_maya_versions(pkg_data, local_path, is_folder)
         self._validate_python_package_layout(local_path, pkg_type, is_folder, name)
 
-        # v5.0: stamp home_origin={type:github,repo:<repo>} so the
-        # published artifact and the source tree agree on where this
-        # package's home is. pkg_data still wins (a publish_github call
-        # that explicitly carries a home_origin — e.g. embedded-but-
-        # mirrored-to-github — keeps the caller's shape).
+        # Stamp home_origin={type:github,repo:<repo>} so the published
+        # artifact and the source tree agree on where this package's
+        # home is. pkg_data still wins (a publish_github call that
+        # explicitly carries a home_origin — e.g. embedded-but-mirrored-
+        # to-github — keeps the caller's shape).
         home_origin = pkg_data.get("home_origin") or {
             "type": "github", "repo": repo,
         }
@@ -650,7 +704,6 @@ class Publisher:
             local_path, ns, name, version, is_folder,
             entry_point, display_name, icon, description, pkg_type, author,
             maya_versions=maya_versions,
-            home_registry=pkg_data.get("home_registry"),
             home_origin=home_origin,
             include_compiled=include_compiled,
             embed_source_path=embed_source_path,
@@ -710,7 +763,6 @@ class Publisher:
         # path) so subsequent publishes from this clone stay consistent.
         self._persist_identity_to_source(
             local_path, ns, name, is_folder,
-            home_registry=pkg_data.get("home_registry"),
             home_origin=home_origin,
         )
 
@@ -718,27 +770,26 @@ class Publisher:
             result["warnings"] = warnings
         return result
 
-    def unpublish(self, pkg_id, registry_entry):
-        """Remove a package from a registry.
+    def unpublish(self, pkg_id, catalogue_entry):
+        """Remove a package from a catalogue.
 
         ``pkg_id`` is the canonical ``"<namespace>/<name>"``. A remote entry
         is redirected to its same-id local mirror; raises
         :class:`RemoteMirrorMissingError` if no mirror exists.
         """
-        target_entry = self._resolve_publish_target(registry_entry)
-        registry_entry = target_entry
+        target_entry = self._resolve_publish_target(catalogue_entry)
+        catalogue_path = self._resolve_catalogue_write_path(target_entry.path)
 
-        reg_path = os.path.normpath(registry_entry.path)
-        if not os.path.exists(reg_path):
-            raise RuntimeError("Registry not found: {}".format(reg_path))
+        if not os.path.exists(catalogue_path):
+            raise RuntimeError("Catalogue not found: {}".format(catalogue_path))
 
-        with open(reg_path, "r", encoding="utf-8") as f:
-            registry = json.load(f)
-        registry, _ = migrate_registry_data(registry)
+        with open(catalogue_path, "r", encoding="utf-8") as f:
+            catalogue = json.load(f)
+        catalogue, _ = migrate_registry_to_catalogue(catalogue)
 
-        packages = registry.get("packages", {})
+        packages = catalogue.get("packages", {})
         if pkg_id not in packages:
-            raise RuntimeError("Package not found in registry: {}".format(pkg_id))
+            raise RuntimeError("Package not found in catalogue: {}".format(pkg_id))
 
         entry = packages[pkg_id]
         namespace = entry.get("namespace", "")
@@ -746,9 +797,9 @@ class Publisher:
 
         # Delete the package directory tree
         if namespace and name:
-            pkg_dir = os.path.join(registry_entry.base_dir, "packages", namespace, name)
+            pkg_dir = os.path.join(target_entry.base_dir, "packages", namespace, name)
         else:
-            pkg_dir = os.path.join(registry_entry.base_dir, "packages", pkg_id)
+            pkg_dir = os.path.join(target_entry.base_dir, "packages", pkg_id)
         if os.path.isdir(pkg_dir):
             shutil.rmtree(pkg_dir)
             # Best-effort cleanup of empty namespace dir
@@ -760,28 +811,29 @@ class Publisher:
                 pass
 
         del packages[pkg_id]
-        registry["last_updated"] = datetime.now(timezone.utc).strftime(
+        catalogue["last_updated"] = datetime.now(timezone.utc).strftime(
             "%Y-%m-%dT%H:%M:%SZ"
         )
 
-        with open(reg_path, "w", encoding="utf-8") as f:
-            json.dump(registry, f, indent=2, ensure_ascii=False)
+        with open(catalogue_path, "w", encoding="utf-8") as f:
+            json.dump(catalogue, f, indent=2, ensure_ascii=False)
 
         return {"id": pkg_id, "name": name}
 
-    def find_published_registries(self, pkg_id):
-        """Find all local registries that contain a given package id."""
+    def find_published_catalogues(self, pkg_id):
+        """Find all local catalogues that contain a given package id."""
         results = []
         for entry in self._config.catalogues:
             if entry.is_remote:
                 continue
-            reg_path = os.path.normpath(entry.path)
-            if not os.path.exists(reg_path):
+            catalogue_path = self._resolve_catalogue_write_path(entry.path)
+            if not catalogue_path or not os.path.exists(catalogue_path):
                 continue
             try:
-                with open(reg_path, "r", encoding="utf-8") as f:
-                    registry = json.load(f)
-                if pkg_id in registry.get("packages", {}):
+                with open(catalogue_path, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+                data, _ = migrate_registry_to_catalogue(data, stamp_id=False)
+                if pkg_id in (data.get("packages") or {}):
                     results.append(entry)
             except (json.JSONDecodeError, OSError):
                 continue
@@ -801,7 +853,7 @@ class Publisher:
 
         * Empty string / None → ``None`` (omit field).
         * File path → basename (the publisher copies the file to the
-          registry's ``icons/`` directory verbatim).
+          catalogue's ``icons/`` directory verbatim).
         * Anything else (emoji, ``"@auto"``, bare filename) → as-is.
         """
         if icon is None or icon == "":
@@ -811,27 +863,27 @@ class Publisher:
         return icon
 
     @staticmethod
-    def _copy_icon_to_registry(icon_path, dest_filename, registry_base):
-        """Copy an icon file to the registry's ``icons/`` directory verbatim.
+    def _copy_icon_to_catalogue(icon_path, dest_filename, catalogue_base):
+        """Copy an icon file to the catalogue's ``icons/`` directory verbatim.
 
-        ``dest_filename`` is the basename to use in the registry; passing the
-        original basename keeps the author's filename instead of forcing
-        ``<name>.png``.
+        ``dest_filename`` is the basename to use in the catalogue; passing
+        the original basename keeps the author's filename instead of
+        forcing ``<name>.png``.
         """
-        icons_dir = os.path.join(registry_base, "icons")
+        icons_dir = os.path.join(catalogue_base, "icons")
         os.makedirs(icons_dir, exist_ok=True)
         dest = os.path.join(icons_dir, dest_filename)
         shutil.copy2(icon_path, dest)
 
-    def _rebuild_icons_archive(self, registry_base):
+    def _rebuild_icons_archive(self, catalogue_base):
         """Rebuild icons.zip from all PNGs in the icons/ directory."""
-        icons_dir = os.path.join(registry_base, "icons")
+        icons_dir = os.path.join(catalogue_base, "icons")
         if not os.path.isdir(icons_dir):
             return
         pngs = [f for f in os.listdir(icons_dir) if f.lower().endswith(".png")]
         if not pngs:
             return
-        archive_path = os.path.join(registry_base, "icons.zip")
+        archive_path = os.path.join(catalogue_base, "icons.zip")
         with zipfile.ZipFile(archive_path, "w", zipfile.ZIP_DEFLATED) as zf:
             for png in pngs:
                 zf.write(os.path.join(icons_dir, png), png)
