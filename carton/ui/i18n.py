@@ -235,6 +235,64 @@ _STRINGS = {
         "settings_uninstall_done": "Carton has been uninstalled.\nPlease restart Maya.",
         "settings_uninstall_errors": "Some errors occurred:\n{}\n\nPlease restart Maya.",
         "settings_uninstall_title": "Uninstall Carton",
+
+        # User-facing error messages (see carton/ui/error_messages.py).
+        # Each category has a body (one-sentence main message) and
+        # an optional hint (actionable guidance). Original technical
+        # messages are preserved in the dialog's Details pane.
+        "err_title_generic": "Carton",
+        # Download
+        "err_download_network": "Could not download the package.",
+        "err_download_network_hint": "Check your network connection and try again. For private GitHub repositories, make sure you ran 'gh auth login'.",
+        "err_download_integrity": "The downloaded file failed integrity verification.",
+        "err_download_integrity_hint": "The file may be corrupted or have been tampered with. Try again; if the error persists, contact the publisher.",
+        "err_download_strict_policy": "This download was rejected by the Strict Verify policy.",
+        "err_download_strict_policy_hint": "Disable Strict Verify in Settings if you trust this source, or ask the publisher to provide a verified release (with a SHA256 checksum).",
+        "err_download_disk": "Not enough disk space to download the package.",
+        "err_download_disk_hint": "Free up space on the install drive and try again.",
+        "err_download_url_missing": "No download source was found for this package.",
+        "err_download_url_missing_hint": "The catalogue entry may be incomplete. Contact the catalogue's publisher.",
+        # Install
+        "err_install_zip_corrupt": "The package archive is corrupted.",
+        "err_install_zip_corrupt_hint": "Try installing again. If the problem persists, the publisher may need to re-upload the package.",
+        "err_install_extract_failed": "Could not extract the package files.",
+        "err_install_extract_failed_hint": "Check write permissions and available disk space in the install directory.",
+        "err_install_handler_failed": "The package's post-install step failed.",
+        "err_install_handler_failed_hint": "This usually indicates a problem with the package itself. See Details and contact the publisher if it persists.",
+        "err_install_persist_failed": "Could not save the installation state file.",
+        "err_install_persist_failed_hint": "Check that the install directory is writable.",
+        "err_install_generic": "The package could not be installed.",
+        "err_install_generic_hint": "See Details for the underlying error.",
+        # Publish
+        "err_publish_namespace_required": "A namespace is required to publish this package.",
+        "err_publish_namespace_required_hint": "Set the namespace from the Edit screen, then try publishing again.",
+        "err_publish_invalid_layout": "The Python package layout is not valid for publishing.",
+        "err_publish_invalid_layout_hint": "The source folder does not look like a Python package. Make sure it contains either an importable module directory or a single .py file.",
+        # GitHub CLI
+        "err_gh_cli_missing": "The GitHub CLI ('gh') is required for this operation but was not found.",
+        "err_gh_cli_missing_hint": "Install it from https://cli.github.com/ and run 'gh auth login', then try again.",
+        "err_gh_asset_missing": "A required file was not found in the GitHub release.",
+        "err_gh_asset_missing_hint": "The publisher may not have uploaded all expected artifacts yet. Try again later or contact the publisher.",
+        "err_gh_generic": "GitHub CLI operation failed.",
+        "err_gh_generic_hint": "See Details for the underlying error.",
+        # GitHub API
+        "err_github_api_generic": "GitHub API request failed.",
+        "err_github_api_generic_hint": "Check your network connection. For private repositories, run 'gh auth login' first. GitHub may be rate-limiting; try again in a few minutes.",
+        # Origin / catalogue structural
+        "err_origin_malformed": "A catalogue entry is malformed and could not be loaded.",
+        "err_origin_malformed_hint": "The catalogue file may be corrupted or from an incompatible version of Carton.",
+        # Identity
+        "err_identity_invalid": "The package name or namespace is invalid.",
+        "err_identity_invalid_hint": "Namespace and name must use lowercase letters, digits, and hyphens only.",
+        # Profile
+        "err_profile_invalid": "The profile file is invalid.",
+        "err_profile_invalid_hint": "Check the JSON syntax and field names. See Details for the specific issue.",
+        # Install-dir change
+        "err_install_dir_change": "Could not change the install directory.",
+        "err_install_dir_change_hint": "See Details for the underlying cause (e.g. missing write permission or an open file).",
+        # Unknown
+        "err_unknown": "An unexpected error occurred.",
+        "err_unknown_hint": "See Details for the technical message. If this keeps happening, please report it as a bug.",
     },
 
     "ja": {
@@ -470,6 +528,63 @@ _STRINGS = {
         "settings_uninstall_done": "Carton をアンインストールしました。\nMaya を再起動してください。",
         "settings_uninstall_errors": "一部エラーが発生しました:\n{}\n\nMaya を再起動してください。",
         "settings_uninstall_title": "Carton アンインストール",
+
+        # ユーザー向けエラーメッセージ (carton/ui/error_messages.py 参照)。
+        # 本文(1文の主メッセージ)とヒント(対処ガイド、省略可)で構成。
+        # 元の技術的メッセージはダイアログの「詳細を表示」に温存される。
+        "err_title_generic": "Carton",
+        # ダウンロード
+        "err_download_network": "パッケージをダウンロードできませんでした。",
+        "err_download_network_hint": "ネットワーク接続を確認して再試行してください。プライベート GitHub リポジトリの場合は 'gh auth login' の実行が必要です。",
+        "err_download_integrity": "ダウンロードしたファイルの整合性チェックに失敗しました。",
+        "err_download_integrity_hint": "ファイルが破損しているか、改ざんされている可能性があります。再試行しても解消しない場合は配布元に連絡してください。",
+        "err_download_strict_policy": "このダウンロードは Strict Verify ポリシーにより拒否されました。",
+        "err_download_strict_policy_hint": "この配布元を信頼できる場合は設定から Strict Verify を無効化するか、配布元に SHA256 チェックサム付きのリリースを用意してもらってください。",
+        "err_download_disk": "ダウンロードに十分なディスク容量がありません。",
+        "err_download_disk_hint": "インストール先ドライブの空き容量を増やしてから再試行してください。",
+        "err_download_url_missing": "このパッケージのダウンロード元が見つかりません。",
+        "err_download_url_missing_hint": "カタログエントリが不完全な可能性があります。カタログの配布元に連絡してください。",
+        # インストール
+        "err_install_zip_corrupt": "パッケージのアーカイブが破損しています。",
+        "err_install_zip_corrupt_hint": "もう一度インストールしてみてください。解消しない場合、配布元にパッケージの再アップロードを依頼してください。",
+        "err_install_extract_failed": "パッケージファイルの展開に失敗しました。",
+        "err_install_extract_failed_hint": "インストール先の書き込み権限とディスク空き容量を確認してください。",
+        "err_install_handler_failed": "パッケージのインストール後処理に失敗しました。",
+        "err_install_handler_failed_hint": "通常はパッケージ側の問題です。詳細を確認の上、解消しない場合は配布元に連絡してください。",
+        "err_install_persist_failed": "インストール状態ファイルの保存に失敗しました。",
+        "err_install_persist_failed_hint": "インストール先が書き込み可能か確認してください。",
+        "err_install_generic": "パッケージをインストールできませんでした。",
+        "err_install_generic_hint": "詳細に元のエラーが表示されています。",
+        # 公開
+        "err_publish_namespace_required": "このパッケージを公開するにはネームスペースが必要です。",
+        "err_publish_namespace_required_hint": "編集画面からネームスペースを設定してから、もう一度公開してください。",
+        "err_publish_invalid_layout": "Python パッケージの構成が公開に適していません。",
+        "err_publish_invalid_layout_hint": "対象フォルダが Python パッケージとして認識できません。import 可能なモジュールディレクトリか単一の .py ファイルになっているか確認してください。",
+        # GitHub CLI
+        "err_gh_cli_missing": "この操作には GitHub CLI ('gh') が必要ですが、見つかりませんでした。",
+        "err_gh_cli_missing_hint": "https://cli.github.com/ からインストールし、'gh auth login' を実行してから再試行してください。",
+        "err_gh_asset_missing": "GitHub Release に必要なファイルが見つかりません。",
+        "err_gh_asset_missing_hint": "配布元がまだ必要なアーティファクトをアップロードしていない可能性があります。しばらく待つか、配布元に連絡してください。",
+        "err_gh_generic": "GitHub CLI の操作に失敗しました。",
+        "err_gh_generic_hint": "詳細に元のエラーが表示されています。",
+        # GitHub API
+        "err_github_api_generic": "GitHub API リクエストに失敗しました。",
+        "err_github_api_generic_hint": "ネットワーク接続を確認してください。プライベートリポジトリの場合は 'gh auth login' を先に実行してください。GitHub 側のレート制限が発動している場合は数分待ってから再試行してください。",
+        # Origin / カタログ構造
+        "err_origin_malformed": "カタログエントリが不正で読み込めませんでした。",
+        "err_origin_malformed_hint": "カタログファイルが破損しているか、互換性のない Carton バージョンで作成された可能性があります。",
+        # 識別子
+        "err_identity_invalid": "パッケージ名またはネームスペースが不正です。",
+        "err_identity_invalid_hint": "ネームスペースと名前は小文字・数字・ハイフンのみを使用してください。",
+        # プロファイル
+        "err_profile_invalid": "プロファイルファイルが不正です。",
+        "err_profile_invalid_hint": "JSON の文法とフィールド名を確認してください。具体的な問題は詳細を参照してください。",
+        # インストール先変更
+        "err_install_dir_change": "インストール先を変更できませんでした。",
+        "err_install_dir_change_hint": "書き込み権限の不足や、対象ファイルが開かれている等の原因が考えられます。詳細を確認してください。",
+        # 不明
+        "err_unknown": "予期しないエラーが発生しました。",
+        "err_unknown_hint": "詳細に技術的なメッセージが表示されています。繰り返し発生する場合はバグとして報告してください。",
     },
 }
 

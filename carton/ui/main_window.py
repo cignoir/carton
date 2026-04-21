@@ -13,6 +13,7 @@ from carton.ui._namespace_grouping import (
     toggle_collapsed,
 )
 from carton.ui.compat import QtWidgets, QtCore, Qt, wrapInstance
+from carton.ui.error_messages import show_error
 from carton.ui.i18n import t
 from carton.ui import theme
 from carton.ui.package_card import PackageCard
@@ -793,7 +794,7 @@ class CartonWindow(QtWidgets.QDialog):
         try:
             profile = profile_store.load_profile(name)
         except InvalidProfileError as e:
-            QtWidgets.QMessageBox.warning(self, "Carton", str(e))
+            show_error(self, e)
             self._rebuild_profile_combo()
             return
         self._config.apply_profile(profile)
@@ -1456,7 +1457,7 @@ class CartonWindow(QtWidgets.QDialog):
             try:
                 new_ns = validate_namespace(new_ns)
             except InvalidIdentityError as e:
-                QtWidgets.QMessageBox.warning(self, t("register_error"), str(e))
+                show_error(self, e, operation="register")
                 return None
 
         fields["namespace"] = new_ns
@@ -1514,7 +1515,7 @@ class CartonWindow(QtWidgets.QDialog):
             self._rebuild_sidebar()
             self._rebuild_cards()
         except Exception as e:
-            QtWidgets.QMessageBox.warning(self, t("register_error"), str(e))
+            show_error(self, e, operation="register")
 
     def _on_publish(self, pkg_id):
         if not self._publisher or not self._config:
@@ -1871,19 +1872,20 @@ class CartonWindow(QtWidgets.QDialog):
         )
 
     def _show_publish_error(self, exc):
-        """Display a publish-error dialog mapped to a friendly message."""
-        from carton.core.publisher import (
-            VersionConflictError,
-            MissingNamespaceError,
-            InvalidPythonPackageLayoutError,
-        )
+        """Display a publish-error dialog mapped to a friendly message.
+
+        VersionConflictError needs the version number formatted into its
+        message, so it's handled inline here. Everything else flows through
+        the central :func:`show_error` translator.
+        """
+        from carton.core.publisher import VersionConflictError
         if isinstance(exc, VersionConflictError):
-            msg = t("publish_already_published", exc.version)
-        elif isinstance(exc, (MissingNamespaceError, InvalidPythonPackageLayoutError)):
-            msg = str(exc)
-        else:
-            msg = str(exc)
-        QtWidgets.QMessageBox.warning(self, t("publish_error"), msg)
+            QtWidgets.QMessageBox.warning(
+                self, t("publish_error"),
+                t("publish_already_published", exc.version),
+            )
+            return
+        show_error(self, exc, operation="publish")
 
     def _build_published_map(self):
         """Return ``{pkg_id: [catalogue_name, ...]}`` for all writable local
@@ -1971,9 +1973,7 @@ class CartonWindow(QtWidgets.QDialog):
             )
             self.refresh()
         except Exception as e:
-            QtWidgets.QMessageBox.warning(
-                self, t("unpublish_error"), str(e),
-            )
+            show_error(self, e, operation="unpublish")
 
     def _set_publish_button_state(self, pkg_id, busy=True):
         for i in range(self._card_layout.count()):
@@ -2118,7 +2118,7 @@ class CartonWindow(QtWidgets.QDialog):
         except Exception as e:
             self._update_banner_btn.setText(t("update"))
             self._update_banner_btn.setEnabled(True)
-            QtWidgets.QMessageBox.warning(self, t("update_error"), str(e))
+            show_error(self, e, operation="update")
 
     def _on_install(self, pkg_id, version=None, pinned=False):
         """Install a package. Optionally a specific version and/or pin it."""
@@ -2181,7 +2181,7 @@ class CartonWindow(QtWidgets.QDialog):
 
         except Exception as e:
             self._set_install_button_state(pkg_id, busy=False)
-            QtWidgets.QMessageBox.warning(self, t("install_error"), str(e))
+            show_error(self, e, operation="install")
 
     def _set_install_button_state(self, pkg_id, busy=True):
         for i in range(self._card_layout.count()):
