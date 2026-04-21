@@ -176,7 +176,17 @@ class _PublishTargetDialog(QtWidgets.QDialog):
         else:
             self._combo = None
 
-        # Create new / Add existing buttons
+        # v5.0 GitHub publish button — single-package flow that doesn't
+        # need a catalogue. Sits above the catalogue-oriented buttons so
+        # the package-first path is visually primary.
+        gh_btn = QtWidgets.QPushButton(t("publish_to_github"))
+        gh_btn.setStyleSheet(
+            theme.btn_outline(theme.ACCENT_GREEN, theme.ACCENT_GREEN_HOVER)
+        )
+        gh_btn.clicked.connect(lambda: self.done(4))
+        layout.addWidget(gh_btn)
+
+        # Create new / Add existing buttons (catalogue flows)
         new_btn = QtWidgets.QPushButton(t("publish_create_registry"))
         new_btn.setStyleSheet(
             theme.btn_outline(theme.ACCENT_LINK, "#1d3040")
@@ -1482,38 +1492,89 @@ class CartonWindow(QtWidgets.QDialog):
         if not pkg_data:
             return
 
-        target_registry = self._pick_publish_target_registry()
-        if not target_registry:
+        target = self._pick_publish_target(pkg_data)
+        if target is None:
             return
-
-        if not self._confirm_home_registry_mismatch(pkg_data, target_registry):
-            return
+        kind, payload = target
 
         namespace = self._ensure_publish_namespace(pkg_id, pkg_data)
         if not namespace:
             return
 
-        confirm_result = self._confirm_publish_details(pkg_data, target_registry)
-        if not confirm_result:
-            return
-        release_notes, embed_source_path = confirm_result
+        if kind == "embedded":
+            target_registry = payload
+            if not self._confirm_home_registry_mismatch(pkg_data, target_registry):
+                return
+            confirm_result = self._confirm_publish_details(
+                pkg_data, target_registry.name,
+            )
+            if not confirm_result:
+                return
+            release_notes, embed_source_path = confirm_result
+            self._run_publish(
+                pkg_id, pkg_data, target_registry,
+                namespace, release_notes, embed_source_path,
+            )
+        elif kind == "github":
+            repo = payload
+            confirm_result = self._confirm_publish_details(pkg_data, repo)
+            if not confirm_result:
+                return
+            release_notes, embed_source_path = confirm_result
+            self._run_publish_github(
+                pkg_id, pkg_data, repo,
+                namespace, release_notes, embed_source_path,
+            )
 
-        self._run_publish(
-            pkg_id, pkg_data, target_registry,
-            namespace, release_notes, embed_source_path,
-        )
+    def _pick_publish_target(self, pkg_data):
+        """Show the publish-target dialog. Returns ``(kind, payload)`` or None.
 
-    def _pick_publish_target_registry(self):
-        """Show the publish-target dialog and return a registry, or None."""
+        * ``("embedded", RegistryEntry)`` for catalogue publishes
+        * ``("github", "owner/repo")`` for GitHub Release publishes
+
+        Returns None when the user cancelled. The GitHub branch prompts
+        for owner/repo and pre-fills from ``home_origin`` when available.
+        """
         dlg = _PublishTargetDialog(self._config, parent=self)
         result = dlg.exec_()
         if result == 1:  # Selected from dropdown
-            return dlg.selected_registry
+            entry = dlg.selected_registry
+            return ("embedded", entry) if entry else None
         if result == 2:  # Create new
-            return self._create_new_registry()
+            entry = self._create_new_registry()
+            return ("embedded", entry) if entry else None
         if result == 3:  # Add existing
-            return self._add_existing_registry()
-        return None  # Cancelled / unknown
+            entry = self._add_existing_registry()
+            return ("embedded", entry) if entry else None
+        if result == 4:  # GitHub publish
+            repo = self._prompt_github_repo(pkg_data)
+            return ("github", repo) if repo else None
+        return None
+
+    def _prompt_github_repo(self, pkg_data):
+        """Ask for owner/repo, pre-filled from home_origin when possible.
+
+        Validates the ``owner/repo`` shape — returns the cleaned slug or
+        ``""`` on cancel / invalid input.
+        """
+        default_repo = ""
+        home_origin = pkg_data.get("home_origin") or {}
+        if home_origin.get("type") == "github":
+            default_repo = home_origin.get("repo", "")
+        repo, ok = QtWidgets.QInputDialog.getText(
+            self, t("publish_to_github"),
+            t("publish_github_prompt"),
+            QtWidgets.QLineEdit.Normal, default_repo,
+        )
+        if not ok:
+            return ""
+        repo = repo.strip().strip("/")
+        if "/" not in repo or repo.count("/") != 1:
+            QtWidgets.QMessageBox.warning(
+                self, t("publish"), t("settings_github_invalid"),
+            )
+            return ""
+        return repo
 
     def _confirm_home_registry_mismatch(self, pkg_data, target_registry):
         """Warn if publishing to a different registry than the home one.
@@ -1569,15 +1630,19 @@ class CartonWindow(QtWidgets.QDialog):
         )
         return namespace
 
-    def _confirm_publish_details(self, pkg_data, target_registry):
+    def _confirm_publish_details(self, pkg_data, target_label):
         """Show the confirm dialog. Returns ``(release_notes, embed_source_path)``
         or None if cancelled.
+
+        ``target_label`` is the human-readable target name — a catalogue
+        name for embedded publishes, an ``owner/repo`` slug for GitHub
+        publishes. It's only used in the prompt string so either works.
         """
         from carton.ui.publish_confirm_dialog import PublishConfirmDialog
         display = pkg_data.get("display_name", "")
         local_version = pkg_data.get("version", "0.0.0")
         confirm = PublishConfirmDialog(
-            display, local_version, target_registry.name, parent=self,
+            display, local_version, target_label, parent=self,
         )
         if confirm.exec_() != QtWidgets.QDialog.Accepted:
             return None
@@ -1632,6 +1697,90 @@ class CartonWindow(QtWidgets.QDialog):
             msg += "\n\nWarnings:\n  - " + "\n  - ".join(warnings)
         QtWidgets.QMessageBox.information(self, t("publish"), msg)
         self.refresh()
+
+    def _run_publish_github(self, pkg_id, pkg_data, repo, namespace,
+                            release_notes, embed_source_path):
+        """Execute a GitHub Release publish and reflect the result.
+
+        Unlike :meth:`_run_publish`, there's no Config-level RegistryEntry
+        involved — the github origin is purely descriptive. On success we
+        stamp ``home_origin = {"type":"github","repo":repo}`` into
+        installed.json so a subsequent publish defaults to the same repo.
+        """
+        self._set_publish_button_state(pkg_id, busy=True)
+        QtWidgets.QApplication.processEvents()
+
+        try:
+            result = self._publisher.publish_github(
+                pkg_data, repo,
+                release_notes=release_notes,
+                namespace=namespace,
+                embed_source_path=embed_source_path,
+            )
+        except Exception as e:
+            self._set_publish_button_state(pkg_id, busy=False)
+            self._show_publish_error(e)
+            return
+
+        # Re-key the installed entry under the canonical namespace/name
+        # and stamp home_origin so the next publish defaults to this repo.
+        fields = {
+            "namespace": result["namespace"],
+            "name": result["name"],
+        }
+        if not pkg_data.get("home_origin"):
+            fields["home_origin"] = {"type": "github", "repo": repo}
+        self._install_manager.rekey_package(pkg_id, result["id"], fields)
+
+        self._show_github_publish_result(pkg_data, result)
+        self.refresh()
+
+    def _show_github_publish_result(self, pkg_data, result):
+        """Show the github publish outcome — release URL or manual steps."""
+        display = pkg_data.get("display_name", result.get("name", ""))
+        warnings = result.get("warnings") or []
+        manual_steps = result.get("manual_steps", "")
+        release_url = result.get("release_url", "")
+
+        if release_url and not manual_steps:
+            msg = t("publish_github_success_url", display, release_url)
+            if warnings:
+                msg += "\n\nWarnings:\n  - " + "\n  - ".join(warnings)
+            QtWidgets.QMessageBox.information(self, t("publish"), msg)
+            return
+
+        # Manual path: longer text, scrollable dialog so copy-paste works
+        # cleanly. Built once so every manual-mode success / fallback goes
+        # through the same surface.
+        dlg = QtWidgets.QDialog(self)
+        dlg.setWindowTitle(t("publish_github_manual_title"))
+        dlg.setMinimumWidth(540)
+        layout = QtWidgets.QVBoxLayout(dlg)
+        layout.setSpacing(10)
+        intro = QtWidgets.QLabel(
+            t("publish_github_manual_intro", display)
+        )
+        intro.setWordWrap(True)
+        layout.addWidget(intro)
+        if warnings:
+            warn_lbl = QtWidgets.QLabel(
+                "Warnings:\n  - " + "\n  - ".join(warnings)
+            )
+            warn_lbl.setStyleSheet("color: {};".format(theme.ACCENT_ORANGE))
+            warn_lbl.setWordWrap(True)
+            layout.addWidget(warn_lbl)
+        steps = QtWidgets.QPlainTextEdit()
+        steps.setReadOnly(True)
+        steps.setPlainText(manual_steps)
+        steps.setMinimumHeight(240)
+        layout.addWidget(steps)
+        btn_row = QtWidgets.QHBoxLayout()
+        btn_row.addStretch()
+        ok = QtWidgets.QPushButton(t("close"))
+        ok.clicked.connect(dlg.accept)
+        btn_row.addWidget(ok)
+        layout.addLayout(btn_row)
+        dlg.exec_()
 
     def _find_registry_by_name(self, name):
         for entry in self._config.registries:
