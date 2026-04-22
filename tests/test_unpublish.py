@@ -4,7 +4,7 @@ import json
 import os
 import tempfile
 
-from carton.core.config import Config, RegistryEntry
+from carton.core.config import Config, CatalogueEntry
 from carton.core.env_manager import MayaEnvManager
 from carton.core.installer import InstallManager
 from carton.core.publisher import Publisher
@@ -44,8 +44,8 @@ def _setup_env(tmpdir):
 
     reg_dir = os.path.join(tmpdir, "registry")
     os.makedirs(reg_dir, exist_ok=True)
-    config.add_registry("test", os.path.join(reg_dir, "registry.json"))
-    registry_entry = config.registries[0]
+    config.add_catalogue("test", os.path.join(reg_dir, "catalogue.json"))
+    registry_entry = config.catalogues[0]
 
     publisher = Publisher(config)
     return config, install_mgr, script_mgr, publisher, registry_entry
@@ -78,16 +78,16 @@ def _register_and_publish(tmpdir, version="1.0.0"):
 class TestUnpublish:
     """Publisher.unpublish() should remove package from registry."""
 
-    def test_unpublish_removes_registry_entry(self):
-        """After unpublish, the package should not exist in registry.json."""
+    def test_unpublish_removes_catalogue_entry(self):
+        """After unpublish, the package should not exist in catalogue.json."""
         with tempfile.TemporaryDirectory() as tmpdir:
             pkg_id, _, _, _, _, publisher, reg_entry = _register_and_publish(tmpdir)
 
             publisher.unpublish(pkg_id, reg_entry)
 
             with open(reg_entry.path, "r", encoding="utf-8") as f:
-                registry = json.load(f)
-            assert pkg_id not in registry["packages"]
+                catalogue = json.load(f)
+            assert pkg_id not in catalogue["packages"]
 
     def test_unpublish_deletes_zip_files(self):
         """After unpublish, the package directory should be removed."""
@@ -112,7 +112,7 @@ class TestUnpublish:
             assert result["name"] == "my_tool"
 
     def test_unpublish_nonexistent_raises(self):
-        """Unpublishing a package not in registry should raise RuntimeError."""
+        """Unpublishing a package not in catalogue should raise RuntimeError."""
         with tempfile.TemporaryDirectory() as tmpdir:
             _, _, config, _, _, publisher, reg_entry = _register_and_publish(tmpdir)
 
@@ -123,7 +123,7 @@ class TestUnpublish:
                 assert "not found" in str(e)
 
     def test_unpublish_preserves_other_packages(self):
-        """Unpublishing one package should not affect others in the same registry."""
+        """Unpublishing one package should not affect others in the same catalogue."""
         with tempfile.TemporaryDirectory() as tmpdir:
             # Publish first package
             pkg_id_1, _, config, install_mgr, script_mgr, publisher, reg_entry = (
@@ -166,19 +166,19 @@ class TestUnpublish:
 
             # Second should still be there
             with open(reg_entry.path, "r", encoding="utf-8") as f:
-                registry = json.load(f)
-            assert pkg_id_1 not in registry["packages"]
-            assert pkg_id_2 in registry["packages"]
+                catalogue = json.load(f)
+            assert pkg_id_1 not in catalogue["packages"]
+            assert pkg_id_2 in catalogue["packages"]
 
 
 class TestFindPublishedRegistries:
-    """Publisher.find_published_registries() should find where a package is published."""
+    """Publisher.find_published_catalogues() should find where a package is published."""
 
-    def test_finds_registry_with_package(self):
+    def test_finds_catalogue_with_package(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             pkg_id, _, _, _, _, publisher, reg_entry = _register_and_publish(tmpdir)
 
-            results = publisher.find_published_registries(pkg_id)
+            results = publisher.find_published_catalogues(pkg_id)
 
             assert len(results) == 1
             assert results[0].name == reg_entry.name
@@ -187,7 +187,7 @@ class TestFindPublishedRegistries:
         with tempfile.TemporaryDirectory() as tmpdir:
             _, _, _, _, _, publisher, _ = _register_and_publish(tmpdir)
 
-            results = publisher.find_published_registries("mystudio/nonexistent")
+            results = publisher.find_published_catalogues("mystudio/nonexistent")
 
             assert results == []
 
@@ -196,6 +196,6 @@ class TestFindPublishedRegistries:
             pkg_id, _, _, _, _, publisher, reg_entry = _register_and_publish(tmpdir)
 
             publisher.unpublish(pkg_id, reg_entry)
-            results = publisher.find_published_registries(pkg_id)
+            results = publisher.find_published_catalogues(pkg_id)
 
             assert results == []

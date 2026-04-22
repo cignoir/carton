@@ -4,8 +4,8 @@ Each section is a small QWidget that operates on a *target* object — either
 a live :class:`carton.core.config.Config` or a
 :class:`carton.core.profile.InstallerProfile`. Both expose the same
 attribute shape (``language``, ``proxy``, ``auto_check_updates``,
-``registries`` as a list of ``RegistryEntry``, plus ``add_registry`` /
-``remove_registry`` helpers), so the section code is identical regardless
+``catalogues`` as a list of ``CatalogueEntry``, plus ``add_catalogue`` /
+``remove_catalogue`` helpers), so the section code is identical regardless
 of which one it edits.
 
 The caller passes a ``persist`` callback that the section invokes after
@@ -20,6 +20,7 @@ import os
 from carton.compat_urllib import Request, urlopen
 from carton.ui.compat import QtWidgets, Qt
 from carton.ui import theme
+from carton.ui.error_messages import show_error
 from carton.ui.i18n import t
 
 
@@ -276,14 +277,182 @@ class StrictVerifySection(QtWidgets.QWidget):
         self._persist()
 
 
+# ---------- Add-catalogue method picker -----------------------------------
+
+
+class _AddCatalogueMethodDialog(QtWidgets.QDialog):
+    """Two-step picker: scope (single / catalogue) → transport.
+
+    The add-a-catalogue menu used to flatten five transports into a single
+    list, which hit first-time users cold — single-package flows and
+    catalogue flows were mixed together with no visible grouping.
+    Splitting the question into *what are you adding?* and then *from
+    where?* trades one extra click for a much clearer mental model, and
+    each step stays at ≤3 options.
+    """
+
+    CANCEL = ""
+    GITHUB = "github"
+    PACKAGE_URL = "package_url"
+    REMOTE = "remote"
+    LOCAL = "local"
+    CREATE_NEW = "create_new"
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle(t("add"))
+        self.setMinimumWidth(400)
+        self.setStyleSheet(theme.dialog_style())
+        self._result = self.CANCEL
+
+        outer = QtWidgets.QVBoxLayout(self)
+        outer.setContentsMargins(20, 18, 20, 18)
+
+        self._stack = QtWidgets.QStackedWidget()
+        self._stack.addWidget(self._build_step1())
+        self._stack.addWidget(self._build_step2_single())
+        self._stack.addWidget(self._build_step2_catalogue())
+        outer.addWidget(self._stack)
+
+    def result_method(self):
+        return self._result
+
+    # ---- step 1 ---------------------------------------------------------
+
+    def _build_step1(self):
+        w = QtWidgets.QWidget()
+        lay = QtWidgets.QVBoxLayout(w)
+        lay.setContentsMargins(0, 0, 0, 0)
+        lay.setSpacing(14)
+
+        title = QtWidgets.QLabel(t("settings_add_scope_title"))
+        title.setStyleSheet(theme.LABEL_DIM_BOLD)
+        lay.addWidget(title)
+
+        lay.addLayout(self._make_option(
+            "\U0001F4E6  " + t("settings_add_scope_single"),
+            t("settings_add_scope_single_hint"),
+            lambda: self._stack.setCurrentIndex(1),
+            accent=theme.ACCENT_GREEN,
+            accent_hover=theme.ACCENT_GREEN_HOVER,
+        ))
+        lay.addLayout(self._make_option(
+            "\U0001F4DA  " + t("settings_add_scope_catalogue"),
+            t("settings_add_scope_catalogue_hint"),
+            lambda: self._stack.setCurrentIndex(2),
+            accent=theme.TEXT_SECONDARY,
+            accent_hover=theme.BG_HOVER,
+        ))
+        lay.addStretch()
+        return w
+
+    # ---- step 2 variants ------------------------------------------------
+
+    def _build_step2_single(self):
+        w = QtWidgets.QWidget()
+        lay = QtWidgets.QVBoxLayout(w)
+        lay.setContentsMargins(0, 0, 0, 0)
+        lay.setSpacing(14)
+
+        title = QtWidgets.QLabel(t("settings_add_single_title"))
+        title.setStyleSheet(theme.LABEL_DIM_BOLD)
+        lay.addWidget(title)
+
+        lay.addLayout(self._make_option(
+            t("settings_add_github"),
+            t("settings_add_github_hint"),
+            lambda: self._finish(self.GITHUB),
+            accent=theme.ACCENT_GREEN,
+            accent_hover=theme.ACCENT_GREEN_HOVER,
+        ))
+        lay.addLayout(self._make_option(
+            t("settings_add_package_url"),
+            t("settings_add_package_url_hint"),
+            lambda: self._finish(self.PACKAGE_URL),
+            accent=theme.ACCENT_GREEN,
+            accent_hover=theme.ACCENT_GREEN_HOVER,
+        ))
+        lay.addStretch()
+        lay.addLayout(self._back_row())
+        return w
+
+    def _build_step2_catalogue(self):
+        w = QtWidgets.QWidget()
+        lay = QtWidgets.QVBoxLayout(w)
+        lay.setContentsMargins(0, 0, 0, 0)
+        lay.setSpacing(14)
+
+        title = QtWidgets.QLabel(t("settings_add_catalogue_title"))
+        title.setStyleSheet(theme.LABEL_DIM_BOLD)
+        lay.addWidget(title)
+
+        lay.addLayout(self._make_option(
+            t("settings_add_local"),
+            t("settings_add_local_hint"),
+            lambda: self._finish(self.LOCAL),
+            accent=theme.TEXT_SECONDARY,
+            accent_hover=theme.BG_HOVER,
+        ))
+        lay.addLayout(self._make_option(
+            t("settings_add_url"),
+            t("settings_add_url_hint"),
+            lambda: self._finish(self.REMOTE),
+            accent=theme.TEXT_SECONDARY,
+            accent_hover=theme.BG_HOVER,
+        ))
+        lay.addLayout(self._make_option(
+            t("settings_add_create_new"),
+            t("settings_add_create_new_hint"),
+            lambda: self._finish(self.CREATE_NEW),
+            accent=theme.ACCENT_LINK,
+            accent_hover="#1d3040",
+        ))
+        lay.addStretch()
+        lay.addLayout(self._back_row())
+        return w
+
+    # ---- shared helpers -------------------------------------------------
+
+    def _make_option(self, title, hint, callback, accent, accent_hover):
+        lay = QtWidgets.QVBoxLayout()
+        lay.setSpacing(4)
+        btn = QtWidgets.QPushButton(title)
+        btn.setCursor(Qt.PointingHandCursor)
+        btn.setStyleSheet(theme.btn_outline(accent, accent_hover))
+        btn.clicked.connect(callback)
+        lay.addWidget(btn)
+        hint_lbl = QtWidgets.QLabel(hint)
+        hint_lbl.setStyleSheet(
+            "color: {}; padding-left: 12px; font-size: 11px;".format(theme.TEXT_DIM)
+        )
+        hint_lbl.setWordWrap(True)
+        lay.addWidget(hint_lbl)
+        return lay
+
+    def _back_row(self):
+        """Bottom-left back button shared by both step-2 pages."""
+        row = QtWidgets.QHBoxLayout()
+        back_btn = QtWidgets.QPushButton("\u2190  " + t("settings_add_back"))
+        back_btn.setCursor(Qt.PointingHandCursor)
+        back_btn.setStyleSheet(theme.btn_ghost_text())
+        back_btn.clicked.connect(lambda: self._stack.setCurrentIndex(0))
+        row.addWidget(back_btn)
+        row.addStretch()
+        return row
+
+    def _finish(self, code):
+        self._result = code
+        self.accept()
+
+
 # ---------- RegistriesSection ---------------------------------------------
 
 
 class RegistriesSection(QtWidgets.QWidget):
     """Registry list editor — list + add/edit/remove + reorder buttons.
 
-    Operates on ``target.registries`` (list of RegistryEntry) via the
-    ``add_registry`` / ``remove_registry`` helpers both Config and
+    Operates on ``target.catalogues`` (list of CatalogueEntry) via the
+    ``add_catalogue`` / ``remove_catalogue`` helpers both Config and
     InstallerProfile expose.
     """
 
@@ -301,7 +470,7 @@ class RegistriesSection(QtWidgets.QWidget):
         layout.addWidget(label)
 
         self._list = QtWidgets.QListWidget()
-        for entry in self._target.registries:
+        for entry in self._target.catalogues:
             self._list.addItem(str(entry))
         self._list.itemDoubleClicked.connect(self._edit)
         layout.addWidget(self._list)
@@ -357,73 +526,96 @@ class RegistriesSection(QtWidgets.QWidget):
 
     def _refresh(self):
         self._list.clear()
-        for entry in self._target.registries:
+        for entry in self._target.catalogues:
             self._list.addItem(str(entry))
 
     def _add(self):
-        choices = [
-            t("settings_add_local"),
-            t("settings_add_github"),
-            t("settings_add_url"),
-            t("settings_add_create_new"),
-        ]
-        chosen, ok = QtWidgets.QInputDialog.getItem(
-            self, t("add"), t("settings_add_method"), choices, 0, False,
-        )
-        if not ok:
+        # Two-step picker: scope (single / catalogue) → transport. The
+        # previous flat 5-item list mixed single-package flows and
+        # catalogue flows into one menu, which was hostile to first-time
+        # users. Splitting on scope first keeps each step at ≤3 options
+        # and reflects the Package-first UX pledge (single-package above
+        # the fold, catalogue one click deeper as an author/team tool).
+        dlg = _AddCatalogueMethodDialog(self)
+        if dlg.exec_() != QtWidgets.QDialog.Accepted:
             return
-        if chosen == choices[1]:
-            self._add_github()
-        elif chosen == choices[2]:
-            self._add_remote()
-        elif chosen == choices[3]:
-            self._create_new_local()
-        else:
-            self._add_local()
+        dispatch = {
+            _AddCatalogueMethodDialog.GITHUB: self._add_github,
+            _AddCatalogueMethodDialog.PACKAGE_URL: self._add_package_url,
+            _AddCatalogueMethodDialog.REMOTE: self._add_remote,
+            _AddCatalogueMethodDialog.LOCAL: self._add_local,
+            _AddCatalogueMethodDialog.CREATE_NEW: self._create_new_local,
+        }
+        handler = dispatch.get(dlg.result_method())
+        if handler is not None:
+            handler()
 
     def _create_new_local(self):
-        from carton.core.registry_id import new_registry_id
+        """Scaffold a fresh v5.0 catalogue in an empty folder.
+
+        Pre-existing ``catalogue.json`` / ``registry.json`` in the picked
+        folder are left alone — we just register the path and let
+        :class:`CatalogueClient` read / auto-migrate them on first fetch.
+        Only the "folder is empty" case creates a new file, and it's
+        always v5.0 (no more v3.1 legacy scaffolds that would just get
+        migrated on the next launch).
+        """
+        from carton.core.migrations import (
+            CATALOGUE_FILENAME,
+            CATALOGUE_SCHEMA_VERSION,
+            LEGACY_REGISTRY_FILENAME,
+        )
+        from carton.core.uuid_id import new_uuid
 
         folder = QtWidgets.QFileDialog.getExistingDirectory(
             self, t("setup_select_folder"),
         )
         if not folder:
             return
-        reg_path = os.path.join(folder, "registry.json")
-        rid = ""
-        if not os.path.exists(reg_path):
-            try:
-                rid = new_registry_id()
-                os.makedirs(folder, exist_ok=True)
-                with open(reg_path, "w", encoding="utf-8") as f:
-                    json.dump({
-                        "schema_version": "3.1",
-                        "registry_id": rid,
-                        "packages": {},
-                    }, f, indent=2, ensure_ascii=False)
-                os.makedirs(os.path.join(folder, "packages"), exist_ok=True)
-            except Exception as e:
-                QtWidgets.QMessageBox.warning(self, "Carton", str(e))
-                return
-        self._finish_add(reg_path, os.path.basename(folder), registry_id=rid)
+        cat_path = os.path.join(folder, CATALOGUE_FILENAME)
+        legacy_path = os.path.join(folder, LEGACY_REGISTRY_FILENAME)
+
+        if os.path.exists(cat_path):
+            self._finish_add(cat_path, os.path.basename(folder), catalogue_id="")
+            return
+        if os.path.exists(legacy_path):
+            # CatalogueClient auto-migrates on first read; just register.
+            self._finish_add(legacy_path, os.path.basename(folder), catalogue_id="")
+            return
+
+        try:
+            rid = new_uuid()
+            os.makedirs(folder, exist_ok=True)
+            with open(cat_path, "w", encoding="utf-8") as f:
+                json.dump({
+                    "schema_version": CATALOGUE_SCHEMA_VERSION,
+                    "catalogue_id": rid,
+                    "display_name": os.path.basename(folder),
+                    "packages": {},
+                }, f, indent=2, ensure_ascii=False)
+            os.makedirs(os.path.join(folder, "packages"), exist_ok=True)
+        except Exception as e:
+            show_error(self, e)
+            return
+        self._finish_add(cat_path, os.path.basename(folder), catalogue_id=rid)
 
     def _add_local(self):
-        from carton.ui._registry_pairing import (
-            read_local_registry_id,
-            stamp_local_registry_with_prompt,
+        from carton.ui._catalogue_pairing import (
+            read_local_catalogue_id,
+            stamp_local_catalogue_with_prompt,
         )
 
         path = QtWidgets.QFileDialog.getOpenFileName(
-            self, t("settings_select_registry"), "",
-            "Registry (registry.json);;JSON (*.json)",
+            self, t("settings_select_catalogue"), "",
+            "Catalogue (catalogue.json);;Legacy (registry.json);;JSON (*.json)",
         )[0]
         if not path:
             return
-        rid, data = read_local_registry_id(path)
+        rid, data = read_local_catalogue_id(path)
         if not rid and data is not None:
-            rid = stamp_local_registry_with_prompt(self, path, data)
+            rid = stamp_local_catalogue_with_prompt(self, path, data)
         default_name = os.path.basename(os.path.dirname(path))
-        self._finish_add(path, default_name, registry_id=rid)
+        self._finish_add(path, default_name, catalogue_id=rid)
 
     def _add_github(self):
         repo, ok = wide_input(self, "GitHub", t("settings_github_placeholder"))
@@ -446,7 +638,24 @@ class RegistriesSection(QtWidgets.QWidget):
             )
             return
         base = "https://raw.githubusercontent.com/{}/{}".format(repo, branch)
-        candidates = [base + "/registry/registry.json", base + "/registry.json"]
+        # v5.0 single-package probe runs first: if the repo root carries a
+        # ``package.json`` with a valid ``namespace/name``, treat it as a
+        # single-package repo and register into the local personal
+        # catalogue instead of walking the multi-package probe path. This
+        # lets "paste owner/repo of your one tool" just work without the
+        # user having to hand-author a catalogue.json.
+        if self._try_register_single_package(base, repo):
+            return
+        # Probe order: v5.0 catalogue before v4.0 registry, nested
+        # layout before root (preserves the existing habit of the
+        # sample repos — the official template publishes under
+        # ``registry/registry.json`` → now ``registry/catalogue.json``).
+        candidates = [
+            base + "/registry/catalogue.json",
+            base + "/catalogue.json",
+            base + "/registry/registry.json",
+            base + "/registry.json",
+        ]
         resolved = None
         for url in candidates:
             try:
@@ -459,15 +668,131 @@ class RegistriesSection(QtWidgets.QWidget):
                 continue
         if not resolved:
             QtWidgets.QMessageBox.warning(
-                self, "Carton", t("settings_github_no_registry", repo),
+                self, "Carton", t("settings_github_no_catalogue", repo),
             )
             return
-        from carton.ui._registry_pairing import probe_remote_registry_id
-        rid = probe_remote_registry_id(resolved)
-        self._finish_add(resolved, repo.split("/")[1], registry_id=rid)
+        from carton.ui._catalogue_pairing import probe_remote_catalogue_id
+        rid = probe_remote_catalogue_id(resolved)
+        self._finish_add(resolved, repo.split("/")[1], catalogue_id=rid)
+
+    def _try_register_single_package(self, base, repo):
+        """Probe ``{base}/package.json`` and register into personal catalogue.
+
+        Returns True when the single-package path was taken (caller stops
+        and skips the catalogue.json probe). False means either no
+        ``package.json`` or the probed file lacked a usable
+        ``namespace/name``; the caller continues to the catalogue probe.
+
+        On a successful hit we mutate ``~/.carton/personal_catalogue.json``
+        and surface a message box — we intentionally do NOT touch
+        ``_target.catalogues`` because plan v5.0 keeps personal-catalogue
+        entries separate from subscribed catalogues. The live UI list
+        (``self._list``) only reflects subscribed catalogues, so nothing
+        needs to change there.
+        """
+        from carton.core.personal_catalogue import PersonalCatalogue, derive_pkg_id
+        from carton.ui._catalogue_pairing import probe_github_package_json
+
+        pkg_data = probe_github_package_json(base)
+        if pkg_data is None:
+            return False
+        pkg_id = derive_pkg_id(pkg_data)
+        if not pkg_id:
+            # package.json exists but lacks namespace/name — fall through
+            # so the user still has a chance to hit a sibling
+            # catalogue.json if the repo has both.
+            return False
+
+        catalogue = PersonalCatalogue.load()
+        if catalogue.contains(pkg_id):
+            QtWidgets.QMessageBox.information(
+                self, "Carton",
+                t("settings_github_pkg_already_added", pkg_id),
+            )
+            return True
+        catalogue.add_github_package(pkg_id, repo)
+        try:
+            catalogue.save()
+        except OSError as e:
+            QtWidgets.QMessageBox.warning(
+                self, "Carton", t("settings_github_error", str(e)),
+            )
+            return True
+        QtWidgets.QMessageBox.information(
+            self, "Carton",
+            t("settings_github_pkg_registered", pkg_id),
+        )
+        return True
+
+    def _add_package_url(self):
+        """Register a single package by direct ``package.json`` URL.
+
+        Counterpart to ``_add_github`` for repos that aren't on GitHub
+        (or host their ``package.json`` at a non-standard path). Hits
+        the URL, reads ``namespace``/``name`` from the returned JSON,
+        and stores a ``url`` origin in the personal catalogue so the
+        Library view can merge it in alongside subscribed catalogues.
+
+        No ``_target.catalogues`` mutation — personal catalogue lives
+        under ``~/.carton/`` and is machine-local (plan v5.0 spec).
+        """
+        from carton.core.personal_catalogue import (
+            PersonalCatalogue, derive_pkg_id,
+        )
+
+        url, ok = wide_input(
+            self, t("settings_add_package_url"),
+            t("settings_package_url_placeholder"), width=560,
+        )
+        if not ok or not url.strip():
+            return
+        url = url.strip()
+        if not url.startswith(("http://", "https://")):
+            QtWidgets.QMessageBox.warning(self, "Carton", t("settings_invalid_url"))
+            return
+
+        try:
+            req = Request(url)
+            req.add_header("Accept", "application/json")
+            resp = urlopen(req, timeout=10)
+            pkg_data = json.loads(resp.read().decode("utf-8"))
+        except Exception as e:
+            QtWidgets.QMessageBox.warning(
+                self, "Carton",
+                t("settings_package_url_error", str(e)),
+            )
+            return
+
+        pkg_id = derive_pkg_id(pkg_data)
+        if not pkg_id:
+            QtWidgets.QMessageBox.warning(
+                self, "Carton",
+                t("settings_package_url_invalid_pkg"),
+            )
+            return
+
+        catalogue = PersonalCatalogue.load()
+        if catalogue.contains(pkg_id):
+            QtWidgets.QMessageBox.information(
+                self, "Carton",
+                t("settings_github_pkg_already_added", pkg_id),
+            )
+            return
+        catalogue.add_url_package(pkg_id, url)
+        try:
+            catalogue.save()
+        except OSError as e:
+            QtWidgets.QMessageBox.warning(
+                self, "Carton", t("settings_github_error", str(e)),
+            )
+            return
+        QtWidgets.QMessageBox.information(
+            self, "Carton",
+            t("settings_github_pkg_registered", pkg_id),
+        )
 
     def _add_remote(self):
-        from carton.ui._registry_pairing import probe_remote_registry_id
+        from carton.ui._catalogue_pairing import probe_remote_catalogue_id
 
         url, ok = wide_input(
             self, t("settings_add_url"), t("settings_url_placeholder"), width=560,
@@ -482,61 +807,61 @@ class RegistriesSection(QtWidgets.QWidget):
         default_name = parts[-2] if len(parts) >= 2 else "remote"
         if default_name in ("raw", "main", "master"):
             default_name = parts[-3] if len(parts) >= 3 else "remote"
-        rid = probe_remote_registry_id(url)
-        self._finish_add(url, default_name, registry_id=rid)
+        rid = probe_remote_catalogue_id(url)
+        self._finish_add(url, default_name, catalogue_id=rid)
 
-    def _finish_add(self, path, default_name="", registry_id=""):
-        from carton.ui._registry_pairing import (
-            DuplicateRegistryChoice,
+    def _finish_add(self, path, default_name="", catalogue_id=""):
+        from carton.ui._catalogue_pairing import (
+            DuplicateCatalogueChoice,
             find_duplicate_entry,
-            resolve_duplicate_registry,
+            resolve_duplicate_catalogue,
         )
 
         # UUID-based duplicate detection: catches "same registry under a
         # different alias" before asking the user for a name. Falls back
-        # silently when neither side has a registry_id — the legacy
+        # silently when neither side has a catalogue_id — the legacy
         # name-based check below still guards.
         existing = find_duplicate_entry(
-            self._target.registries, registry_id, path,
+            self._target.catalogues, catalogue_id, path,
         )
         if existing is not None:
-            choice = resolve_duplicate_registry(self, existing)
-            if choice == DuplicateRegistryChoice.CANCEL:
+            choice = resolve_duplicate_catalogue(self, existing)
+            if choice == DuplicateCatalogueChoice.CANCEL:
                 return
-            if choice == DuplicateRegistryChoice.USE_EXISTING:
+            if choice == DuplicateCatalogueChoice.USE_EXISTING:
                 return
             # ADD_ALIAS → fall through to the name prompt.
 
         name, ok = wide_input(
-            self, "Registry Name", t("settings_registry_name"), text=default_name,
+            self, "Catalogue Name", t("settings_catalogue_name"), text=default_name,
         )
         if not ok or not name:
             return
-        for r in self._target.registries:
+        for r in self._target.catalogues:
             if r.name == name:
                 QtWidgets.QMessageBox.warning(
                     self, "Carton", t("settings_already_exists", name),
                 )
                 return
-        self._target.add_registry(name, path, registry_id=registry_id)
+        self._target.add_catalogue(name, path, catalogue_id=catalogue_id)
         self._persist()
-        self._list.addItem(str(self._target.registries[-1]))
+        self._list.addItem(str(self._target.catalogues[-1]))
 
     def _edit(self, item=None):
         row = self._list.currentRow()
         if row < 0:
             return
-        entry = self._target.registries[row]
+        entry = self._target.catalogues[row]
 
         dialog = QtWidgets.QDialog(self)
-        dialog.setWindowTitle(t("settings_edit_registry"))
+        dialog.setWindowTitle(t("settings_edit_catalogue"))
         dialog.setFixedWidth(500)
         dialog.setStyleSheet(theme.dialog_style())
         dlg_layout = QtWidgets.QVBoxLayout(dialog)
         dlg_layout.setContentsMargins(20, 20, 20, 20)
         dlg_layout.setSpacing(12)
 
-        name_label = QtWidgets.QLabel(t("settings_registry_name"))
+        name_label = QtWidgets.QLabel(t("settings_catalogue_name"))
         name_label.setStyleSheet(theme.LABEL_DIM)
         dlg_layout.addWidget(name_label)
         name_input = QtWidgets.QLineEdit(entry.name)
@@ -566,8 +891,8 @@ class RegistriesSection(QtWidgets.QWidget):
             new_path = path_input.text().strip()
             if not new_name or not new_path:
                 return
-            from carton.core.config import RegistryEntry
-            self._target.registries[row] = RegistryEntry(new_name, new_path)
+            from carton.core.config import CatalogueEntry
+            self._target.catalogues[row] = CatalogueEntry(new_name, new_path)
             self._persist()
             self._refresh()
             self._list.setCurrentRow(row)
@@ -576,14 +901,14 @@ class RegistriesSection(QtWidgets.QWidget):
         row = self._list.currentRow()
         if row < 0:
             return
-        entry = self._target.registries[row]
+        entry = self._target.catalogues[row]
         reply = QtWidgets.QMessageBox.question(
             self, "Remove Registry",
             t("settings_confirm_remove", entry.name),
             QtWidgets.QMessageBox.Yes | QtWidgets.QMessageBox.No,
         )
         if reply == QtWidgets.QMessageBox.Yes:
-            self._target.remove_registry(entry.name)
+            self._target.remove_catalogue(entry.name)
             self._persist()
             self._list.takeItem(row)
 
@@ -591,7 +916,7 @@ class RegistriesSection(QtWidgets.QWidget):
         row = self._list.currentRow()
         if row <= 0:
             return
-        regs = self._target.registries
+        regs = self._target.catalogues
         regs[row], regs[row - 1] = regs[row - 1], regs[row]
         self._persist()
         self._refresh()
@@ -599,9 +924,9 @@ class RegistriesSection(QtWidgets.QWidget):
 
     def _move_down(self):
         row = self._list.currentRow()
-        if row < 0 or row >= len(self._target.registries) - 1:
+        if row < 0 or row >= len(self._target.catalogues) - 1:
             return
-        regs = self._target.registries
+        regs = self._target.catalogues
         regs[row], regs[row + 1] = regs[row + 1], regs[row]
         self._persist()
         self._refresh()

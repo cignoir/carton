@@ -59,15 +59,40 @@
           "type": "boolean",
           "description": "My Tools (source=local) の場合、参照先がフォルダかファイルかの区別"
         },
-        "home_registry": {
+        "origin": {
           "type": "object",
+          "description": "v5.0 inbound origin snapshot. このパッケージをどこから install したかの identity を記録する (catalogue の versions/latest_version は stale になるので含めない、再解決時は origin 経由で最新を取る)",
+          "required": ["type"],
           "properties": {
-            "name": { "type": "string" },
-            "registry_id": {
+            "type": {
+              "type": "string",
+              "enum": ["embedded", "github", "url", "local"]
+            },
+            "repo": { "type": "string" },
+            "ref": { "type": "string" },
+            "url": { "type": "string" },
+            "path": { "type": "string" }
+          }
+        },
+        "home_origin": {
+          "type": "object",
+          "description": "v5.0 本籍 origin（embedded/github/url/local）",
+          "required": ["type"],
+          "properties": {
+            "type": {
+              "type": "string",
+              "enum": ["embedded", "github", "url", "local"]
+            },
+            "catalogue_name": { "type": "string" },
+            "catalogue_id": {
               "type": "string",
               "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
             },
-            "hint": { "type": "string" }
+            "hint": { "type": "string" },
+            "repo": { "type": "string" },
+            "ref": { "type": "string" },
+            "url": { "type": "string" },
+            "path": { "type": "string" }
           }
         },
         "activated_paths": {

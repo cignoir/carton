@@ -16,11 +16,11 @@ from carton.core.identity import slugify_namespace
 class EditDialog(QtWidgets.QDialog):
     """Dialog for editing metadata of locally registered tools."""
 
-    def __init__(self, pkg_id, pkg_data, published_registries=None, parent=None):
+    def __init__(self, pkg_id, pkg_data, published_catalogues=None, parent=None):
         super().__init__(parent)
         self._pkg_id = pkg_id
         self._pkg_data = pkg_data
-        self._published_registries = published_registries or []
+        self._published_catalogues = published_catalogues or []
         self._result = None
 
         self.setWindowTitle(t("edit_title"))
@@ -65,9 +65,9 @@ class EditDialog(QtWidgets.QDialog):
         self._namespace_input.textChanged.connect(self._update_namespace_preview)
         # "Published" for namespace-lock purposes: known to live in any
         # writable registry. The publisher resolves the "is it actually
-        # there" question for us via published_registries; we don't need
+        # there" question for us via published_catalogues; we don't need
         # to second-guess based on installed.json source flags.
-        is_published = bool(self._published_registries)
+        is_published = bool(self._published_catalogues)
         if is_published:
             self._namespace_input.setReadOnly(True)
             self._namespace_input.setToolTip(
@@ -218,7 +218,7 @@ class EditDialog(QtWidgets.QDialog):
         remove_btn.clicked.connect(self._on_remove)
         btn_layout.addWidget(remove_btn)
 
-        if self._published_registries:
+        if self._published_catalogues:
             history_btn = QtWidgets.QPushButton(t("show_history"))
             history_btn.setStyleSheet(theme.btn_ghost_text())
             history_btn.clicked.connect(self._on_history)
@@ -325,14 +325,14 @@ class EditDialog(QtWidgets.QDialog):
 
     def _on_unpublish(self):
         display = self._pkg_data.get("display_name", self._pkg_id)
-        regs = self._published_registries
+        regs = self._published_catalogues
 
         if len(regs) == 1:
             target = regs[0]
         else:
             names = [r.name for r in regs]
             chosen, ok = QtWidgets.QInputDialog.getItem(
-                self, t("unpublish"), t("unpublish_select_registry"),
+                self, t("unpublish"), t("unpublish_select_catalogue"),
                 names, 0, False,
             )
             if not ok:
@@ -345,15 +345,15 @@ class EditDialog(QtWidgets.QDialog):
             QtWidgets.QMessageBox.Yes | QtWidgets.QMessageBox.No,
         )
         if reply == QtWidgets.QMessageBox.Yes:
-            self._result = {"action": "unpublish", "registry": target}
+            self._result = {"action": "unpublish", "catalogue": target}
             self.accept()
 
     def get_result(self):
         return self._result
 
     @classmethod
-    def prompt(cls, pkg_id, pkg_data, published_registries=None, parent=None):
-        dialog = cls(pkg_id, pkg_data, published_registries=published_registries, parent=parent)
+    def prompt(cls, pkg_id, pkg_data, published_catalogues=None, parent=None):
+        dialog = cls(pkg_id, pkg_data, published_catalogues=published_catalogues, parent=parent)
         if dialog.exec_() == QtWidgets.QDialog.Accepted:
             return dialog.get_result()
         return None

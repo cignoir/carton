@@ -87,12 +87,12 @@ class TestPublishPersistence:
                 is_folder=True, namespace="mystudio",
             )
 
-            reg_dir = os.path.join(tmpdir, "registry")
+            reg_dir = os.path.join(tmpdir, "catalogue")
             os.makedirs(reg_dir, exist_ok=True)
-            config.add_registry("test", os.path.join(reg_dir, "registry.json"))
+            config.add_catalogue("test", os.path.join(reg_dir, "catalogue.json"))
             publisher = Publisher(config)
             pkg_data = install_mgr.get_installed_packages()[pkg_id]
-            result = publisher.publish(pkg_data, config.registries[0])
+            result = publisher.publish(pkg_data, config.catalogues[0])
 
             assert result["id"] == "mystudio/my_tool"
 
@@ -101,10 +101,10 @@ class TestPublishPersistence:
             assert data["namespace"] == "mystudio"
             assert "id" not in data
 
-            # Registry entry keyed by namespace/name
-            with open(config.registries[0].path, "r") as f:
-                registry = json.load(f)
-            assert "mystudio/my_tool" in registry["packages"]
+            # Catalogue entry keyed by namespace/name.
+            with open(config.catalogues[0].path, "r") as f:
+                catalogue = json.load(f)
+            assert "mystudio/my_tool" in catalogue["packages"]
 
     def test_publish_without_namespace_raises(self):
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -118,14 +118,14 @@ class TestPublishPersistence:
                 is_folder=True,
             )
 
-            reg_dir = os.path.join(tmpdir, "registry")
+            reg_dir = os.path.join(tmpdir, "catalogue")
             os.makedirs(reg_dir, exist_ok=True)
-            config.add_registry("test", os.path.join(reg_dir, "registry.json"))
+            config.add_catalogue("test", os.path.join(reg_dir, "catalogue.json"))
             publisher = Publisher(config)
             pkg_data = install_mgr.get_installed_packages()[pkg_id]
 
             try:
-                publisher.publish(pkg_data, config.registries[0])
+                publisher.publish(pkg_data, config.catalogues[0])
                 assert False, "expected MissingNamespaceError"
             except MissingNamespaceError:
                 pass
@@ -157,11 +157,11 @@ def _make_project(tmpdir, namespace="mystudio"):
     return project_root
 
 
-class TestRegistryIdStamping:
-    """First publish stamps a registry_id; subsequent publishes preserve it."""
+class TestCatalogueIdStamping:
+    """First publish stamps a catalogue_id; subsequent publishes preserve it."""
 
-    def test_first_publish_stamps_registry_id(self):
-        from carton.core.registry_id import is_valid_registry_id
+    def test_first_publish_stamps_catalogue_id(self):
+        from carton.core.uuid_id import is_valid_uuid
 
         with tempfile.TemporaryDirectory() as tmpdir:
             project_root = _make_project(tmpdir, namespace="mystudio")
@@ -172,22 +172,22 @@ class TestRegistryIdStamping:
                 entry_point={"type": "python", "module": "my_tool", "function": "show"},
                 is_folder=True, namespace="mystudio",
             )
-            reg_dir = os.path.join(tmpdir, "registry")
+            reg_dir = os.path.join(tmpdir, "catalogue")
             os.makedirs(reg_dir, exist_ok=True)
-            reg_path = os.path.join(reg_dir, "registry.json")
-            config.add_registry("test", reg_path)
+            reg_path = os.path.join(reg_dir, "catalogue.json")
+            config.add_catalogue("test", reg_path)
             publisher = Publisher(config)
             pkg_data = install_mgr.get_installed_packages()[pkg_id]
-            publisher.publish(pkg_data, config.registries[0])
+            publisher.publish(pkg_data, config.catalogues[0])
 
             with open(reg_path, "r", encoding="utf-8") as f:
-                registry = json.load(f)
-            assert is_valid_registry_id(registry.get("registry_id", ""))
-            assert registry["schema_version"] == "4.0"
-            # The RegistryEntry is updated in-memory to match the stamp.
-            assert config.registries[0].registry_id == registry["registry_id"]
+                catalogue = json.load(f)
+            assert is_valid_uuid(catalogue.get("catalogue_id", ""))
+            assert catalogue["schema_version"] == "5.0"
+            # The CatalogueEntry is updated in-memory to match the stamp.
+            assert config.catalogues[0].catalogue_id == catalogue["catalogue_id"]
 
-    def test_second_publish_preserves_registry_id(self):
+    def test_second_publish_preserves_catalogue_id(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             project_root = _make_project(tmpdir, namespace="mystudio")
             config, install_mgr, script_mgr = _make_env(tmpdir)
@@ -197,26 +197,26 @@ class TestRegistryIdStamping:
                 entry_point={"type": "python", "module": "my_tool", "function": "show"},
                 is_folder=True, namespace="mystudio",
             )
-            reg_dir = os.path.join(tmpdir, "registry")
+            reg_dir = os.path.join(tmpdir, "catalogue")
             os.makedirs(reg_dir, exist_ok=True)
-            reg_path = os.path.join(reg_dir, "registry.json")
-            config.add_registry("test", reg_path)
+            reg_path = os.path.join(reg_dir, "catalogue.json")
+            config.add_catalogue("test", reg_path)
             publisher = Publisher(config)
             pkg_data = install_mgr.get_installed_packages()[pkg_id]
 
-            publisher.publish(pkg_data, config.registries[0])
+            publisher.publish(pkg_data, config.catalogues[0])
             with open(reg_path, "r", encoding="utf-8") as f:
-                rid_first = json.load(f)["registry_id"]
+                cid_first = json.load(f)["catalogue_id"]
 
             # Second publish (bump the version to avoid VersionConflictError)
             pkg_data2 = dict(pkg_data)
             pkg_data2["version"] = "1.0.1"
-            publisher.publish(pkg_data2, config.registries[0])
+            publisher.publish(pkg_data2, config.catalogues[0])
             with open(reg_path, "r", encoding="utf-8") as f:
-                rid_second = json.load(f)["registry_id"]
-            assert rid_first == rid_second
+                cid_second = json.load(f)["catalogue_id"]
+            assert cid_first == cid_second
 
-    def test_home_registry_carries_registry_id(self):
+    def test_home_origin_carries_catalogue_id(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             project_root = _make_project(tmpdir, namespace="mystudio")
             config, install_mgr, script_mgr = _make_env(tmpdir)
@@ -226,20 +226,21 @@ class TestRegistryIdStamping:
                 entry_point={"type": "python", "module": "my_tool", "function": "show"},
                 is_folder=True, namespace="mystudio",
             )
-            reg_dir = os.path.join(tmpdir, "registry")
+            reg_dir = os.path.join(tmpdir, "catalogue")
             os.makedirs(reg_dir, exist_ok=True)
-            config.add_registry("test", os.path.join(reg_dir, "registry.json"))
+            config.add_catalogue("test", os.path.join(reg_dir, "catalogue.json"))
             publisher = Publisher(config)
             pkg_data = install_mgr.get_installed_packages()[pkg_id]
-            publisher.publish(pkg_data, config.registries[0])
+            publisher.publish(pkg_data, config.catalogues[0])
 
             with open(os.path.join(project_root, "package.json"), "r") as f:
                 data = json.load(f)
-            home = data.get("home_registry") or {}
-            assert home.get("name") == "test"
-            # registry_id should be present so other machines resolve by UUID
-            # rather than alias name.
-            assert home.get("registry_id")
+            origin = data.get("home_origin") or {}
+            assert origin.get("type") == "embedded"
+            assert origin.get("catalogue_name") == "test"
+            # catalogue_id should be present so other machines resolve by
+            # UUID rather than alias name.
+            assert origin.get("catalogue_id")
 
 
 class TestSidecarPersistenceForSingleFile:
@@ -257,12 +258,12 @@ class TestSidecarPersistenceForSingleFile:
                 is_folder=False, namespace="mystudio",
             )
 
-            reg_dir = os.path.join(tmpdir, "registry")
+            reg_dir = os.path.join(tmpdir, "catalogue")
             os.makedirs(reg_dir, exist_ok=True)
-            config.add_registry("test", os.path.join(reg_dir, "registry.json"))
+            config.add_catalogue("test", os.path.join(reg_dir, "catalogue.json"))
             publisher = Publisher(config)
             pkg_data = install_mgr.get_installed_packages()[pkg_id]
-            publisher.publish(pkg_data, config.registries[0])
+            publisher.publish(pkg_data, config.catalogues[0])
 
             # Sidecar should now exist next to the script
             assert os.path.exists(sidecar_path_for(script_path))

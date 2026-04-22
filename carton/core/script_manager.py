@@ -22,7 +22,7 @@ class ScriptManager:
 
     def register(self, file_path, name, display_name, icon, description,
                  pkg_type, entry_point, is_folder=False, version="0.0.0",
-                 author="", namespace="", home_registry=None,
+                 author="", namespace="", home_origin=None,
                  include_compiled=False):
         """Register locally.
 
@@ -37,7 +37,8 @@ class ScriptManager:
             is_folder: Whether this is a folder registration
             namespace: Optional namespace. Required to publish; may be empty
                 for personal-only registration.
-            home_registry: Optional dict with at least {"name": ...}.
+            home_origin: Optional v5.0 home origin payload (embedded /
+                github / url / local variant dict).
 
         Returns:
             pkg_id: ``"<namespace>/<name>"`` if namespace is set, else ``name``.
@@ -73,8 +74,8 @@ class ScriptManager:
             "icon": icon,
             "description": description,
         }
-        if home_registry:
-            installed_data["home_registry"] = home_registry
+        if home_origin:
+            installed_data["home_origin"] = home_origin
         if include_compiled:
             installed_data["include_compiled"] = True
 
@@ -104,8 +105,8 @@ class ScriptManager:
         """Activate a My Tools entry at Maya startup.
 
         Activates both pure My Tools (``source="local"``) and double-bound
-        registry installs (``source="registry"`` with ``local_path``) so the
-        original source path keeps participating in import resolution.
+        catalogue installs (``source="registry"`` with ``local_path``) so
+        the original source path keeps participating in import resolution.
         """
         from carton.core.install_state import is_my_tools
 
@@ -139,11 +140,22 @@ class ScriptManager:
 
         # Maya modules: delegate to the dedicated handler so the same logic
         # (free-form command, structured python entry, or userSetup re-exec)
-        # runs for both locally-registered and installed-from-registry modules.
+        # runs for both locally-registered and installed-from-catalogue modules.
         if pkg_data.get("type") == "maya_module":
             from carton.core.handlers.maya_module_handler import MayaModuleHandler
             MayaModuleHandler().launch(pkg_data)
             return
+
+        if not ep_type:
+            # No recognised entry_point shape — usually a legacy / malformed
+            # ``package.json`` whose ``entry_point`` was adopted verbatim at
+            # register time (EditDialog rewrites it into a valid shape, which
+            # is why editing + saving makes the tool launch).
+            hint = self._describe_entry_for_error(entry)
+            raise RuntimeError(
+                "Cannot launch: entry_point has no usable 'type' field. "
+                "Got {}. Open Edit and save to rebuild it.".format(hint)
+            )
 
         if ep_type == "plugin":
             # Maya binary plugin (.mll)
@@ -209,12 +221,26 @@ class ScriptManager:
             mod = importlib.import_module(module_name)
             func = getattr(mod, func_name)
             func()
+        else:
+            raise RuntimeError(
+                "Cannot launch: unknown entry_point type {!r}".format(ep_type)
+            )
+
+    @staticmethod
+    def _describe_entry_for_error(entry):
+        """Compact description of a malformed entry_point for error messages."""
+        if not isinstance(entry, dict):
+            return repr(entry)
+        if not entry:
+            return "{}"
+        keys = ", ".join(sorted(entry.keys()))
+        return "{{{}}}".format(keys)
 
     def _add_to_env(self, path, pkg_type, is_folder):
         """Add a path to Maya environment variables."""
         if pkg_type == "maya_module" and is_folder:
             # Delegate to the maya_module handler so locally-registered modules
-            # use the exact same env wiring as installed-from-registry ones.
+            # use the exact same env wiring as installed-from-catalogue ones.
             from carton.core.handlers.maya_module_handler import (
                 resolve_paths, _apply_paths, _exec_user_setup,
                 _ACTIVATED_DIRS,

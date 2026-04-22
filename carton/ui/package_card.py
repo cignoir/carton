@@ -2,6 +2,7 @@
 
 import os
 
+from carton.ui._origin_badge import resolve_origin_verification
 from carton.ui.compat import QtWidgets, QtCore, QtGui, Qt
 from carton.ui.i18n import t
 from carton.ui import theme
@@ -60,13 +61,13 @@ class PackageCard(QtWidgets.QFrame):
     unpublish_requested = QtCore.Signal(str, str)  # (pkg_id, registry_name)
 
     def __init__(self, pkg_id, pkg_data, installed_version=None, icon_path=None,
-                 published_registries=None, parent=None):
+                 published_catalogues=None, parent=None):
         super().__init__(parent)
         self._pkg_id = pkg_id
         self._pkg_data = pkg_data
         self._installed_version = installed_version
         self._icon_path = icon_path
-        self._published_registries = list(published_registries or [])
+        self._published_catalogues = list(published_catalogues or [])
         self._setup_ui()
 
     def _setup_ui(self):
@@ -177,15 +178,35 @@ class PackageCard(QtWidgets.QFrame):
             )
             title_layout.addWidget(verified)
 
+        # v5.0 origin-verification mark — shown on pre-install library
+        # cards when the catalogue / Release signed the artifact's
+        # SHA256. Intentionally rendered as the same minimal ✓ glyph as
+        # the install-time ``verified`` mark above (no pill, no label
+        # text) so the card stays quiet — the tooltip carries the
+        # "verified source" explanation for users who hover.
+        if not self._installed_version:
+            origin_badge = resolve_origin_verification(
+                self._pkg_data, self._installed_version,
+            )
+            if origin_badge:
+                origin_label = QtWidgets.QLabel(origin_badge["glyph"])
+                origin_label.setToolTip(t(origin_badge["tooltip_key"]))
+                origin_label.setStyleSheet(
+                    "font-size: 10px; color: {color};"
+                    " background: transparent; padding: 0 2px;".format(
+                        color=theme.ACCENT_GREEN)
+                )
+                title_layout.addWidget(origin_label)
+
         # Published-to badge: clickable menu for unpublish, shown when this
         # package currently lives in one or more writable local registries.
-        if self._published_registries:
+        if self._published_catalogues:
             pub_btn = QtWidgets.QToolButton()
-            if len(self._published_registries) == 1:
-                pub_btn.setText(t("published_to_badge", self._published_registries[0]))
+            if len(self._published_catalogues) == 1:
+                pub_btn.setText(t("published_to_badge", self._published_catalogues[0]))
             else:
-                pub_btn.setText(t("published_to_badge_multi", len(self._published_registries)))
-            pub_btn.setToolTip(t("unpublish_select_registry"))
+                pub_btn.setText(t("published_to_badge_multi", len(self._published_catalogues)))
+            pub_btn.setToolTip(t("unpublish_select_catalogue"))
             pub_btn.setCursor(Qt.PointingHandCursor)
             pub_btn.setPopupMode(QtWidgets.QToolButton.InstantPopup)
             pub_btn.setStyleSheet(
@@ -228,7 +249,7 @@ class PackageCard(QtWidgets.QFrame):
                     accent=theme.ACCENT_GREEN,
                 )
             )
-            for reg_name in self._published_registries:
+            for reg_name in self._published_catalogues:
                 act = menu.addAction(t("unpublish_from", reg_name))
                 # Default-arg binding to freeze reg_name per iteration.
                 act.triggered.connect(

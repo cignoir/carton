@@ -121,7 +121,7 @@ def start():
 # Used as the fallback when neither config.json already exists nor a
 # SEED_CONFIG was baked in by the profile-aware builder.
 DEFAULT_CONFIG = {
-    "registries": [],
+    "catalogues": [],
     "install_dir": "",
     "auto_check_updates": True,
     "github_repo": "cignoir/carton",
@@ -259,7 +259,7 @@ def onMayaDroppedPythonFile(*args, **kwargs):
             default_file = os.path.join(profiles_dir, "default.json")
             if not os.path.exists(default_file):
                 blank = {
-                    "registries": [],
+                    "catalogues": [],
                     "language": "auto",
                     "auto_check_updates": True,
                     "github_repo": "cignoir/carton",

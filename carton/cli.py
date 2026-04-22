@@ -1,4 +1,4 @@
-"""Carton CLI — admin commands for registry management."""
+"""Carton CLI — admin commands for catalogue management."""
 
 import argparse
 import json
@@ -6,49 +6,62 @@ import os
 import sys
 
 
-def _load_registry(path):
-    """Load and return (registry_dict, normalized_path)."""
+def _load_catalogue(path, migrate=True):
+    """Load a catalogue file and return ``(catalogue_dict, normalized_path)``.
+
+    By default v4.0 registries are migrated in-memory to the v5.0 shape
+    so consumers only need to think in catalogue terms. Pass
+    ``migrate=False`` to inspect the on-disk shape verbatim (used by
+    the ``catalogue id`` command, which needs to reject pre-v5.0 files
+    rather than silently upgrading them).
+    """
     path = os.path.normpath(path)
     if not os.path.exists(path):
-        print("Error: registry not found: {}".format(path))
+        print("Error: catalogue not found: {}".format(path))
         sys.exit(1)
     with open(path, "r", encoding="utf-8") as f:
-        return json.load(f), path
+        data = json.load(f)
+    if migrate:
+        from carton.core.migrations import migrate_registry_to_catalogue
+        data, _ = migrate_registry_to_catalogue(data, stamp_id=False)
+    return data, path
 
 
 def _list_packages(args):
-    """List all packages in a registry."""
-    registry, _ = _load_registry(args.registry)
-    packages = registry.get("packages", {})
+    """List all packages in a catalogue."""
+    catalogue, _ = _load_catalogue(args.catalogue)
+    packages = catalogue.get("packages", {})
     if not packages:
-        print("No packages in registry.")
+        print("No packages in catalogue.")
         return
     for pkg_id, pkg_data in packages.items():
         name = pkg_data.get("display_name", pkg_data.get("name", "?"))
-        latest = pkg_data.get("latest_version", "?")
+        origin = pkg_data.get("origin") or {}
+        latest = origin.get("latest_version", "?")
         print("  {} — {} v{}".format(pkg_id, name, latest))
 
 
 def _unpublish(args):
-    """Force-unpublish a package from a registry."""
-    from carton.core.config import RegistryEntry
+    """Force-unpublish a package from a catalogue."""
+    from carton.core.config import CatalogueEntry
     from carton.core.config import Config
     from carton.core.publisher import Publisher
 
-    reg_entry = RegistryEntry(name="cli", path=args.registry)
-    config = Config(registries=[reg_entry])
+    cat_entry = CatalogueEntry(name="cli", path=args.catalogue)
+    config = Config(catalogues=[cat_entry])
     publisher = Publisher(config)
 
     # Show package info before unpublishing
-    registry, _ = _load_registry(args.registry)
-    packages = registry.get("packages", {})
+    catalogue, _ = _load_catalogue(args.catalogue)
+    packages = catalogue.get("packages", {})
     if args.id not in packages:
-        print("Error: package {} not found in registry.".format(args.id))
+        print("Error: package {} not found in catalogue.".format(args.id))
         sys.exit(1)
 
     pkg = packages[args.id]
     display = pkg.get("display_name", pkg.get("name", args.id))
-    versions = list(pkg.get("versions", {}).keys())
+    origin = pkg.get("origin") or {}
+    versions = list((origin.get("versions") or {}).keys())
 
     print("Package: {} ({})".format(display, args.id))
     print("Versions: {}".format(", ".join(versions) if versions else "none"))
@@ -59,42 +72,78 @@ def _unpublish(args):
             print("Cancelled.")
             return
 
-    result = publisher.unpublish(args.id, reg_entry)
+    result = publisher.unpublish(args.id, cat_entry)
     print("Unpublished: {}".format(result["name"]))
 
 
-def _registry_id(args):
-    """Show or stamp a registry's ``registry_id``.
+def _catalogue_id(args):
+    """Show or stamp a v5.0 catalogue's ``catalogue_id``.
 
-    Vendor-neutral: only reads/writes the local registry.json. Useful for
-    admins migrating pre-UUID registries (e.g. ones already mirrored to a
-    remote host) — stamp locally, then re-upload the file.
+    Vendor-neutral: only reads/writes the local catalogue.json. Refuses
+    pre-v5.0 files so admins don't silently lose the schema bump — they
+    should run ``catalogue migrate`` first.
     """
-    from carton.core.registry_id import (
-        read_registry_id,
-        stamp_registry_id,
-    )
+    from carton.core.uuid_id import is_valid_uuid, new_uuid
+    from carton.core.migrations import CATALOGUE_SCHEMA_VERSION
 
-    from carton.core.migrations import REGISTRY_SCHEMA_VERSION, migrate_registry_data
-
-    registry, path = _load_registry(args.registry)
-    registry, _ = migrate_registry_data(registry)
-    current = read_registry_id(registry)
+    catalogue, path = _load_catalogue(args.path, migrate=False)
+    if catalogue.get("schema_version") != CATALOGUE_SCHEMA_VERSION:
+        print(
+            "Error: not a v{} catalogue. Run "
+            "'python -m carton catalogue migrate {}' first.".format(
+                CATALOGUE_SCHEMA_VERSION, path,
+            )
+        )
+        sys.exit(1)
+    raw = (catalogue.get("catalogue_id") or "").strip().lower()
+    current = raw if is_valid_uuid(raw) else ""
     if args.stamp:
-        rid, was_new = stamp_registry_id(registry)
-        registry["schema_version"] = REGISTRY_SCHEMA_VERSION
-        if was_new or current != rid:
-            with open(path, "w", encoding="utf-8") as f:
-                json.dump(registry, f, indent=2, ensure_ascii=False)
-            print("Stamped: {}".format(rid))
-        else:
-            print("Already has registry_id: {}".format(rid))
+        if current:
+            print("Already has catalogue_id: {}".format(current))
+            return
+        new_id = new_uuid()
+        catalogue["catalogue_id"] = new_id
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump(catalogue, f, indent=2, ensure_ascii=False)
+        print("Stamped: {}".format(new_id))
         return
     if current:
         print(current)
     else:
-        print("(no registry_id)")
+        print("(no catalogue_id)")
         sys.exit(2)
+
+
+def _catalogue_migrate(args):
+    """Migrate a v4.0 registry.json on disk to a v5.0 catalogue.json.
+
+    Idempotent — running against an already-migrated tree is a no-op
+    (and prints a hint pointing at the existing catalogue.json).
+    """
+    from carton.core.migrations import (
+        CATALOGUE_FILENAME,
+        LEGACY_REGISTRY_FILENAME,
+        migrate_local_registry_file_to_catalogue,
+    )
+
+    target = os.path.abspath(args.path)
+    if os.path.isdir(target):
+        candidate = os.path.join(target, LEGACY_REGISTRY_FILENAME)
+        if not os.path.exists(candidate):
+            candidate = os.path.join(target, CATALOGUE_FILENAME)
+        target = candidate
+
+    if not os.path.exists(target):
+        print("Error: file not found: {}".format(target))
+        sys.exit(1)
+
+    out_path = migrate_local_registry_file_to_catalogue(target)
+    if not out_path:
+        print("Nothing to migrate.")
+        return
+    print("Wrote: {}".format(out_path))
+    if os.path.basename(target).lower() == LEGACY_REGISTRY_FILENAME and not os.path.exists(target):
+        print("Backed up legacy registry.json next to it (look for '*.bak-v0.4.*').")
 
 
 def main():
@@ -105,25 +154,34 @@ def main():
     sub = parser.add_subparsers(dest="command")
 
     # list
-    ls = sub.add_parser("list", help="List packages in a registry")
-    ls.add_argument("registry", help="Path to registry.json")
+    ls = sub.add_parser("list", help="List packages in a catalogue")
+    ls.add_argument("catalogue", help="Path to catalogue.json")
 
     # unpublish
     unpub = sub.add_parser("unpublish", help="Force-unpublish a package")
-    unpub.add_argument("--registry", required=True, help="Path to registry.json")
+    unpub.add_argument("--catalogue", required=True, help="Path to catalogue.json")
     unpub.add_argument("--id", required=True,
                        help="Package id to unpublish ('namespace/name')")
     unpub.add_argument("--force", "-f", action="store_true",
                        help="Skip confirmation prompt")
 
-    # registry subgroup
-    reg = sub.add_parser("registry", help="Registry inspection utilities")
-    reg_sub = reg.add_subparsers(dest="registry_command")
-    rid_p = reg_sub.add_parser(
-        "id", help="Print or stamp a registry's registry_id (UUID)",
+    # catalogue subgroup (v5.0)
+    cat = sub.add_parser("catalogue", help="Catalogue (v5.0) utilities")
+    cat_sub = cat.add_subparsers(dest="catalogue_command")
+    mig_p = cat_sub.add_parser(
+        "migrate",
+        help="Convert a v4.0 registry.json into a v5.0 catalogue.json in place",
     )
-    rid_p.add_argument("registry", help="Path to registry.json")
-    rid_p.add_argument(
+    mig_p.add_argument(
+        "path",
+        help="Path to registry.json (or its containing directory)",
+    )
+    cid_p = cat_sub.add_parser(
+        "id",
+        help="Print or stamp a v5.0 catalogue's catalogue_id (UUID)",
+    )
+    cid_p.add_argument("path", help="Path to catalogue.json")
+    cid_p.add_argument(
         "--stamp", action="store_true",
         help="Write a fresh UUID into the file if it doesn't already have one",
     )
@@ -134,8 +192,10 @@ def main():
         _list_packages(args)
     elif args.command == "unpublish":
         _unpublish(args)
-    elif args.command == "registry" and getattr(args, "registry_command", None) == "id":
-        _registry_id(args)
+    elif args.command == "catalogue" and getattr(args, "catalogue_command", None) == "migrate":
+        _catalogue_migrate(args)
+    elif args.command == "catalogue" and getattr(args, "catalogue_command", None) == "id":
+        _catalogue_id(args)
     else:
         parser.print_help()
 

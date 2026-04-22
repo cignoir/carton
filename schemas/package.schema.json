@@ -79,25 +79,57 @@
       "type": ["string", "null"],
       "description": "アイコン。画像ファイルの相対パス (例: resources/icon.png)、絵文字 (例: 📷)、'@auto' (icons/<name>.png 自動解決)、null (アイコン無し)"
     },
-    "home_registry": {
+    "home_origin": {
       "type": "object",
-      "description": "このパッケージの本籍レジストリ。別レジストリに publish しようとすると警告される",
-      "properties": {
-        "name": {
-          "type": "string",
-          "description": "Carton 内で登録されているレジストリ名"
+      "description": "v5.0 本籍 origin。embedded（従来の registry）/ github / url / local を統一形で表現。別 catalogue に publish しようとすると警告される",
+      "oneOf": [
+        {
+          "type": "object",
+          "required": ["type"],
+          "properties": {
+            "type": { "const": "embedded" },
+            "catalogue_name": { "type": "string" },
+            "catalogue_id": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+            },
+            "hint": { "type": "string" }
+          },
+          "additionalProperties": false
         },
-        "registry_id": {
-          "type": "string",
-          "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
-          "description": "本籍レジストリの UUID。Config 層で自動付与される"
+        {
+          "type": "object",
+          "required": ["type", "repo"],
+          "properties": {
+            "type": { "const": "github" },
+            "repo": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]*/[A-Za-z0-9][A-Za-z0-9_.-]*$",
+              "description": "GitHub owner/name"
+            },
+            "ref": { "type": "string", "description": "tag / branch hint (optional)" }
+          },
+          "additionalProperties": false
         },
-        "hint": {
-          "type": "string",
-          "description": "レジストリの場所ヒント（パス または URL）。Add 時のレジストリ追加誘導に使う"
+        {
+          "type": "object",
+          "required": ["type", "url"],
+          "properties": {
+            "type": { "const": "url" },
+            "url": { "type": "string", "format": "uri" }
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": ["type", "path"],
+          "properties": {
+            "type": { "const": "local" },
+            "path": { "type": "string" }
+          },
+          "additionalProperties": false
         }
-      },
-      "additionalProperties": false
+      ]
     },
     "source_path": {
       "type": "string",
@@ -108,6 +140,7 @@
       "description": "publish 時に記録される、source がフォルダかファイルかの区別"
     },
     "dependencies": {
+      "deprecated": true,
       "type": "array",
       "items": {
         "type": "object",
@@ -117,7 +150,7 @@
           "version": { "type": "string" }
         }
       },
-      "description": "他パッケージへの依存"
+      "description": "【非推奨・解決されません】他パッケージへの依存を表示用に宣言できるが、Carton は依存解決を行いません。DCC ツールはファット配布が前提のため、必要なモジュールはパッケージ内に同梱してください。詳細は docs/design-faq.md 参照。"
     },
     "tags": {
       "type": "array",

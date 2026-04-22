@@ -5,14 +5,14 @@ Usage:
     carton.show()
 """
 
-__version__ = "0.4.0"
+__version__ = "0.5.0"
 
 _window = None
 _initialized = False
 _config = None
 _env_mgr = None
 _install_mgr = None
-_registry_client = None
+_catalogue_client = None
 _downloader = None
 _self_updater = None
 _script_mgr = None
@@ -22,7 +22,7 @@ _publisher = None
 def startup():
     """Initialization called from the bootstrap at Maya startup."""
     global _initialized, _config, _env_mgr, _install_mgr
-    global _registry_client, _downloader, _self_updater, _script_mgr, _publisher
+    global _catalogue_client, _downloader, _self_updater, _script_mgr, _publisher
     if _initialized:
         return
     _initialized = True
@@ -30,7 +30,11 @@ def startup():
     from carton.core.config import Config
     from carton.core.env_manager import MayaEnvManager
     from carton.core.installer import InstallManager
-    from carton.core.registry_client import RegistryClient
+    # v5.0: CatalogueClient understands both v4.0 registries
+    # (auto-migrated in memory) and v5.0 catalogues with the Origin
+    # abstraction. The legacy RegistryClient has been removed; its API
+    # was a subset of this one.
+    from carton.core.catalogue_client import CatalogueClient
     from carton.core.downloader import Downloader
     from carton.core.self_updater import SelfUpdater
     from carton.core.script_manager import ScriptManager
@@ -49,7 +53,9 @@ def startup():
 
     _env_mgr = MayaEnvManager()
     _install_mgr = InstallManager(_config, _env_mgr)
-    _registry_client = RegistryClient(_config)
+    # CatalogueClient understands v5.0 catalogue.json directly and
+    # auto-migrates v4.0 registry.json on first read.
+    _catalogue_client = CatalogueClient(_config)
     _downloader = Downloader(_config)
     _self_updater = SelfUpdater(_config, _downloader)
     _script_mgr = ScriptManager(_config, _install_mgr, _env_mgr)
@@ -83,7 +89,7 @@ def show():
     from carton.ui.main_window import create_window
     _window = create_window()
     _window.set_services(
-        registry_client=_registry_client,
+        catalogue_client=_catalogue_client,
         install_manager=_install_mgr,
         downloader=_downloader,
         self_updater=_self_updater,

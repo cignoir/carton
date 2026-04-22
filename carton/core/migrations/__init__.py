@@ -1,12 +1,17 @@
-"""Schema migration helpers — v0.3.x (schema v3.x) → v0.4.0 (schema v4.0).
+"""Schema migration helpers.
 
-Carton 0.4.0 collapses the registry / installed metadata model — see
-``docs/schema-migration.md`` for the field-by-field rationale. The runtime
-auto-migrates older files on first read and backs up the original next to
-the original file with a ``.bak-v0.3.<timestamp>`` suffix.
+Two-stage chain brings legacy data to the current v5.0 Package-first
+model:
 
-Migrations are idempotent: data already at v4.0 passes through unchanged
-and no backup is taken.
+* ``installed.json`` v3.x → v4.0 (flat entries; see :mod:`.installed`).
+* On-disk ``registry.json`` → ``catalogue.json`` v5.0 (see :mod:`.catalogue`).
+  Input registries in the v4.0 shape (``registry_id`` / flat per-package
+  ``versions``) are accepted transparently — the v4.0 migrator itself
+  has been retired since the file format is now read-only input to the
+  v5.0 migrator.
+
+Migrations are idempotent: data already at the target shape passes
+through unchanged and no backup is taken.
 """
 
 import json
@@ -18,20 +23,25 @@ from carton.core.migrations.installed import (
     INSTALLED_SCHEMA_VERSION,
     migrate_installed_data,
 )
-from carton.core.migrations.registry import (
-    REGISTRY_SCHEMA_VERSION,
-    migrate_registry_data,
+from carton.core.migrations.catalogue import (
+    CATALOGUE_FILENAME,
+    CATALOGUE_SCHEMA_VERSION,
+    LEGACY_REGISTRY_FILENAME,
+    migrate_local_registry_file_to_catalogue,
+    migrate_registry_to_catalogue,
 )
 
 
 __all__ = [
+    "CATALOGUE_FILENAME",
+    "CATALOGUE_SCHEMA_VERSION",
     "INSTALLED_SCHEMA_VERSION",
-    "REGISTRY_SCHEMA_VERSION",
-    "migrate_installed_data",
-    "migrate_registry_data",
-    "migrate_installed_file",
-    "migrate_local_registry_file",
+    "LEGACY_REGISTRY_FILENAME",
     "make_backup",
+    "migrate_installed_data",
+    "migrate_installed_file",
+    "migrate_local_registry_file_to_catalogue",
+    "migrate_registry_to_catalogue",
 ]
 
 
@@ -66,24 +76,6 @@ def migrate_installed_file(path):
     except (OSError, ValueError):
         return False
     migrated, was_migrated = migrate_installed_data(data)
-    if not was_migrated:
-        return False
-    make_backup(path)
-    with open(path, "w", encoding="utf-8") as f:
-        json.dump(migrated, f, indent=2, ensure_ascii=False)
-    return True
-
-
-def migrate_local_registry_file(path):
-    """Migrate a local ``registry.json`` on disk in place. Returns True if a write happened."""
-    if not os.path.exists(path):
-        return False
-    try:
-        with open(path, "r", encoding="utf-8") as f:
-            data = json.load(f)
-    except (OSError, ValueError):
-        return False
-    migrated, was_migrated = migrate_registry_data(data)
     if not was_migrated:
         return False
     make_backup(path)

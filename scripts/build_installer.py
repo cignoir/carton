@@ -136,8 +136,8 @@ def build(version=None, languages=None, profile_path=None, output=None):
     print("Carton v{}".format(version))
     print("  zip: {:.1f} KB  ({})".format(release_kb, os.path.basename(release_zip)))
     if seed is not None:
-        print("  profile: {} ({} registries)".format(
-            os.path.basename(profile_path), len(seed.get("registries", [])),
+        print("  profile: {} ({} catalogues)".format(
+            os.path.basename(profile_path), len(seed.get("catalogues", [])),
         ))
 
     # 5. Output mode A: explicit --output → single file, language taken

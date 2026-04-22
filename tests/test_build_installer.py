@@ -37,12 +37,12 @@ class TestBuilderPlaceholderSubstitution:
         assert 'CARTON_VERSION = "9.9.9"' in content
 
     def test_profile_build_inlines_seed_dict(self, tmp_path, monkeypatch):
-        # Use an HTTPS path so RegistryEntry doesn't run os.path.normpath
+        # Use an HTTPS path so CatalogueEntry doesn't run os.path.normpath
         # on it (which would mangle slashes on Windows and break the
         # substring assertions below).
         profile_path = tmp_path / "studio.json"
         profile_path.write_text(json.dumps({
-            "registries": [{"name": "s", "path": "https://example.com/r.json"}],
+            "catalogues": [{"name": "s", "path": "https://example.com/r.json"}],
             "language": "ja",
             "auto_check_updates": False,
             "github_repo": "acme/carton",
@@ -107,7 +107,7 @@ class TestTemplateSeedSemantics:
 
     def test_seed_applied_when_no_existing_config(self, tmp_path, monkeypatch):
         seed = {
-            "registries": [
+            "catalogues": [
                 {"name": "studio", "path": "https://example.com/r.json"},
             ],
             "language": "ja",
@@ -116,7 +116,7 @@ class TestTemplateSeedSemantics:
             "proxy": "http://p:80",
         }
         mod = self._load_generated(tmp_path, monkeypatch, seed=seed)
-        # InstallerProfile normalizes through RegistryEntry; for HTTPS
+        # InstallerProfile normalizes through CatalogueEntry; for HTTPS
         # paths the value round-trips unchanged so a direct equality
         # check is safe.
         assert mod.SEED_CONFIG == seed

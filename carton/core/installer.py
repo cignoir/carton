@@ -28,9 +28,10 @@ class InstallError(RuntimeError):
 class InstallManager:
     """Facade for package management using Handlers.
 
-    Keys in ``installed.json`` are ``"<namespace>/<name>"`` for registry-sourced
-    packages. Locally-registered scripts (My Tools) without a namespace are
-    keyed by bare ``name``.
+    Keys in ``installed.json`` are ``"<namespace>/<name>"`` for catalogue-
+    sourced packages (``source="registry"`` — the enum literal is historical).
+    Locally-registered scripts (My Tools) without a namespace are keyed by
+    bare ``name``.
     """
 
     def __init__(self, config, env_manager):
@@ -93,12 +94,12 @@ class InstallManager:
             pkg_type = inner.get("type") or meta.get("type", "python_package")
             inner_source_path = inner.get("source_path", "") or ""
             inner_is_folder = inner.get("is_folder")
-            inner_home_registry = inner.get("home_registry")
+            inner_home_origin = inner.get("home_origin")
 
             # If the publisher stamped the source path AND the same path
             # exists on this machine, treat the install as also a My Tools
             # registration: keep ``source="registry"`` (the bytes still
-            # come from the registry) but record ``local_path`` so the UI
+            # come from the catalogue) but record ``local_path`` so the UI
             # presents the entry as double-bound. This lets a user
             # reinstall Carton (or move to a fresh install_dir) and get
             # their My Tools entries back automatically.
@@ -115,7 +116,7 @@ class InstallManager:
             entry_dict = self._build_install_entry(
                 meta, pkg_type, rel_path,
                 activated_paths, relink_local_path,
-                inner_is_folder, inner_home_registry,
+                inner_is_folder, inner_home_origin,
             )
             self._persist_install_entry(pkg_id, entry_dict, prev_entry)
 
@@ -184,9 +185,9 @@ class InstallManager:
         """Return the inner ``package.json`` as a dict, or ``{}`` if missing.
 
         The inner package.json is the source of truth for type/entry_point
-        details — the registry-side meta only carries identity + display
+        details — the catalogue-side meta only carries identity + display
         fields. Read errors are silently ignored: callers fall back to the
-        registry meta.
+        catalogue meta.
         """
         inner_pkg_json = os.path.join(package_dir, "package.json")
         if not os.path.exists(inner_pkg_json):
@@ -216,7 +217,7 @@ class InstallManager:
 
     def _build_install_entry(self, meta, pkg_type, rel_path,
                               activated_paths, relink_local_path,
-                              inner_is_folder, inner_home_registry):
+                              inner_is_folder, inner_home_origin):
         """Construct the installed.json entry dict for a successful install."""
         info = PackageInfo(
             pkg_id=meta["id"],
@@ -230,14 +231,14 @@ class InstallManager:
             activated_paths=activated_paths,
             pinned=meta.get("pinned", False),
             local_path=relink_local_path,
-            home_registry=inner_home_registry or {},
+            home_origin=inner_home_origin or {},
         )
         entry_dict = info.to_installed_dict()
         if relink_local_path:
             if inner_is_folder is not None:
                 entry_dict["is_folder"] = inner_is_folder
             # Stash the icon as an absolute path so My Tools can
-            # render it without re-fetching from the registry.
+            # render it without re-fetching from the catalogue.
             icon_resolved = meta.get("icon_resolved", "")
             if icon_resolved:
                 entry_dict["icon"] = icon_resolved
@@ -249,8 +250,8 @@ class InstallManager:
         try:
             self._save_installed()
         except OSError as e:
-            # Revert the in-memory registry change before rolling back
-            # the filesystem in the outer except.
+            # Revert the in-memory packages index change before rolling
+            # back the filesystem in the outer except.
             if prev_entry is not None:
                 self._installed["packages"][pkg_id] = prev_entry
             else:
@@ -277,11 +278,11 @@ class InstallManager:
     def uninstall_package(self, pkg_id):
         """Uninstall a package.
 
-        Double-bound entries (registry-installed AND My Tools-registered,
+        Double-bound entries (catalogue-installed AND My Tools-registered,
         identified by ``source="registry"`` plus a non-empty ``local_path``)
         are demoted to pure My Tools (``source="local"``) instead of being
         removed — the registration is the user's data and shouldn't get
-        wiped along with the registry bytes.
+        wiped along with the installed bytes.
         """
         pkg_data = self._installed["packages"].get(pkg_id)
         if not pkg_data:
@@ -348,7 +349,7 @@ class InstallManager:
         """Move an installed entry from ``old_id`` to ``new_id``.
 
         Optional ``fields`` are merged into the entry before it is re-keyed.
-        ``home_registry`` is preserved if already set. No-op if ``old_id`` is
+        ``home_origin`` is preserved if already set. No-op if ``old_id`` is
         not present. Returns True if the entry was re-keyed.
         """
         packages = self._installed.get("packages", {})
@@ -369,11 +370,11 @@ class InstallManager:
         return None
 
     def is_installed(self, pkg_id):
-        """True if a package has registry-installed bytes on disk.
+        """True if a package has catalogue-installed bytes on disk.
 
         Pure My Tools entries (``source="local"``) are reported as NOT
         installed — they reference original files in place and have no
-        registry-managed bytes.
+        catalogue-managed bytes.
         """
         entry = self._installed.get("packages", {}).get(pkg_id)
         if not entry:

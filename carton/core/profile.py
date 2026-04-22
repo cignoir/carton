@@ -3,7 +3,7 @@
 A profile is the subset of :class:`~carton.core.config.Config` that makes
 sense to ship inside a customized Carton installer for a team or project:
 
-* the registry list (the main reason for building a custom installer)
+* the catalogue list (the main reason for building a custom installer)
 * language preference
 * HTTP proxy
 * auto-update behavior
@@ -22,8 +22,8 @@ overwriting an existing config.
 import json
 import os
 
-from carton.core.config import RegistryEntry
-from carton.core.registry_id import is_valid_registry_id
+from carton.core.config import CatalogueEntry
+from carton.core.uuid_id import is_valid_uuid
 
 
 class InvalidProfileError(ValueError):
@@ -33,7 +33,7 @@ class InvalidProfileError(ValueError):
 # Fields the profile is allowed to set. Anything outside this set is
 # rejected during validation so typos in hand-edited JSON surface early.
 _ALLOWED_KEYS = {
-    "registries",
+    "catalogues",
     "language",
     "auto_check_updates",
     "github_repo",
@@ -52,42 +52,38 @@ class InstallerProfile:
 
     def __init__(
         self,
-        registries=None,
+        catalogues=None,
         language="auto",
         auto_check_updates=True,
         github_repo="cignoir/carton",
         proxy="",
     ):
-        # Use RegistryEntry so the shared settings widgets can treat
+        # Use CatalogueEntry so the shared settings widgets can treat
         # Config and InstallerProfile interchangeably.
-        self.registries = []
-        for r in registries or []:
-            if isinstance(r, RegistryEntry):
-                self.registries.append(r)
+        self.catalogues = []
+        for r in catalogues or []:
+            if isinstance(r, CatalogueEntry):
+                self.catalogues.append(r)
             else:
-                self.registries.append(RegistryEntry(
+                self.catalogues.append(CatalogueEntry(
                     name=r.get("name", ""),
                     path=r.get("path", ""),
-                    registry_id=r.get("registry_id", ""),
+                    catalogue_id=r.get("catalogue_id", ""),
                 ))
         self.language = language
         self.auto_check_updates = bool(auto_check_updates)
         self.github_repo = github_repo
         self.proxy = proxy
 
-    # ---- mutation helpers (mirror Config so widgets can call either) ----
+    def add_catalogue(self, name, path, catalogue_id=""):
+        self.catalogues.append(CatalogueEntry(name, path, catalogue_id))
 
-    def add_registry(self, name, path, registry_id=""):
-        self.registries.append(RegistryEntry(name, path, registry_id))
-
-    def remove_registry(self, name):
-        self.registries = [r for r in self.registries if r.name != name]
-
-    # ---- factories -------------------------------------------------------
+    def remove_catalogue(self, name):
+        self.catalogues = [r for r in self.catalogues if r.name != name]
 
     @classmethod
     def blank(cls):
-        """An empty profile (no registries, defaults for everything else)."""
+        """An empty profile (no catalogues, defaults for everything else)."""
         return cls()
 
     @classmethod
@@ -98,12 +94,12 @@ class InstallerProfile:
         as a starting point.
         """
         return cls(
-            registries=[
-                RegistryEntry(
+            catalogues=[
+                CatalogueEntry(
                     name=r.name, path=r.path,
-                    registry_id=getattr(r, "registry_id", ""),
+                    catalogue_id=getattr(r, "catalogue_id", ""),
                 )
-                for r in getattr(config, "registries", []) or []
+                for r in getattr(config, "catalogues", []) or []
             ],
             language=getattr(config, "language", "auto"),
             auto_check_updates=getattr(config, "auto_check_updates", True),
@@ -111,11 +107,9 @@ class InstallerProfile:
             proxy=getattr(config, "proxy", ""),
         )
 
-    # ---- serialization ---------------------------------------------------
-
     def to_dict(self):
         return {
-            "registries": [r.to_dict() for r in self.registries],
+            "catalogues": [r.to_dict() for r in self.catalogues],
             "language": self.language,
             "auto_check_updates": self.auto_check_updates,
             "github_repo": self.github_repo,
@@ -124,11 +118,28 @@ class InstallerProfile:
 
     @classmethod
     def from_dict(cls, data):
-        """Build from a dict (e.g. parsed JSON). Validates structure."""
+        """Build from a dict (e.g. parsed JSON). Validates structure.
+
+        v0.4.x profiles used ``registries`` / ``registry_id`` keys; we
+        accept those as aliases for ``catalogues`` / ``catalogue_id`` so
+        hand-edited or git-tracked profile files keep loading across the
+        cutover. The next ``save()`` rewrites the file with v5.0 keys.
+        Same-file co-existence of both keys is rejected — we pick a
+        winner rather than silently preferring one.
+        """
         if not isinstance(data, dict):
             raise InvalidProfileError(
                 "Profile must be a JSON object, got {}".format(type(data).__name__)
             )
+
+        if "registries" in data and "catalogues" in data:
+            raise InvalidProfileError(
+                "profile has both 'catalogues' and 'registries' — drop the "
+                "legacy 'registries' key"
+            )
+        if "registries" in data:
+            data = dict(data)
+            data["catalogues"] = data.pop("registries")
 
         unknown = set(data.keys()) - _ALLOWED_KEYS
         if unknown:
@@ -136,38 +147,44 @@ class InstallerProfile:
                 "Unknown profile field(s): {}".format(", ".join(sorted(unknown)))
             )
 
-        registries = data.get("registries", [])
-        if not isinstance(registries, list):
-            raise InvalidProfileError("'registries' must be a list")
+        entries = data.get("catalogues", [])
+        if not isinstance(entries, list):
+            raise InvalidProfileError("'catalogues' must be a list")
         normalized = []
-        for i, entry in enumerate(registries):
+        for i, entry in enumerate(entries):
             if not isinstance(entry, dict):
                 raise InvalidProfileError(
-                    "registries[{}] must be an object".format(i)
+                    "catalogues[{}] must be an object".format(i)
                 )
             name = entry.get("name", "")
             path = entry.get("path", "")
             if not name or not isinstance(name, str):
                 raise InvalidProfileError(
-                    "registries[{}].name is required".format(i)
+                    "catalogues[{}].name is required".format(i)
                 )
             if not path or not isinstance(path, str):
                 raise InvalidProfileError(
-                    "registries[{}].path is required".format(i)
+                    "catalogues[{}].path is required".format(i)
                 )
-            registry_id = entry.get("registry_id", "")
-            if registry_id:
-                if not isinstance(registry_id, str):
+            if "registry_id" in entry and "catalogue_id" in entry:
+                raise InvalidProfileError(
+                    "catalogues[{}] has both 'catalogue_id' and "
+                    "'registry_id' — drop the legacy key".format(i)
+                )
+            cid_raw = entry.get("catalogue_id") or entry.get("registry_id") or ""
+            catalogue_id = cid_raw or ""
+            if catalogue_id:
+                if not isinstance(catalogue_id, str):
                     raise InvalidProfileError(
-                        "registries[{}].registry_id must be a string".format(i)
+                        "catalogues[{}].catalogue_id must be a string".format(i)
                     )
-                if not is_valid_registry_id(registry_id):
+                if not is_valid_uuid(catalogue_id):
                     raise InvalidProfileError(
-                        "registries[{}].registry_id must be a UUID".format(i)
+                        "catalogues[{}].catalogue_id must be a UUID".format(i)
                     )
-                registry_id = registry_id.strip().lower()
+                catalogue_id = catalogue_id.strip().lower()
             normalized.append({
-                "name": name, "path": path, "registry_id": registry_id,
+                "name": name, "path": path, "catalogue_id": catalogue_id,
             })
 
         language = data.get("language", "auto")
@@ -191,14 +208,12 @@ class InstallerProfile:
             raise InvalidProfileError("proxy must be a string")
 
         return cls(
-            registries=normalized,
+            catalogues=normalized,
             language=language,
             auto_check_updates=auto_check_updates,
             github_repo=github_repo,
             proxy=proxy,
         )
-
-    # ---- file I/O --------------------------------------------------------
 
     def save(self, path):
         """Write the profile to a JSON file with stable formatting."""

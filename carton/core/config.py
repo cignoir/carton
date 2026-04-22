@@ -48,26 +48,26 @@ class InstallDirChangeError(RuntimeError):
     """Raised when switching install_dir fails (validation or move error)."""
 
 
-class RegistryEntry:
-    """Registry configuration entry.
+class CatalogueEntry:
+    """v5.0 catalogue configuration entry.
 
-    ``registry_id`` is a client-side cache of the UUID stored inside the
-    registry's ``registry.json``. It is populated on fetch (see
-    :class:`carton.core.registry_client.RegistryClient`) and persisted
-    alongside ``name`` / ``path`` so duplicate detection can work before the
-    first network round trip. Empty means "not yet known" — registry.json is
-    always the source of truth.
+    ``catalogue_id`` is a client-side cache of the UUID stored inside the
+    catalogue's ``catalogue.json``. It is populated on fetch (see
+    :class:`carton.core.catalogue_client.CatalogueClient`) and persisted
+    alongside ``name`` / ``path`` so duplicate detection can work before
+    the first network round trip. Empty means "not yet known" — the
+    hosted file is always the source of truth.
     """
 
-    def __init__(self, name, path, registry_id=""):
+    def __init__(self, name, path, catalogue_id=""):
         self.name = name
         self.path = path if _is_url(path) else os.path.normpath(path)
-        self.registry_id = (registry_id or "").strip().lower()
+        self.catalogue_id = (catalogue_id or "").strip().lower()
 
     def to_dict(self):
         d = {"name": self.name, "path": self.path}
-        if self.registry_id:
-            d["registry_id"] = self.registry_id
+        if self.catalogue_id:
+            d["catalogue_id"] = self.catalogue_id
         return d
 
     @classmethod
@@ -75,21 +75,22 @@ class RegistryEntry:
         return cls(
             name=d.get("name", ""),
             path=d.get("path", ""),
-            registry_id=d.get("registry_id", ""),
+            catalogue_id=d.get("catalogue_id", ""),
         )
 
-    def to_home_meta(self):
-        """Build a ``home_registry`` payload for embedding in package metadata.
+    def to_home_origin_meta(self):
+        """Build a v5.0 ``home_origin`` payload (embedded-type) for this entry.
 
-        Single source of truth so publisher / script_manager / UI never
-        construct home_registry dicts ad hoc — that's how the
-        ``registry_id`` field used to drift between encode sites.
+        Single source of truth so publisher / UI never construct home_origin
+        dicts ad hoc. A :class:`CatalogueEntry` (=embedded catalogue) always
+        emits the embedded variant, so the payload is
+        ``{"type": "embedded", "catalogue_name": ..., "catalogue_id": ...,
+        "hint": ...}``. Github/url/local origins construct their own
+        payload at publish time and never go through this helper.
         """
-        meta = {"name": self.name}
-        if self.registry_id:
-            meta["registry_id"] = self.registry_id
-        # An empty path normalises to "." via os.path.normpath in __init__;
-        # treat that as "no hint" so the meta dict stays minimal.
+        meta = {"type": "embedded", "catalogue_name": self.name}
+        if self.catalogue_id:
+            meta["catalogue_id"] = self.catalogue_id
         if self.path and self.path != ".":
             meta["hint"] = self.path
         return meta
@@ -99,18 +100,17 @@ class RegistryEntry:
 
     @property
     def is_remote(self):
-        """True if the registry is a remote URL."""
+        """True if the catalogue is a remote URL."""
         return _is_url(self.path)
 
     @property
     def base_dir(self):
         """Base directory or URL for relative path resolution.
 
-        For local: parent directory of registry.json
-        For remote: parent URL of registry.json
+        For local: parent directory of catalogue.json
+        For remote: parent URL of catalogue.json
         """
         if self.is_remote:
-            # "https://example.com/registry/registry.json" -> "https://example.com/registry/"
             return self.path.rsplit("/", 1)[0] + "/"
         return os.path.dirname(os.path.normpath(self.path))
 
@@ -120,7 +120,7 @@ class Config:
 
     def __init__(
         self,
-        registries=None,
+        catalogues=None,
         install_dir=_DEFAULT_INSTALL_DIR,
         auto_check_updates=True,
         github_repo="cignoir/carton",
@@ -130,23 +130,23 @@ class Config:
         strict_verify=True,
         profile_order=None,
     ):
-        self.registries = registries or []
+        self.catalogues = catalogues or []
         self.install_dir = install_dir
         self.auto_check_updates = auto_check_updates
         self.github_repo = github_repo
         self.language = language
         # Name of the active runtime profile (see carton.core.profile_store).
         # Empty string means "use config.json directly". When set, the
-        # overlay fields (registries / proxy / language / github_repo /
+        # overlay fields (catalogues / proxy / language / github_repo /
         # auto_check_updates) are persisted to the profile file too, so
         # switching profiles restores those values.
         self.active_profile = active_profile
-        # When True, refuse to install any package whose registry entry
+        # When True, refuse to install any package whose catalogue entry
         # lacks a sha256, and treat hash mismatches as fatal (default
         # downloader already raises on mismatch). On by default — every
-        # zip Carton publishes carries a sha256, so the only registries
+        # zip Carton publishes carries a sha256, so the only catalogues
         # this affects are very old or hand-rolled ones. Disable in
-        # Settings if you need to install from such a registry.
+        # Settings if you need to install from such a catalogue.
         self.strict_verify = bool(strict_verify)
         # User-facing ordering of profiles in the sidebar dropdown.
         # Names not in this list (newly created profiles, or profiles
@@ -168,9 +168,10 @@ class Config:
         if os.path.exists(path):
             with open(path, "r", encoding="utf-8") as f:
                 data = json.load(f)
-            registries = [RegistryEntry.from_dict(r) for r in data.get("registries", [])]
+            entries_raw = data.get("catalogues", [])
+            catalogues = [CatalogueEntry.from_dict(r) for r in entries_raw]
             cfg = cls(
-                registries=registries,
+                catalogues=catalogues,
                 install_dir=data.get("install_dir", _DEFAULT_INSTALL_DIR),
                 auto_check_updates=data.get("auto_check_updates", True),
                 github_repo=data.get("github_repo", "cignoir/carton"),
@@ -199,7 +200,7 @@ class Config:
         ``"default"`` name. If the corresponding profile file is missing
         (first run, or the user is upgrading from a pre-profile build),
         seed it from the current snapshot so the user's existing
-        registries become the default profile's contents.
+        catalogues become the default profile's contents.
         """
         try:
             from carton.core import profile_store
@@ -224,7 +225,7 @@ class Config:
             # Only seed the active profile from a non-empty Config. If
             # the snapshot is empty avoid creating a permanent empty
             # profile that would later mask recovered data.
-            if self.registries:
+            if self.catalogues:
                 try:
                     profile_store.save_profile(
                         self.active_profile, InstallerProfile.from_config(self),
@@ -250,13 +251,13 @@ class Config:
         if path is None:
             path = default_config_path()
         # Diagnostic: log every canonical save with caller info so we can
-        # track down phantom writes that clobber the user's registries.
+        # track down phantom writes that clobber the user's catalogues.
         if is_canonical:
             try:
                 import traceback
                 stack = traceback.format_stack()[-4:-1]
-                print("[Carton.save] registries={} active_profile={!r}".format(
-                    len(self.registries), self.active_profile))
+                print("[Carton.save] catalogues={} active_profile={!r}".format(
+                    len(self.catalogues), self.active_profile))
                 for line in stack:
                     print("  " + line.rstrip())
             except Exception:
@@ -271,15 +272,15 @@ class Config:
             try:
                 from carton.core import profile_store
                 from carton.core.profile import InstallerProfile
-                # Safety: if our in-memory registries list is empty but
+                # Safety: if our in-memory catalogues list is empty but
                 # the on-disk profile is not, refuse to clobber it. This
                 # protects against any code path that briefly holds an
                 # uninitialised Config and triggers a save before its
                 # state is fully populated.
-                if not self.registries and profile_store.profile_exists(self.active_profile):
+                if not self.catalogues and profile_store.profile_exists(self.active_profile):
                     try:
                         existing = profile_store.load_profile(self.active_profile)
-                        if existing.registries:
+                        if existing.catalogues:
                             return
                     except Exception:
                         pass
@@ -310,8 +311,6 @@ class Config:
         if new_dir == old_dir:
             return  # No-op
 
-        # Disallow nesting: moving into a subdir of the old tree would make
-        # the move infinite/ambiguous.
         try:
             common = os.path.commonpath([old_dir, new_dir])
         except ValueError:
@@ -321,9 +320,6 @@ class Config:
                 "New directory cannot be inside the current install directory."
             )
 
-        # New dir must either not exist, or exist and be empty. We refuse to
-        # merge into a populated directory to avoid clobbering unrelated
-        # files.
         if os.path.exists(new_dir):
             if not os.path.isdir(new_dir):
                 raise InstallDirChangeError(
@@ -341,9 +337,6 @@ class Config:
                     "Cannot create destination: {}".format(e)
                 )
 
-        # Move each known subpath individually so we never touch files in
-        # the old install_dir that Carton doesn't own (e.g. the user put
-        # their install_dir = ~/maya and we'd otherwise nuke their shelves).
         _MOVE_ITEMS = ("packages", "installed.json", ".staging", ".icon_cache")
         moved = []
         try:
@@ -355,8 +348,6 @@ class Config:
                 shutil.move(src, dst)
                 moved.append((src, dst))
         except (OSError, shutil.Error) as e:
-            # Roll back anything we already moved so the old location is
-            # usable again.
             for src, dst in moved:
                 try:
                     shutil.move(dst, src)
@@ -374,7 +365,7 @@ class Config:
 
     def to_dict(self):
         return {
-            "registries": [r.to_dict() for r in self.registries],
+            "catalogues": [r.to_dict() for r in self.catalogues],
             "install_dir": self.install_dir,
             "auto_check_updates": self.auto_check_updates,
             "github_repo": self.github_repo,
@@ -392,12 +383,12 @@ class Config:
         on startup (after loading config.json) and when the user switches
         profiles via the UI.
         """
-        self.registries = [
-            RegistryEntry(
+        self.catalogues = [
+            CatalogueEntry(
                 name=r.name, path=r.path,
-                registry_id=getattr(r, "registry_id", ""),
+                catalogue_id=getattr(r, "catalogue_id", ""),
             )
-            for r in profile.registries
+            for r in profile.catalogues
         ]
         self.language = profile.language
         self.auto_check_updates = profile.auto_check_updates
@@ -417,45 +408,44 @@ class Config:
             return
         os.environ["HTTP_PROXY"] = self.proxy
         os.environ["HTTPS_PROXY"] = self.proxy
-        # Lowercase variants for cross-platform tools that only check those.
         os.environ["http_proxy"] = self.proxy
         os.environ["https_proxy"] = self.proxy
 
-    def add_registry(self, name, path, registry_id=""):
-        """Add a registry."""
-        self.registries.append(RegistryEntry(name, path, registry_id))
+    def add_catalogue(self, name, path, catalogue_id=""):
+        """Add a catalogue entry."""
+        self.catalogues.append(CatalogueEntry(name, path, catalogue_id))
 
-    def remove_registry(self, name):
-        """Remove a registry by name."""
-        self.registries = [r for r in self.registries if r.name != name]
+    def remove_catalogue(self, name):
+        """Remove a catalogue entry by name."""
+        self.catalogues = [r for r in self.catalogues if r.name != name]
 
-    def find_registry_by_id(self, registry_id):
-        """Return the first RegistryEntry whose ``registry_id`` matches, or None.
+    def find_catalogue_by_id(self, catalogue_id):
+        """Return the first CatalogueEntry whose ``catalogue_id`` matches, or None.
 
         Matches local and remote entries alike — callers that need a
         writable target should use :meth:`find_local_mirror` instead.
         """
-        if not registry_id:
+        if not catalogue_id:
             return None
-        rid = registry_id.strip().lower()
-        for entry in self.registries:
-            if entry.registry_id and entry.registry_id == rid:
+        cid = catalogue_id.strip().lower()
+        for entry in self.catalogues:
+            if entry.catalogue_id and entry.catalogue_id == cid:
                 return entry
         return None
 
-    def find_local_mirror(self, registry_id):
-        """Return the first LOCAL RegistryEntry with the given id, or None.
+    def find_local_mirror(self, catalogue_id):
+        """Return the first LOCAL CatalogueEntry with the given id, or None.
 
         Used by :class:`carton.core.publisher.Publisher` to route a publish
         against a remote entry to its writable local counterpart.
         """
-        if not registry_id:
+        if not catalogue_id:
             return None
-        rid = registry_id.strip().lower()
-        for entry in self.registries:
+        cid = catalogue_id.strip().lower()
+        for entry in self.catalogues:
             if entry.is_remote:
                 continue
-            if entry.registry_id and entry.registry_id == rid:
+            if entry.catalogue_id and entry.catalogue_id == cid:
                 return entry
         return None
 

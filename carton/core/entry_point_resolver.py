@@ -28,24 +28,67 @@ def resolve_entry_point(installed_entry, package_dir=None, registry_data=None):
             preview-hint fallback. May be None.
 
     Returns:
-        A dict — possibly empty if no entry point can be determined.
+        A dict — possibly empty if no entry point can be determined. The
+        result is normalised: legacy shapes (``"module:function"`` string,
+        bare ``module``/``script`` dict without a ``type`` key) are upgraded
+        to the current tagged-union form so downstream launchers can
+        dispatch on ``type``.
     """
     if package_dir and os.path.isdir(package_dir):
         inner = _read_inner_entry_point(package_dir)
         if inner is not None:
-            return inner
+            return normalize_entry_point(inner)
 
     if installed_entry:
         ep = installed_entry.get("entry_point")
         if ep:
-            return ep
+            return normalize_entry_point(ep)
 
     if registry_data:
         ep = registry_data.get("entry_point")
         if ep:
-            return ep
+            return normalize_entry_point(ep)
 
     return {}
+
+
+def normalize_entry_point(ep):
+    """Coerce a possibly-legacy entry_point into the tagged-union shape.
+
+    Transforms:
+      * ``"module:function"`` string → ``{"type":"python", "module":..., "function":...}``
+      * dict without ``type`` but with ``module`` → ``{"type":"python", ...}``
+      * dict without ``type`` but with ``script`` + ``procedure`` → ``{"type":"mel", ...}``
+      * dict without ``type`` but with ``file`` ending in ``.mll`` → ``{"type":"plugin", ...}``
+
+    Anything already carrying a ``type`` passes through. Anything we can't
+    classify is returned as-is so the launcher's own fall-through guard
+    surfaces a clear error.
+    """
+    if isinstance(ep, str) and ":" in ep:
+        mod, _, fn = ep.partition(":")
+        mod = mod.strip()
+        fn = fn.strip()
+        if mod and fn:
+            return {"type": "python", "module": mod, "function": fn}
+        return ep
+    if not isinstance(ep, dict) or not ep:
+        return ep
+    if ep.get("type"):
+        return ep
+    promoted = dict(ep)
+    if ep.get("module"):
+        promoted["type"] = "python"
+        promoted.setdefault("function", ep.get("function") or "show")
+        return promoted
+    if ep.get("script") and ep.get("procedure"):
+        promoted["type"] = "mel"
+        return promoted
+    file_hint = ep.get("file", "")
+    if file_hint.endswith(".mll"):
+        promoted["type"] = "plugin"
+        return promoted
+    return ep
 
 
 def _read_inner_entry_point(package_dir):
