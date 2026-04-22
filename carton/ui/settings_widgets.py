@@ -353,7 +353,10 @@ class _AddCatalogueMethodDialog(QtWidgets.QDialog):
         lay = QtWidgets.QVBoxLayout(w)
         lay.setContentsMargins(0, 0, 0, 0)
         lay.setSpacing(14)
-        lay.addLayout(self._header_with_back(t("settings_add_single_title")))
+
+        title = QtWidgets.QLabel(t("settings_add_single_title"))
+        title.setStyleSheet(theme.LABEL_DIM_BOLD)
+        lay.addWidget(title)
 
         lay.addLayout(self._make_option(
             t("settings_add_github"),
@@ -370,6 +373,7 @@ class _AddCatalogueMethodDialog(QtWidgets.QDialog):
             accent_hover=theme.ACCENT_GREEN_HOVER,
         ))
         lay.addStretch()
+        lay.addLayout(self._back_row())
         return w
 
     def _build_step2_catalogue(self):
@@ -377,7 +381,10 @@ class _AddCatalogueMethodDialog(QtWidgets.QDialog):
         lay = QtWidgets.QVBoxLayout(w)
         lay.setContentsMargins(0, 0, 0, 0)
         lay.setSpacing(14)
-        lay.addLayout(self._header_with_back(t("settings_add_catalogue_title")))
+
+        title = QtWidgets.QLabel(t("settings_add_catalogue_title"))
+        title.setStyleSheet(theme.LABEL_DIM_BOLD)
+        lay.addWidget(title)
 
         lay.addLayout(self._make_option(
             t("settings_add_local"),
@@ -401,6 +408,7 @@ class _AddCatalogueMethodDialog(QtWidgets.QDialog):
             accent_hover="#1d3040",
         ))
         lay.addStretch()
+        lay.addLayout(self._back_row())
         return w
 
     # ---- shared helpers -------------------------------------------------
@@ -421,7 +429,8 @@ class _AddCatalogueMethodDialog(QtWidgets.QDialog):
         lay.addWidget(hint_lbl)
         return lay
 
-    def _header_with_back(self, title_text):
+    def _back_row(self):
+        """Bottom-left back button shared by both step-2 pages."""
         row = QtWidgets.QHBoxLayout()
         back_btn = QtWidgets.QPushButton("\u2190  " + t("settings_add_back"))
         back_btn.setCursor(Qt.PointingHandCursor)
@@ -429,9 +438,6 @@ class _AddCatalogueMethodDialog(QtWidgets.QDialog):
         back_btn.clicked.connect(lambda: self._stack.setCurrentIndex(0))
         row.addWidget(back_btn)
         row.addStretch()
-        title = QtWidgets.QLabel(title_text)
-        title.setStyleSheet(theme.LABEL_DIM_BOLD)
-        row.addWidget(title)
         return row
 
     def _finish(self, code):
