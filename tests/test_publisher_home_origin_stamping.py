@@ -1,21 +1,19 @@
-"""Tests for v5.0 ``home_origin`` stamping in :class:`Publisher` publishes.
+"""Tests for v5.0 ``home_origin`` handling in :class:`Publisher` publishes.
 
-Follow-up to the ``home_origin`` alias layer (commit ``e7921ef``): both
-:meth:`Publisher.publish` (embedded) and :meth:`Publisher.publish_github`
-now stamp a ``home_origin`` payload into
+The v0.5 source-sacred refactor moved ``home_origin`` out of the source
+tree entirely. It now lives in two places:
 
-* the zip artifact's inner ``package.json``, and
-* the source tree's ``package.json`` / ``.carton.json`` sidecar,
+* the zip artifact's inner ``package.json`` (the on-the-wire record), and
+* the catalogue.json ``packages[id]`` entry (the authoritative index).
 
-so consumers that have migrated to the v5.0 field see the right variant
-without having to guess it from ``home_registry``.
-
-Precedence is ``pkg_data["home_origin"]`` > auto-built variant, mirroring
-the existing ``home_registry`` rule so a tool whose home is elsewhere
-(e.g. an embedded-but-mirrored-to-github publish) keeps the caller's
-shape rather than being overwritten with the target's.
+The publisher used to *also* back-stamp the source's ``package.json`` /
+``.carton.json`` sidecar. That was a responsibility violation — Carton
+is a package manager, not a code generator — and it has been removed.
+These tests pin both halves of that contract: what *does* get written
+(zip + catalogue), and what *must not* be written (the author's source).
 """
 
+import hashlib
 import json
 import os
 import tempfile
@@ -136,16 +134,34 @@ def _read_zip_package_json(zip_path):
             return json.loads(f.read().decode("utf-8"))
 
 
+def _snapshot_dir(root):
+    """Capture (relative_path, sha256) for every file under ``root``.
+
+    Used to assert a publish operation leaves the source tree byte-for-
+    byte identical. Directories are implicit in the file list.
+    """
+    snapshot = {}
+    for dirpath, _dirs, files in os.walk(root):
+        for fn in files:
+            abs_path = os.path.join(dirpath, fn)
+            rel = os.path.relpath(abs_path, root)
+            with open(abs_path, "rb") as f:
+                snapshot[rel] = hashlib.sha256(f.read()).hexdigest()
+    return snapshot
+
+
 # ---- publish_github (github-origin) --------------------------------------
 
-class TestGithubPublishStamping:
+class TestGithubPublishZipStamping:
+    """The zip artifact's inner package.json carries home_origin."""
+
     @pytest.fixture
     def publisher(self, tmp_path):
         cfg = Config(install_dir=str(tmp_path / "install"))
         os.makedirs(cfg.staging_dir, exist_ok=True)
         return Publisher(cfg)
 
-    def test_zip_package_json_has_github_home_origin(self, publisher, tmp_path):
+    def test_zip_has_github_home_origin(self, publisher, tmp_path):
         local = _make_tool_for_github(tmp_path)
         gh = _StubGh(available=True)
         result = publisher.publish_github(
@@ -158,79 +174,66 @@ class TestGithubPublishStamping:
             "type": "github", "repo": "mystudio/my_tool",
         }
 
-    def test_source_package_json_has_github_home_origin(self, publisher, tmp_path):
-        local = _make_tool_for_github(tmp_path)
-        gh = _StubGh(available=True)
-        publisher.publish_github(
-            _pkg_data_for_github(local),
-            repo="mystudio/my_tool",
-            gh_cli_module=gh,
-        )
-        with open(os.path.join(local, "package.json"), "r", encoding="utf-8") as f:
-            data = json.load(f)
-        assert data["home_origin"] == {
-            "type": "github", "repo": "mystudio/my_tool",
-        }
-
-    def test_caller_home_origin_wins_over_repo(self, publisher, tmp_path):
-        """A tool whose real home is elsewhere (e.g. embedded in a private
-        catalogue) but is being mirrored to github keeps the caller's
-        home_origin rather than being overwritten."""
+    def test_caller_home_origin_wins_in_zip(self, publisher, tmp_path):
+        """A tool whose real home is a private catalogue but is being
+        mirrored to github keeps the caller's home_origin inside the zip."""
         local = _make_tool_for_github(tmp_path)
         caller_home = {"type": "embedded", "catalogue_name": "internal"}
         gh = _StubGh(available=True)
-        publisher.publish_github(
+        result = publisher.publish_github(
             _pkg_data_for_github(local, home_origin=caller_home),
             repo="mystudio/my_tool-mirror",
             gh_cli_module=gh,
         )
-        # Source tree stamped with the caller's shape, not the mirror repo.
-        with open(os.path.join(local, "package.json"), "r", encoding="utf-8") as f:
-            data = json.load(f)
-        assert data["home_origin"] == caller_home
+        inner = _read_zip_package_json(result["zip_path"])
+        assert inner["home_origin"] == caller_home
 
-    def test_legacy_home_registry_is_dropped_on_stamp(self, publisher, tmp_path):
-        """Post-v5.0 the publisher no longer preserves pre-existing
-        ``home_registry`` payloads — only ``home_origin`` survives on
-        the stamped source tree. This protects v5.0 consumers from
-        seeing the obsolete alias on freshly-published trees."""
+
+class TestGithubPublishSourceSacred:
+    """publish_github must not mutate the author's source tree."""
+
+    @pytest.fixture
+    def publisher(self, tmp_path):
+        cfg = Config(install_dir=str(tmp_path / "install"))
+        os.makedirs(cfg.staging_dir, exist_ok=True)
+        return Publisher(cfg)
+
+    def test_source_tree_is_unchanged_after_publish(self, publisher, tmp_path):
         local = _make_tool_for_github(tmp_path)
-        # Pre-populate the source package.json with a legacy stub to
-        # prove the publisher actively drops it rather than just
-        # declining to write a new one.
-        pkg_json_path = os.path.join(local, "package.json")
-        with open(pkg_json_path, "r", encoding="utf-8") as f:
-            seed = json.load(f)
-        seed["home_registry"] = {"name": "studio-main",
-                                 "registry_id": "a" * 8 + "-" + "a" * 4
-                                 + "-" + "a" * 4 + "-" + "a" * 4 + "-" + "a" * 12}
-        with open(pkg_json_path, "w", encoding="utf-8") as f:
-            json.dump(seed, f)
-
+        before = _snapshot_dir(local)
         gh = _StubGh(available=True)
         publisher.publish_github(
             _pkg_data_for_github(local),
             repo="mystudio/my_tool",
             gh_cli_module=gh,
         )
-        with open(pkg_json_path, "r", encoding="utf-8") as f:
+        after = _snapshot_dir(local)
+        assert after == before, "publish_github wrote to the source tree"
+
+    def test_source_package_json_has_no_home_origin(self, publisher, tmp_path):
+        """The author never wrote a home_origin — Carton must not either."""
+        local = _make_tool_for_github(tmp_path)
+        gh = _StubGh(available=True)
+        publisher.publish_github(
+            _pkg_data_for_github(local),
+            repo="mystudio/my_tool",
+            gh_cli_module=gh,
+        )
+        with open(os.path.join(local, "package.json"), "r", encoding="utf-8") as f:
             data = json.load(f)
-        assert "home_registry" not in data
-        assert data["home_origin"] == {"type": "github", "repo": "mystudio/my_tool"}
+        assert "home_origin" not in data
 
 
 # ---- publish (embedded-origin) -------------------------------------------
 
-class TestEmbeddedPublishStamping:
-    def test_zip_package_json_has_embedded_home_origin(self):
+class TestEmbeddedPublishZipStamping:
+    def test_zip_has_embedded_home_origin(self):
         """Embedded publish stamps home_origin={type:embedded,...} into the
         zip's inner package.json.
 
-        Note: catalogue_id may be missing on a first publish — the zip is
-        built before ``_update_registry`` generates/reads the registry_id,
-        same tightness as the pre-existing ``to_home_meta`` path. The
-        source tree persists happens after stamping, so the source-tree
-        counterpart test verifies catalogue_id convergence.
+        catalogue_id may be absent on a first publish — the zip is built
+        before update_catalogue generates/reads the id, so this test only
+        pins type + catalogue_name.
         """
         with tempfile.TemporaryDirectory() as tmpdir:
             project_root = _make_project(tmpdir)
@@ -245,7 +248,6 @@ class TestEmbeddedPublishStamping:
             pkg_data = install_mgr.get_installed_packages()[pkg_id]
             publisher.publish(pkg_data, config.catalogues[0])
 
-            # Zip lands at packages/<ns>/<name>/<version>/<name>-<version>.zip
             zip_path = os.path.join(
                 reg_dir, "packages", "mystudio", "my_tool",
                 "1.0.0", "my_tool-1.0.0.zip",
@@ -255,11 +257,7 @@ class TestEmbeddedPublishStamping:
             assert origin.get("type") == "embedded"
             assert origin.get("catalogue_name") == "studio-main"
 
-    def test_source_package_json_has_embedded_home_origin(self):
-        """Source tree is persisted AFTER ``_update_registry`` stamps the
-        registry_id, so the home_origin written back here carries the
-        catalogue_id too — this is the path consumers on this machine
-        resolve from."""
+    def test_caller_home_origin_wins_in_zip(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             project_root = _make_project(tmpdir)
             config, install_mgr, script_mgr = _make_env(tmpdir)
@@ -267,29 +265,8 @@ class TestEmbeddedPublishStamping:
 
             reg_dir = os.path.join(tmpdir, "catalogue")
             os.makedirs(reg_dir, exist_ok=True)
-            config.add_catalogue(os.path.join(reg_dir, "catalogue.json"), display_name="studio-main")
-            publisher = Publisher(config)
-            pkg_data = install_mgr.get_installed_packages()[pkg_id]
-            publisher.publish(pkg_data, config.catalogues[0])
-
-            with open(os.path.join(project_root, "package.json"), "r",
-                      encoding="utf-8") as f:
-                data = json.load(f)
-            origin = data.get("home_origin") or {}
-            assert origin.get("type") == "embedded"
-            assert origin.get("catalogue_name") == "studio-main"
-            # The stamped registry_id propagates to home_origin too.
-            assert origin.get("catalogue_id") == config.catalogues[0].catalogue_id
-
-    def test_caller_home_origin_wins_over_target(self):
-        with tempfile.TemporaryDirectory() as tmpdir:
-            project_root = _make_project(tmpdir)
-            config, install_mgr, script_mgr = _make_env(tmpdir)
-            pkg_id = _register(script_mgr, project_root)
-
-            reg_dir = os.path.join(tmpdir, "catalogue")
-            os.makedirs(reg_dir, exist_ok=True)
-            config.add_catalogue(os.path.join(reg_dir, "catalogue.json"), display_name="mirror")
+            reg_path = os.path.join(reg_dir, "catalogue.json")
+            config.add_catalogue(reg_path, display_name="mirror")
             publisher = Publisher(config)
 
             pkg_data = dict(install_mgr.get_installed_packages()[pkg_id])
@@ -297,9 +274,56 @@ class TestEmbeddedPublishStamping:
             pkg_data["home_origin"] = caller_home
             publisher.publish(pkg_data, config.catalogues[0])
 
+            zip_path = os.path.join(
+                reg_dir, "packages", "mystudio", "my_tool",
+                "1.0.0", "my_tool-1.0.0.zip",
+            )
+            inner = _read_zip_package_json(zip_path)
+            assert inner["home_origin"] == caller_home
+
+
+class TestEmbeddedPublishSourceSacred:
+    """publish (embedded) must not mutate the author's source tree."""
+
+    def test_source_tree_is_unchanged_after_publish(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            project_root = _make_project(tmpdir)
+            config, install_mgr, script_mgr = _make_env(tmpdir)
+            pkg_id = _register(script_mgr, project_root)
+
+            reg_dir = os.path.join(tmpdir, "catalogue")
+            os.makedirs(reg_dir, exist_ok=True)
+            config.add_catalogue(
+                os.path.join(reg_dir, "catalogue.json"),
+                display_name="studio-main",
+            )
+            publisher = Publisher(config)
+            pkg_data = install_mgr.get_installed_packages()[pkg_id]
+
+            before = _snapshot_dir(project_root)
+            publisher.publish(pkg_data, config.catalogues[0])
+            after = _snapshot_dir(project_root)
+
+            assert after == before, "publish wrote to the source tree"
+
+    def test_source_package_json_has_no_home_origin_after_publish(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            project_root = _make_project(tmpdir)
+            config, install_mgr, script_mgr = _make_env(tmpdir)
+            pkg_id = _register(script_mgr, project_root)
+
+            reg_dir = os.path.join(tmpdir, "catalogue")
+            os.makedirs(reg_dir, exist_ok=True)
+            config.add_catalogue(
+                os.path.join(reg_dir, "catalogue.json"),
+                display_name="studio-main",
+            )
+            publisher = Publisher(config)
+            pkg_data = install_mgr.get_installed_packages()[pkg_id]
+            publisher.publish(pkg_data, config.catalogues[0])
+
             with open(os.path.join(project_root, "package.json"), "r",
                       encoding="utf-8") as f:
                 data = json.load(f)
-            # Caller's shape survives; target "mirror" embedded variant
-            # did NOT overwrite it.
-            assert data["home_origin"] == caller_home
+            # The author never wrote a home_origin; Carton must not add one.
+            assert "home_origin" not in data

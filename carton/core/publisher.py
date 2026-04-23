@@ -35,7 +35,7 @@ from carton.core.migrations import (
 )
 from carton.core.path_utils import resolve_local_path
 from carton.core.uuid_id import read_uuid
-from carton.core.sidecar import write_sidecar, read_sidecar
+from carton.core.sidecar import read_sidecar
 
 
 _DEFAULT_MAYA_VERSIONS = ["2024", "2025", "2026", "2027"]
@@ -247,17 +247,10 @@ class Publisher:
             release_notes=release_notes,
         )
 
-        # 5. Persist namespace/name back into source so the next user converges.
-        # Re-build home_origin *after* _update_catalogue so the stamped
-        # catalogue_id (now on target_entry) propagates into the payload.
-        # The earlier ``home_origin`` was handed to the zip when the
-        # catalogue_id may still have been blank — first-publish asymmetry
-        # is intentional.
-        home_origin_source = pkg_data.get("home_origin") or target_entry.to_home_origin_meta()
-        self._persist_identity_to_source(
-            local_path, ns, name, is_folder,
-            home_origin=home_origin_source,
-        )
+        # The author's source is sacred — namespace/name/home_origin are
+        # persisted into the zip and the catalogue, never back-written to
+        # the source package.json. Subscribers who want identity on their
+        # machine read from installed.json (populated by the installer).
 
         result = {"id": pkg_id, "namespace": ns, "name": name, "version": version}
         if requested_entry is not target_entry:
@@ -414,39 +407,6 @@ class Publisher:
         if version in (origin.get("versions") or {}):
             raise VersionConflictError(version)
 
-    def _persist_identity_to_source(self, local_path, namespace, name, is_folder,
-                                    home_origin=None):
-        """Write namespace/name back into source so other clones converge.
-
-        Folder packages: update or create ``<folder>/package.json``.
-        Single files: create or update ``<file>.carton.json`` sidecar.
-        """
-        updates = {"namespace": namespace, "name": name}
-        if home_origin:
-            updates["home_origin"] = home_origin
-
-        if is_folder:
-            pkg_json_path = os.path.join(local_path, "package.json")
-            data = {}
-            if os.path.exists(pkg_json_path):
-                try:
-                    with open(pkg_json_path, "r", encoding="utf-8") as f:
-                        data = json.load(f)
-                except (json.JSONDecodeError, OSError):
-                    data = {}
-            # Drop legacy id / home_registry fields if present — v5.0
-            # source trees should converge on namespace/name + home_origin.
-            data.pop("id", None)
-            data.pop("home_registry", None)
-            data.update(updates)
-            with open(pkg_json_path, "w", encoding="utf-8") as f:
-                json.dump(data, f, indent=2, ensure_ascii=False)
-        else:
-            existing = read_sidecar(local_path) or {}
-            existing.pop("home_registry", None)
-            existing.update(updates)
-            write_sidecar(local_path, existing)
-
     def publish_github(self, pkg_data, repo, release_notes="",
                        tag_prefix="v", namespace=None,
                        embed_source_path=False,
@@ -599,13 +559,6 @@ class Publisher:
                 result["manual_steps"] = gh.build_manual_instructions(
                     repo, tag, [zip_path, sums_path], notes=release_notes,
                 )
-
-        # Persist identity back into the source tree (same as embedded
-        # path) so subsequent publishes from this clone stay consistent.
-        self._persist_identity_to_source(
-            local_path, ns, name, is_folder,
-            home_origin=home_origin,
-        )
 
         if warnings:
             result["warnings"] = warnings

@@ -375,6 +375,13 @@ class PublishController:
         """Return the package namespace, prompting and persisting if missing.
 
         Returns None if the user cancelled or supplied an invalid value.
+
+        This is a legacy-rescue path: v0.5 Add flows already require a
+        namespace up front, so fresh packages never hit this branch. What
+        this path is for is pre-v0.5 tools that were added without one.
+        Importantly, the answer is persisted only into installed.json —
+        the author's source manifest is never touched, keeping Carton's
+        role as a reader, not a writer, of package.json.
         """
         w = self._w
         namespace = pkg_data.get("namespace", "")
@@ -389,7 +396,6 @@ class PublishController:
         namespace = slugify_namespace(ns)
         if not namespace:
             return None
-        # Persist immediately so subsequent publishes don't re-ask
         w._install_manager.update_package_fields(
             pkg_id, {"namespace": namespace}
         )

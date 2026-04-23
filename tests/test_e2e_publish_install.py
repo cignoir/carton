@@ -137,19 +137,11 @@ class TestPublishInstallRoundtrip:
             assert inner_meta["home_origin"]["type"] == "embedded"
             assert inner_meta["home_origin"]["catalogue_name"] == "e2e-local"
 
-        # Source side gained a package.json pinning the identity.
-        persisted = os.path.join(src_pkg, "package.json")
-        assert os.path.isfile(persisted)
-        with open(persisted, "r", encoding="utf-8") as f:
-            persisted_meta = json.load(f)
-        assert persisted_meta["namespace"] == "e2e"
-        assert persisted_meta["name"] == "hello_tool"
-        # Legacy home_registry is no longer written — v5.0 source trees
-        # only carry home_origin.
-        assert "home_registry" not in persisted_meta
-        assert persisted_meta["home_origin"]["type"] == "embedded"
-        assert persisted_meta["home_origin"]["catalogue_id"] == \
-            cat_json["catalogue_id"]
+        # v0.5 source-sacred: Carton must not back-stamp the author's
+        # source tree. The dedicated source-sacred tests live in
+        # tests/test_publisher_home_origin_stamping.py; here we only
+        # assert the absence of the stamp that earlier versions wrote.
+        assert not os.path.exists(os.path.join(src_pkg, "package.json"))
 
         # --- Consumer side (different Config, same catalogue) ---
         cons_config = Config(
@@ -339,13 +331,8 @@ class TestPublishViaRemoteMirror:
         )
         assert os.path.isfile(zip_abs)
 
-        # Source-side package.json records the home origin as the LOCAL
-        # mirror (the writable one) plus the shared UUID so machines
-        # under different aliases converge.
-        persisted = os.path.join(src_pkg, "package.json")
-        with open(persisted, "r", encoding="utf-8") as f:
-            persisted_meta = json.load(f)
-        origin_meta = persisted_meta["home_origin"]
-        assert origin_meta["type"] == "embedded"
-        assert origin_meta["catalogue_name"] == "carton-guru2"
-        assert origin_meta["catalogue_id"] == shared_uuid
+        # v0.5 source-sacred: no back-stamp on the author's source.
+        # The catalogue_id convergence that used to be verified here is
+        # now enforced on the catalogue/zip side — which is the side the
+        # consumer actually reads.
+        assert not os.path.exists(os.path.join(src_pkg, "package.json"))

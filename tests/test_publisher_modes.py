@@ -219,13 +219,18 @@ class TestGhFailureFallback:
         assert any("repo not found" in w for w in warnings)
 
 
-class TestIdentityPersistence:
-    def test_writes_namespace_name_back_into_source(self, publisher, tmp_path):
-        """Mirror of the embedded-publish behaviour: successive publishes
-        from this clone must converge on the same identity."""
+class TestSourceSacred:
+    def test_publish_does_not_write_namespace_back_to_source(self, publisher, tmp_path):
+        """v0.5: Carton is a reader of the author's manifest, not a writer.
+
+        Earlier releases back-stamped namespace/name into the source
+        package.json on every publish; the sacred-source contract
+        forbids that. This is the flagship regression guard.
+        """
         local = _make_tool(tmp_path)
-        # Blow away the existing namespace so we can prove it's rewritten.
         pkg_json_path = os.path.join(local, "package.json")
+        # Remove namespace from source to prove the publisher leaves the
+        # gap rather than filling it in.
         with open(pkg_json_path, "r", encoding="utf-8") as f:
             data = json.load(f)
         data.pop("namespace", None)
@@ -240,8 +245,8 @@ class TestIdentityPersistence:
         )
         with open(pkg_json_path, "r", encoding="utf-8") as f:
             data = json.load(f)
-        assert data["namespace"] == "mystudio"
-        assert data["name"] == "my_tool"
+        assert "namespace" not in data, \
+            "publish_github wrote namespace back to the source manifest"
 
 
 class TestValidation:

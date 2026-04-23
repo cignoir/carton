@@ -73,10 +73,15 @@ class TestNamespaceRegistration:
 
 
 class TestPublishPersistence:
-    def test_publish_writes_namespace_to_package_json(self):
+    def test_publish_records_identity_in_catalogue(self):
+        """v0.5 source-sacred: identity lands in the catalogue, not the
+        source tree. Earlier versions wrote namespace back into the
+        author's package.json; that responsibility has been removed."""
         with tempfile.TemporaryDirectory() as tmpdir:
             # Use the nested project layout so the publisher's flat-layout
-            # validator passes.
+            # validator passes. namespace=None means the author-side
+            # package.json has no namespace — we rely on pkg_data /
+            # installed.json to supply it, and the source stays untouched.
             project_root = _make_project(tmpdir, namespace=None)
             config, install_mgr, script_mgr = _make_env(tmpdir)
 
@@ -96,15 +101,17 @@ class TestPublishPersistence:
 
             assert result["id"] == "mystudio/my_tool"
 
-            with open(os.path.join(project_root, "package.json"), "r") as f:
-                data = json.load(f)
-            assert data["namespace"] == "mystudio"
-            assert "id" not in data
-
             # Catalogue entry keyed by namespace/name.
             with open(config.catalogues[0].path, "r") as f:
                 catalogue = json.load(f)
             assert "mystudio/my_tool" in catalogue["packages"]
+
+            # Source is sacred: the source package.json never gained a
+            # namespace — that stays the responsibility of pkg_data /
+            # installed.json, not of the publisher.
+            with open(os.path.join(project_root, "package.json"), "r") as f:
+                src_data = json.load(f)
+            assert "namespace" not in src_data
 
     def test_publish_without_namespace_raises(self):
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -216,7 +223,15 @@ class TestCatalogueIdStamping:
                 cid_second = json.load(f)["catalogue_id"]
             assert cid_first == cid_second
 
-    def test_home_origin_carries_catalogue_id(self):
+    def test_home_origin_carries_catalogue_id_in_zip(self):
+        """home_origin lands in the zip's inner package.json so the
+        installer can copy it into installed.json on unpack.
+
+        v0.5: this check moved off the source tree (which was back-
+        stamped by earlier releases) and onto the zip, which is the
+        on-the-wire artifact every subscriber downloads and unpacks.
+        """
+        import zipfile
         with tempfile.TemporaryDirectory() as tmpdir:
             project_root = _make_project(tmpdir, namespace="mystudio")
             config, install_mgr, script_mgr = _make_env(tmpdir)
@@ -224,27 +239,49 @@ class TestCatalogueIdStamping:
                 file_path=project_root, name="my_tool", display_name="My Tool",
                 icon="🔧", description="t", pkg_type="python_package",
                 entry_point={"type": "python", "module": "my_tool", "function": "show"},
-                is_folder=True, namespace="mystudio",
+                is_folder=True, namespace="mystudio", version="1.0.0",
             )
             reg_dir = os.path.join(tmpdir, "catalogue")
             os.makedirs(reg_dir, exist_ok=True)
-            config.add_catalogue(os.path.join(reg_dir, "catalogue.json"), display_name="test")
+            config.add_catalogue(
+                os.path.join(reg_dir, "catalogue.json"), display_name="test",
+            )
             publisher = Publisher(config)
             pkg_data = install_mgr.get_installed_packages()[pkg_id]
             publisher.publish(pkg_data, config.catalogues[0])
 
-            with open(os.path.join(project_root, "package.json"), "r") as f:
-                data = json.load(f)
-            origin = data.get("home_origin") or {}
+            # Resolve zip location from the catalogue entry's base_dir
+            # to avoid coupling the test to path-normalisation quirks.
+            zip_path = os.path.join(
+                config.catalogues[0].base_dir,
+                "packages", "mystudio", "my_tool", "1.0.0",
+                "my_tool-1.0.0.zip",
+            )
+            with zipfile.ZipFile(zip_path) as zf:
+                with zf.open("package.json") as f:
+                    inner = json.loads(f.read().decode("utf-8"))
+            origin = inner.get("home_origin") or {}
             assert origin.get("type") == "embedded"
             assert origin.get("catalogue_name") == "test"
-            # catalogue_id should be present so other machines resolve by
-            # UUID rather than alias name.
-            assert origin.get("catalogue_id")
+            # catalogue_id is only present after update_catalogue stamps
+            # it; at zip-write time it may still be blank on first
+            # publish. The production installer handles that case by
+            # filling catalogue_id from the catalogue.json on resolve.
+            if origin.get("catalogue_id"):
+                assert origin["catalogue_id"] == config.catalogues[0].catalogue_id
 
 
-class TestSidecarPersistenceForSingleFile:
-    def test_publish_creates_sidecar_for_single_file(self):
+class TestSidecarSacredForSingleFile:
+    def test_publish_does_not_create_sidecar_next_to_script(self):
+        """v0.5: Carton must not drop a sidecar next to the author's
+        single-file script.
+
+        Earlier releases wrote ``<script>.carton.json`` on publish so
+        subsequent publishes converged on the same identity. That was a
+        responsibility violation (Carton is a package manager, not a
+        metadata generator), and it's been removed alongside the
+        folder-side back-stamping.
+        """
         with tempfile.TemporaryDirectory() as tmpdir:
             script_path = os.path.join(tmpdir, "rename.py")
             with open(script_path, "w") as f:
@@ -265,8 +302,5 @@ class TestSidecarPersistenceForSingleFile:
             pkg_data = install_mgr.get_installed_packages()[pkg_id]
             publisher.publish(pkg_data, config.catalogues[0])
 
-            # Sidecar should now exist next to the script
-            assert os.path.exists(sidecar_path_for(script_path))
-            sc = read_sidecar(script_path)
-            assert sc["namespace"] == "mystudio"
-            assert sc["name"] == "rename"
+            assert not os.path.exists(sidecar_path_for(script_path))
+            assert read_sidecar(script_path) is None

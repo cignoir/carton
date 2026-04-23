@@ -370,11 +370,21 @@ class AddDialog(QtWidgets.QDialog):
             QtWidgets.QMessageBox.warning(self, "Carton", t("add_no_display_name"))
             return
 
+        # Require namespace up front so the source package.json owns its
+        # identity from day one. Carton used to back-stamp namespace on
+        # first publish, but that meant the manifest started life with
+        # a "who decides my identity?" ambiguity. npm / cargo-style: the
+        # author declares it, we only read.
+        namespace_raw = self._namespace_input.text().strip()
+        if not namespace_raw:
+            QtWidgets.QMessageBox.warning(self, "Carton", t("add_no_namespace"))
+            return
+
         is_exec_mode = self._mode_exec.isChecked()
         func = self._func_combo.currentText().strip()
         icon = self._icon_input.text().strip() or "🔧"
         description = self._desc_input.text().strip()
-        namespace = slugify_namespace(self._namespace_input.text())
+        namespace = slugify_namespace(namespace_raw)
 
         # Reject names that aren't valid Python identifiers when the
         # entry point will go through importlib. Single-file MEL / .mll
