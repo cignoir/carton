@@ -295,13 +295,16 @@ class ScriptManager:
             elif pkg_type == "plugin":
                 # Folder plugin: mirror PluginHandler.install — plug-ins/
                 # goes on MAYA_PLUG_IN_PATH, optional scripts/ goes on
-                # MAYA_SCRIPT_PATH.
+                # MAYA_SCRIPT_PATH *and* sys.path so Python companions
+                # bundled alongside the .mll can be imported by the
+                # plugin's own UI commands.
                 plugins_dir = os.path.join(path, "plug-ins")
                 if os.path.isdir(plugins_dir):
                     self._env_mgr.add_env_path("MAYA_PLUG_IN_PATH", plugins_dir)
                 scripts_dir = os.path.join(path, "scripts")
                 if os.path.isdir(scripts_dir):
                     self._env_mgr.add_env_path("MAYA_SCRIPT_PATH", scripts_dir)
+                    self._env_mgr.add_python_path(scripts_dir)
         else:
             # File: add the file's directory
             script_dir = os.path.dirname(path)
@@ -337,6 +340,7 @@ class ScriptManager:
                 scripts_dir = os.path.join(path, "scripts")
                 if os.path.isdir(scripts_dir):
                     self._env_mgr.remove_env_path("MAYA_SCRIPT_PATH", scripts_dir)
+                    self._env_mgr.remove_python_path(scripts_dir)
         else:
             script_dir = os.path.dirname(path)
             if pkg_type == "plugin":
