@@ -158,11 +158,22 @@ class ScriptManager:
             )
 
         if ep_type == "plugin":
-            # Maya binary plugin (.mll)
+            # Maya binary plugin (.mll). Two concrete shapes arrive here:
+            #   * single-file registration → ``file`` carries the basename,
+            #     ``local_path`` is the .mll itself
+            #   * folder package.json registration → ``plugin_file`` carries
+            #     the extension-less plugin name, ``local_path`` is the
+            #     package folder (with a ``plug-ins/`` subdir that's already
+            #     on MAYA_PLUG_IN_PATH via _add_to_env)
             import maya.cmds
             local_path = pkg_data.get("local_path", "")
-            plugin_file = entry.get("file", "")
-            if local_path and os.path.isfile(local_path):
+            plugin_file = entry.get("plugin_file") or entry.get("file", "")
+            is_folder = pkg_data.get("is_folder", False)
+            if is_folder:
+                # MAYA_PLUG_IN_PATH has ``plug-ins/`` wired up already —
+                # let Maya resolve the bare name.
+                plugin_path = plugin_file
+            elif local_path and os.path.isfile(local_path):
                 plugin_path = local_path
             elif local_path and os.path.isdir(local_path):
                 plugin_path = os.path.join(local_path, plugin_file)
@@ -170,11 +181,17 @@ class ScriptManager:
                 plugin_path = plugin_file
             if not maya.cmds.pluginInfo(plugin_path, q=True, loaded=True):
                 maya.cmds.loadPlugin(plugin_path)
-            # Optional: run a command after loading (e.g. to open the UI)
+            # Optional: run a command after loading (e.g. to open the UI).
+            # ``command`` — legacy single-file shape (raw Python exec).
+            # ``ui_command`` — package.json shape (MEL procedure name).
             command = entry.get("command", "")
             if command:
                 import __main__
                 exec(command, __main__.__dict__)
+            ui_command = entry.get("ui_command", "")
+            if ui_command:
+                import maya.mel
+                maya.mel.eval("{}()".format(ui_command))
         elif ep_type == "exec":
             # Top-level execution
             local_path = pkg_data.get("local_path", "")
@@ -275,6 +292,16 @@ class ScriptManager:
                 scripts_dir = os.path.join(path, "scripts")
                 self._env_mgr.add_env_path("MAYA_SCRIPT_PATH",
                                            scripts_dir if os.path.isdir(scripts_dir) else path)
+            elif pkg_type == "plugin":
+                # Folder plugin: mirror PluginHandler.install — plug-ins/
+                # goes on MAYA_PLUG_IN_PATH, optional scripts/ goes on
+                # MAYA_SCRIPT_PATH.
+                plugins_dir = os.path.join(path, "plug-ins")
+                if os.path.isdir(plugins_dir):
+                    self._env_mgr.add_env_path("MAYA_PLUG_IN_PATH", plugins_dir)
+                scripts_dir = os.path.join(path, "scripts")
+                if os.path.isdir(scripts_dir):
+                    self._env_mgr.add_env_path("MAYA_SCRIPT_PATH", scripts_dir)
         else:
             # File: add the file's directory
             script_dir = os.path.dirname(path)
@@ -303,6 +330,13 @@ class ScriptManager:
                 scripts_dir = os.path.join(path, "scripts")
                 self._env_mgr.remove_env_path("MAYA_SCRIPT_PATH",
                                               scripts_dir if os.path.isdir(scripts_dir) else path)
+            elif pkg_type == "plugin":
+                plugins_dir = os.path.join(path, "plug-ins")
+                if os.path.isdir(plugins_dir):
+                    self._env_mgr.remove_env_path("MAYA_PLUG_IN_PATH", plugins_dir)
+                scripts_dir = os.path.join(path, "scripts")
+                if os.path.isdir(scripts_dir):
+                    self._env_mgr.remove_env_path("MAYA_SCRIPT_PATH", scripts_dir)
         else:
             script_dir = os.path.dirname(path)
             if pkg_type == "plugin":
