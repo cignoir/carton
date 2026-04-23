@@ -20,12 +20,12 @@ class TestConfig:
         with tempfile.TemporaryDirectory() as tmpdir:
             path = os.path.join(tmpdir, "config.json")
             c = Config()
-            c.add_catalogue("test", "/some/path/registry.json")
+            c.add_catalogue("/some/path/registry.json", display_name="test")
             c.save(path)
 
             loaded = Config.load(path)
             assert len(loaded.catalogues) == 1
-            assert loaded.catalogues[0].name == "test"
+            assert loaded.catalogues[0].display_name == "test"
             assert loaded.catalogues[0].path == os.path.normpath("/some/path/registry.json")
 
     def test_load_missing(self):
@@ -39,13 +39,13 @@ class TestConfig:
 
     def test_add_remove_catalogue(self):
         c = Config()
-        c.add_catalogue("a", "/path/a.json")
-        c.add_catalogue("b", "/path/b.json")
+        c.add_catalogue("/path/a.json", display_name="a")
+        c.add_catalogue("/path/b.json", display_name="b")
         assert len(c.catalogues) == 2
 
-        c.remove_catalogue("a")
+        c.remove_catalogue("/path/a.json")
         assert len(c.catalogues) == 1
-        assert c.catalogues[0].name == "b"
+        assert c.catalogues[0].display_name == "b"
 
 
 class TestChangeInstallDir:
@@ -159,13 +159,13 @@ class TestProxy:
 
 class TestCatalogueEntry:
     def test_base_dir(self):
-        e = CatalogueEntry("test", "/some/dir/registry.json")
+        e = CatalogueEntry("/some/dir/registry.json", display_name="test")
         assert e.base_dir == os.path.normpath("/some/dir")
 
     def test_to_dict(self):
-        e = CatalogueEntry("test", "/path/registry.json")
+        e = CatalogueEntry("/path/registry.json", display_name="test")
         d = e.to_dict()
-        assert d["name"] == "test"
+        assert d["display_name"] == "test"
         assert d["path"] == os.path.normpath("/path/registry.json")
 
 
@@ -173,25 +173,36 @@ class TestCatalogueEntryCatalogueId:
     _UUID = "c0a8f1f9-1a2e-4b5c-9d7a-5f8e1a2b3c4d"
 
     def test_default_is_empty(self):
-        e = CatalogueEntry("test", "/path/registry.json")
+        e = CatalogueEntry("/path/registry.json", display_name="test")
         assert e.catalogue_id == ""
 
     def test_stored_lowercased_and_trimmed(self):
-        e = CatalogueEntry("test", "/p", catalogue_id="  " + self._UUID.upper() + "  ")
+        e = CatalogueEntry(
+            "/p", catalogue_id="  " + self._UUID.upper() + "  ",
+            display_name="test",
+        )
         assert e.catalogue_id == self._UUID
 
     def test_to_dict_omits_empty_id(self):
-        e = CatalogueEntry("test", "/p")
+        e = CatalogueEntry("/p", display_name="test")
         assert "catalogue_id" not in e.to_dict()
 
     def test_to_dict_includes_id(self):
-        e = CatalogueEntry("test", "/p", catalogue_id=self._UUID)
+        e = CatalogueEntry("/p", catalogue_id=self._UUID, display_name="test")
         assert e.to_dict()["catalogue_id"] == self._UUID
 
     def test_from_dict_roundtrip(self):
-        src = {"name": "n", "path": "/p", "catalogue_id": self._UUID}
+        src = {
+            "display_name": "n", "path": "/p", "catalogue_id": self._UUID,
+        }
         e = CatalogueEntry.from_dict(src)
         assert e.catalogue_id == self._UUID
+
+    def test_from_dict_accepts_legacy_name_key(self):
+        """Pre-v0.5 config.json used ``name`` for the subscriber alias."""
+        src = {"name": "legacy-alias", "path": "/p"}
+        e = CatalogueEntry.from_dict(src)
+        assert e.display_name == "legacy-alias"
 
 
 class TestConfigCatalogueIdLookup:
@@ -200,35 +211,35 @@ class TestConfigCatalogueIdLookup:
 
     def test_find_catalogue_by_id(self):
         c = Config()
-        c.add_catalogue("a", "/p/a.json", catalogue_id=self._UUID_A)
-        c.add_catalogue("b", "/p/b.json", catalogue_id=self._UUID_B)
+        c.add_catalogue("/p/a.json", catalogue_id=self._UUID_A, display_name="a")
+        c.add_catalogue("/p/b.json", catalogue_id=self._UUID_B, display_name="b")
         match = c.find_catalogue_by_id(self._UUID_B)
         assert match is not None
-        assert match.name == "b"
+        assert match.display_name == "b"
 
     def test_find_catalogue_by_id_missing(self):
         c = Config()
-        c.add_catalogue("a", "/p/a.json", catalogue_id=self._UUID_A)
+        c.add_catalogue("/p/a.json", catalogue_id=self._UUID_A, display_name="a")
         assert c.find_catalogue_by_id("cccccccc-3333-4333-8333-cccccccccccc") is None
         assert c.find_catalogue_by_id("") is None
 
     def test_find_local_mirror_prefers_local(self):
         c = Config()
-        c.add_catalogue("remote", "https://example.com/r.json", catalogue_id=self._UUID_A)
-        c.add_catalogue("local", "/p/a.json", catalogue_id=self._UUID_A)
+        c.add_catalogue("https://example.com/r.json", catalogue_id=self._UUID_A, display_name="remote")
+        c.add_catalogue("/p/a.json", catalogue_id=self._UUID_A, display_name="local")
         mirror = c.find_local_mirror(self._UUID_A)
         assert mirror is not None
-        assert mirror.name == "local"
+        assert mirror.display_name == "local"
 
     def test_find_local_mirror_none_when_only_remote(self):
         c = Config()
-        c.add_catalogue("remote", "https://example.com/r.json", catalogue_id=self._UUID_A)
+        c.add_catalogue("https://example.com/r.json", catalogue_id=self._UUID_A, display_name="remote")
         assert c.find_local_mirror(self._UUID_A) is None
 
     def test_registry_id_roundtrips_through_save_load(self, tmp_path):
         path = tmp_path / "config.json"
         c = Config()
-        c.add_catalogue("a", "/p/a.json", catalogue_id=self._UUID_A)
+        c.add_catalogue("/p/a.json", catalogue_id=self._UUID_A, display_name="a")
         c.save(str(path))
         loaded = Config.load(str(path))
         assert loaded.catalogues[0].catalogue_id == self._UUID_A

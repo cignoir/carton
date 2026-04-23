@@ -44,7 +44,9 @@ def _setup_env(tmpdir):
 
     reg_dir = os.path.join(tmpdir, "registry")
     os.makedirs(reg_dir, exist_ok=True)
-    config.add_catalogue("test", os.path.join(reg_dir, "catalogue.json"))
+    config.add_catalogue(
+        os.path.join(reg_dir, "catalogue.json"), display_name="test",
+    )
     registry_entry = config.catalogues[0]
 
     publisher = Publisher(config)
@@ -181,7 +183,7 @@ class TestFindPublishedRegistries:
             results = publisher.find_published_catalogues(pkg_id)
 
             assert len(results) == 1
-            assert results[0].name == reg_entry.name
+            assert results[0].display_name == reg_entry.display_name
 
     def test_returns_empty_when_not_published(self):
         with tempfile.TemporaryDirectory() as tmpdir:

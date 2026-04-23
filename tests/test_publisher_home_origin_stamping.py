@@ -240,7 +240,7 @@ class TestEmbeddedPublishStamping:
             reg_dir = os.path.join(tmpdir, "catalogue")
             os.makedirs(reg_dir, exist_ok=True)
             reg_path = os.path.join(reg_dir, "catalogue.json")
-            config.add_catalogue("studio-main", reg_path)
+            config.add_catalogue(reg_path, display_name="studio-main")
             publisher = Publisher(config)
             pkg_data = install_mgr.get_installed_packages()[pkg_id]
             publisher.publish(pkg_data, config.catalogues[0])
@@ -267,7 +267,7 @@ class TestEmbeddedPublishStamping:
 
             reg_dir = os.path.join(tmpdir, "catalogue")
             os.makedirs(reg_dir, exist_ok=True)
-            config.add_catalogue("studio-main", os.path.join(reg_dir, "catalogue.json"))
+            config.add_catalogue(os.path.join(reg_dir, "catalogue.json"), display_name="studio-main")
             publisher = Publisher(config)
             pkg_data = install_mgr.get_installed_packages()[pkg_id]
             publisher.publish(pkg_data, config.catalogues[0])
@@ -289,7 +289,7 @@ class TestEmbeddedPublishStamping:
 
             reg_dir = os.path.join(tmpdir, "catalogue")
             os.makedirs(reg_dir, exist_ok=True)
-            config.add_catalogue("mirror", os.path.join(reg_dir, "catalogue.json"))
+            config.add_catalogue(os.path.join(reg_dir, "catalogue.json"), display_name="mirror")
             publisher = Publisher(config)
 
             pkg_data = dict(install_mgr.get_installed_packages()[pkg_id])

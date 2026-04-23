@@ -25,25 +25,25 @@ _UUID_B = "bbbbbbbb-2222-4222-8222-bbbbbbbbbbbb"
 class TestFindDuplicateEntry:
     def test_no_rid_returns_none(self):
         c = Config()
-        c.add_catalogue("a", "/p/a.json", catalogue_id=_UUID_A)
+        c.add_catalogue("/p/a.json", catalogue_id=_UUID_A, display_name="a")
         assert find_duplicate_entry(c.catalogues, "", "/p/new.json") is None
 
     def test_no_match_returns_none(self):
         c = Config()
-        c.add_catalogue("a", "/p/a.json", catalogue_id=_UUID_A)
+        c.add_catalogue("/p/a.json", catalogue_id=_UUID_A, display_name="a")
         assert find_duplicate_entry(c.catalogues, _UUID_B, "/p/new.json") is None
 
     def test_match_returns_entry(self):
         c = Config()
-        c.add_catalogue("a", "/p/a.json", catalogue_id=_UUID_A)
+        c.add_catalogue("/p/a.json", catalogue_id=_UUID_A, display_name="a")
         match = find_duplicate_entry(c.catalogues, _UUID_A, "/p/new.json")
         assert match is not None
-        assert match.name == "a"
+        assert match.display_name == "a"
 
     def test_same_path_not_a_duplicate(self):
         """Re-selecting a registry already in the list is not a duplicate."""
         c = Config()
-        c.add_catalogue("a", "/p/a.json", catalogue_id=_UUID_A)
+        c.add_catalogue("/p/a.json", catalogue_id=_UUID_A, display_name="a")
         same = os.path.normpath("/p/a.json")
         assert find_duplicate_entry(c.catalogues, _UUID_A, same) is None
 
@@ -57,10 +57,7 @@ class TestFindDuplicateEntry:
         paired remote so we can skip it.
         """
         c = Config()
-        c.add_catalogue(
-            "guru2", "https://example.com/guru2/registry.json",
-            catalogue_id=_UUID_A,
-        )
+        c.add_catalogue("https://example.com/guru2/registry.json", catalogue_id=_UUID_A, display_name="guru2")
         remote_entry = c.catalogues[0]
         match = find_duplicate_entry(
             c.catalogues, _UUID_A,
@@ -74,14 +71,8 @@ class TestFindDuplicateEntry:
     def test_ignore_does_not_skip_other_entries(self):
         """If a SECOND entry shares the UUID, it's still a real duplicate."""
         c = Config()
-        c.add_catalogue(
-            "guru2-remote", "https://example.com/guru2/registry.json",
-            catalogue_id=_UUID_A,
-        )
-        c.add_catalogue(
-            "guru2-local", "F:/workspace/carton-guru2/registry.json",
-            catalogue_id=_UUID_A,
-        )
+        c.add_catalogue("https://example.com/guru2/registry.json", catalogue_id=_UUID_A, display_name="guru2-remote")
+        c.add_catalogue("F:/workspace/carton-guru2/registry.json", catalogue_id=_UUID_A, display_name="guru2-local")
         remote_entry = c.catalogues[0]
         local_entry = c.catalogues[1]
         match = find_duplicate_entry(

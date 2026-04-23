@@ -330,18 +330,18 @@ class EditDialog(QtWidgets.QDialog):
         if len(regs) == 1:
             target = regs[0]
         else:
-            names = [r.name for r in regs]
+            names = [r.label for r in regs]
             chosen, ok = QtWidgets.QInputDialog.getItem(
                 self, t("unpublish"), t("unpublish_select_catalogue"),
                 names, 0, False,
             )
             if not ok:
                 return
-            target = next(r for r in regs if r.name == chosen)
+            target = next(r for r in regs if r.label == chosen)
 
         reply = QtWidgets.QMessageBox.question(
             self, t("unpublish"),
-            t("confirm_unpublish", display, target.name),
+            t("confirm_unpublish", display, target.label),
             QtWidgets.QMessageBox.Yes | QtWidgets.QMessageBox.No,
         )
         if reply == QtWidgets.QMessageBox.Yes:

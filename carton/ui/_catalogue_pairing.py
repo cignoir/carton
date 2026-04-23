@@ -38,22 +38,41 @@ def read_local_catalogue_id(path):
     return cid, data
 
 
-def probe_remote_catalogue_id(url, timeout=15):
-    """One-off HTTP GET to a URL; return the catalogue_id it exposes.
+def probe_remote_catalogue_meta(url, timeout=15):
+    """One-off HTTP GET to a URL; return ``{catalogue_id, display_name}``.
 
-    Any network / parse error yields ``""``. No retry, no caching — callers
-    that need persistence should store the result on a CatalogueEntry.
-    Falls back to the legacy ``registry_id`` key for producers that
-    haven't migrated yet.
+    Any network / parse error yields an all-empty dict. Callers pick the
+    field they need and ignore the rest. Centralised so a single round
+    trip populates both the UUID cache and the display_name cache on
+    first registration — we want subscribers to adopt the author's
+    intended name immediately rather than prompting for an alias.
     """
+    result = {"catalogue_id": "", "display_name": ""}
     try:
         req = Request(url)
         req.add_header("Accept", "application/json")
         resp = urlopen(req, timeout=timeout)
         data = json.loads(resp.read().decode("utf-8"))
     except (URLError, OSError, ValueError):
-        return ""
-    return read_uuid(data, "catalogue_id") or read_uuid(data, "registry_id")
+        return result
+    cid = read_uuid(data, "catalogue_id") or read_uuid(data, "registry_id")
+    if cid:
+        result["catalogue_id"] = cid
+    name = (data.get("display_name") or "").strip()
+    if name:
+        result["display_name"] = name
+    return result
+
+
+def probe_remote_catalogue_id(url, timeout=15):
+    """Return just the ``catalogue_id`` from the remote catalogue.
+
+    Thin wrapper around :func:`probe_remote_catalogue_meta` — kept as a
+    named alias so older call sites that only care about the UUID read
+    cleanly. New code that also wants the display_name should call
+    ``probe_remote_catalogue_meta`` directly to avoid a second round trip.
+    """
+    return probe_remote_catalogue_meta(url, timeout=timeout)["catalogue_id"]
 
 
 def probe_github_package_json(base_url, timeout=10):
@@ -153,7 +172,7 @@ def resolve_duplicate_catalogue(parent, existing_entry):
     box = QtWidgets.QMessageBox(parent)
     box.setIcon(QtWidgets.QMessageBox.Question)
     box.setWindowTitle(t("catalogue_duplicate_title"))
-    box.setText(t("catalogue_duplicate_msg", existing_entry.name, existing_entry.path))
+    box.setText(t("catalogue_duplicate_msg", existing_entry.label, existing_entry.path))
     use_btn = box.addButton(
         t("catalogue_use_existing"), QtWidgets.QMessageBox.AcceptRole,
     )

@@ -89,7 +89,7 @@ class TestPublishPersistence:
 
             reg_dir = os.path.join(tmpdir, "catalogue")
             os.makedirs(reg_dir, exist_ok=True)
-            config.add_catalogue("test", os.path.join(reg_dir, "catalogue.json"))
+            config.add_catalogue(os.path.join(reg_dir, "catalogue.json"), display_name="test")
             publisher = Publisher(config)
             pkg_data = install_mgr.get_installed_packages()[pkg_id]
             result = publisher.publish(pkg_data, config.catalogues[0])
@@ -120,7 +120,7 @@ class TestPublishPersistence:
 
             reg_dir = os.path.join(tmpdir, "catalogue")
             os.makedirs(reg_dir, exist_ok=True)
-            config.add_catalogue("test", os.path.join(reg_dir, "catalogue.json"))
+            config.add_catalogue(os.path.join(reg_dir, "catalogue.json"), display_name="test")
             publisher = Publisher(config)
             pkg_data = install_mgr.get_installed_packages()[pkg_id]
 
@@ -175,7 +175,7 @@ class TestCatalogueIdStamping:
             reg_dir = os.path.join(tmpdir, "catalogue")
             os.makedirs(reg_dir, exist_ok=True)
             reg_path = os.path.join(reg_dir, "catalogue.json")
-            config.add_catalogue("test", reg_path)
+            config.add_catalogue(reg_path, display_name="test")
             publisher = Publisher(config)
             pkg_data = install_mgr.get_installed_packages()[pkg_id]
             publisher.publish(pkg_data, config.catalogues[0])
@@ -200,7 +200,7 @@ class TestCatalogueIdStamping:
             reg_dir = os.path.join(tmpdir, "catalogue")
             os.makedirs(reg_dir, exist_ok=True)
             reg_path = os.path.join(reg_dir, "catalogue.json")
-            config.add_catalogue("test", reg_path)
+            config.add_catalogue(reg_path, display_name="test")
             publisher = Publisher(config)
             pkg_data = install_mgr.get_installed_packages()[pkg_id]
 
@@ -228,7 +228,7 @@ class TestCatalogueIdStamping:
             )
             reg_dir = os.path.join(tmpdir, "catalogue")
             os.makedirs(reg_dir, exist_ok=True)
-            config.add_catalogue("test", os.path.join(reg_dir, "catalogue.json"))
+            config.add_catalogue(os.path.join(reg_dir, "catalogue.json"), display_name="test")
             publisher = Publisher(config)
             pkg_data = install_mgr.get_installed_packages()[pkg_id]
             publisher.publish(pkg_data, config.catalogues[0])
@@ -260,7 +260,7 @@ class TestSidecarPersistenceForSingleFile:
 
             reg_dir = os.path.join(tmpdir, "catalogue")
             os.makedirs(reg_dir, exist_ok=True)
-            config.add_catalogue("test", os.path.join(reg_dir, "catalogue.json"))
+            config.add_catalogue(os.path.join(reg_dir, "catalogue.json"), display_name="test")
             publisher = Publisher(config)
             pkg_data = install_mgr.get_installed_packages()[pkg_id]
             publisher.publish(pkg_data, config.catalogues[0])

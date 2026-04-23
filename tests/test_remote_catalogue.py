@@ -29,29 +29,29 @@ class TestIsUrl:
 
 class TestCatalogueEntryRemote:
     def test_is_remote_url(self):
-        e = CatalogueEntry("test", "https://example.com/reg/registry.json")
+        e = CatalogueEntry("https://example.com/reg/registry.json", display_name="test")
         assert e.is_remote is True
 
     def test_is_remote_local(self):
-        e = CatalogueEntry("test", "/some/path/registry.json")
+        e = CatalogueEntry("/some/path/registry.json", display_name="test")
         assert e.is_remote is False
 
     def test_url_not_normpathed(self):
         """URLs should not be mangled by os.path.normpath."""
         url = "https://raw.githubusercontent.com/org/repo/main/registry.json"
-        e = CatalogueEntry("test", url)
+        e = CatalogueEntry(url, display_name="test")
         assert e.path == url
 
     def test_base_dir_url(self):
-        e = CatalogueEntry("test", "https://example.com/registry/registry.json")
+        e = CatalogueEntry("https://example.com/registry/registry.json", display_name="test")
         assert e.base_dir == "https://example.com/registry/"
 
     def test_base_dir_url_nested(self):
-        e = CatalogueEntry("test", "https://raw.githubusercontent.com/org/repo/main/registry.json")
+        e = CatalogueEntry("https://raw.githubusercontent.com/org/repo/main/registry.json", display_name="test")
         assert e.base_dir == "https://raw.githubusercontent.com/org/repo/main/"
 
     def test_base_dir_local(self):
-        e = CatalogueEntry("test", "/some/dir/registry.json")
+        e = CatalogueEntry("/some/dir/registry.json", display_name="test")
         assert e.base_dir == os.path.normpath("/some/dir")
 
 
@@ -69,7 +69,7 @@ class TestPublisherRemoteGuard:
         monkeypatch.setattr(
             Publisher, "_probe_remote_catalogue_id", staticmethod(lambda e: ""),
         )
-        remote_entry = CatalogueEntry("remote", "https://example.com/registry.json")
+        remote_entry = CatalogueEntry("https://example.com/registry.json", display_name="remote")
         with pytest.raises(RemoteMirrorMissingError) as excinfo:
             publisher.publish({}, remote_entry)
         assert excinfo.value.reason == "no_remote_id"
@@ -81,7 +81,7 @@ class TestPublisherRemoteGuard:
         monkeypatch.setattr(
             Publisher, "_probe_remote_catalogue_id", staticmethod(lambda e: rid),
         )
-        remote_entry = CatalogueEntry("remote", "https://example.com/registry.json")
+        remote_entry = CatalogueEntry("https://example.com/registry.json", display_name="remote")
         with pytest.raises(RemoteMirrorMissingError) as excinfo:
             publisher.publish({}, remote_entry)
         assert excinfo.value.reason == "no_local_mirror"
@@ -92,7 +92,7 @@ class TestPublisherRemoteGuard:
         monkeypatch.setattr(
             Publisher, "_probe_remote_catalogue_id", staticmethod(lambda e: ""),
         )
-        remote_entry = CatalogueEntry("remote", "https://example.com/registry.json")
+        remote_entry = CatalogueEntry("https://example.com/registry.json", display_name="remote")
         with pytest.raises(RemoteMirrorMissingError):
             publisher.unpublish("fake-id", remote_entry)
 
@@ -100,10 +100,10 @@ class TestPublisherRemoteGuard:
         """find_published_catalogues should skip remote catalogues."""
         with tempfile.TemporaryDirectory() as tmpdir:
             config = Config(install_dir=tmpdir)
-            config.add_catalogue("remote", "https://example.com/registry.json")
+            config.add_catalogue("https://example.com/registry.json", display_name="remote")
 
             # Also add a local catalogue that doesn't exist
-            config.add_catalogue("local", os.path.join(tmpdir, "nonexistent.json"))
+            config.add_catalogue(os.path.join(tmpdir, "nonexistent.json"), display_name="local")
 
             publisher = Publisher(config)
             results = publisher.find_published_catalogues("some-uuid")
@@ -120,11 +120,11 @@ class TestConfigRemoteCatalogue:
             url = "https://raw.githubusercontent.com/org/repo/main/registry.json"
 
             c = Config()
-            c.add_catalogue("github", url)
+            c.add_catalogue(url, display_name="github")
             c.save(path)
 
             loaded = Config.load(path)
             assert len(loaded.catalogues) == 1
-            assert loaded.catalogues[0].name == "github"
+            assert loaded.catalogues[0].display_name == "github"
             assert loaded.catalogues[0].path == url
             assert loaded.catalogues[0].is_remote is True

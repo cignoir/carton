@@ -47,7 +47,7 @@ def _unpublish(args):
     from carton.core.config import Config
     from carton.core.publisher import Publisher
 
-    cat_entry = CatalogueEntry(name="cli", path=args.catalogue)
+    cat_entry = CatalogueEntry(path=args.catalogue, display_name="cli")
     config = Config(catalogues=[cat_entry])
     publisher = Publisher(config)
 

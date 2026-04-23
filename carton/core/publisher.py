@@ -261,7 +261,7 @@ class Publisher:
 
         result = {"id": pkg_id, "namespace": ns, "name": name, "version": version}
         if requested_entry is not target_entry:
-            result["published_via"] = requested_entry.name
+            result["published_via"] = requested_entry.label
         if warnings:
             result["warnings"] = warnings
         return result

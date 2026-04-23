@@ -108,8 +108,7 @@ class TestInstalledDictRoundtrip:
 
 class TestCatalogueEntryHomeOriginMeta:
     def test_local_entry_emits_embedded_variant(self):
-        entry = CatalogueEntry(
-            name="studio-main",
+        entry = CatalogueEntry(display_name="studio-main",
             path="/studio/registry/catalogue.json",
             catalogue_id=_UUID,
         )
@@ -120,8 +119,7 @@ class TestCatalogueEntryHomeOriginMeta:
         assert meta["hint"] == entry.path
 
     def test_remote_url_included_as_hint(self):
-        entry = CatalogueEntry(
-            name="public",
+        entry = CatalogueEntry(display_name="public",
             path="https://example.com/registry/catalogue.json",
             catalogue_id=_UUID,
         )
@@ -129,7 +127,7 @@ class TestCatalogueEntryHomeOriginMeta:
         assert meta["hint"] == "https://example.com/registry/catalogue.json"
 
     def test_missing_catalogue_id_omits_it(self):
-        entry = CatalogueEntry(name="studio-main", path=".")
+        entry = CatalogueEntry(display_name="studio-main", path=".")
         meta = entry.to_home_origin_meta()
         assert "catalogue_id" not in meta
         assert meta["catalogue_name"] == "studio-main"
@@ -137,6 +135,6 @@ class TestCatalogueEntryHomeOriginMeta:
 
     def test_empty_path_omits_hint(self):
         """``.`` (the normalised form of an empty path) means no hint."""
-        entry = CatalogueEntry(name="studio-main", path="", catalogue_id=_UUID)
+        entry = CatalogueEntry(display_name="studio-main", path="", catalogue_id=_UUID)
         meta = entry.to_home_origin_meta()
         assert "hint" not in meta

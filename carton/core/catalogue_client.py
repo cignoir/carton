@@ -47,6 +47,16 @@ def _normalise_catalogue_url(url):
     return url
 
 
+def _entry_label(entry):
+    """Best-effort user-facing label for diagnostic log lines.
+
+    Falls back to the path when ``display_name`` isn't populated yet —
+    first fetch happens before the name cache can fill, and diagnostic
+    messages emitted during that fetch need to identify the entry.
+    """
+    return getattr(entry, "display_name", "") or entry.path
+
+
 class CatalogueClient(object):
     """Load multiple local + remote catalogues and merge their packages.
 
@@ -138,9 +148,9 @@ class CatalogueClient(object):
             return
 
         virtual = CatalogueEntry(
-            name=PERSONAL_DISPLAY_NAME,
             path="",
             catalogue_id=cat.catalogue_id,
+            display_name=PERSONAL_DISPLAY_NAME,
         )
         self._merge_catalogue(virtual, cat.to_dict(), base_dir="")
 
@@ -154,7 +164,7 @@ class CatalogueClient(object):
         path = self._resolve_local_catalogue_path(entry.path)
         if not path or not os.path.exists(path):
             print("[Carton.catalogue] Not found: {} ({})".format(
-                entry.name, entry.path))
+                _entry_label(entry), entry.path))
             return
 
         # Auto-migrate legacy registry.json to catalogue.json on disk.
@@ -167,7 +177,8 @@ class CatalogueClient(object):
             with open(path, "r", encoding="utf-8") as f:
                 data = json.load(f)
         except (OSError, ValueError) as e:
-            print("[Carton.catalogue] Read failed: {} ({})".format(entry.name, e))
+            print("[Carton.catalogue] Read failed: {} ({})".format(
+                _entry_label(entry), e))
             return
 
         # If this catalogue still parses as a v4.0 registry, migrate
@@ -175,6 +186,7 @@ class CatalogueClient(object):
         # local files).
         data, _ = migrate_registry_to_catalogue(data)
         self._cache_catalogue_id(entry, data)
+        self._cache_display_name(entry, data)
         self._merge_catalogue(entry, data, base_dir=os.path.dirname(path))
 
     def _load_remote(self, entry):
@@ -198,11 +210,11 @@ class CatalogueClient(object):
                     data = json.loads(resp.read().decode("utf-8"))
                 except (URLError, OSError, ValueError) as e2:
                     print("[Carton.catalogue] Remote failed: {} ({})".format(
-                        entry.name, e2))
+                        _entry_label(entry), e2))
                     return
             else:
                 print("[Carton.catalogue] Remote failed: {} ({})".format(
-                    entry.name, e))
+                    _entry_label(entry), e))
                 return
 
         # Migrate in memory only (no write-back to remote). stamp_id=False
@@ -212,9 +224,10 @@ class CatalogueClient(object):
             print(
                 "[Carton.catalogue] Remote {!r} has no catalogue_id — "
                 "ask the maintainer to stamp it so mirror matching can "
-                "work.".format(entry.name)
+                "work.".format(_entry_label(entry))
             )
         self._cache_catalogue_id(entry, data)
+        self._cache_display_name(entry, data)
         base_dir = url.rsplit("/", 1)[0] + "/"
         self._merge_catalogue(entry, data, base_dir=base_dir)
         # Remote catalogues get their icons.zip pulled into the local
@@ -283,11 +296,26 @@ class CatalogueClient(object):
         if cid:
             entry.catalogue_id = cid
 
+    @staticmethod
+    def _cache_display_name(entry, data):
+        """Mirror the catalogue.json ``display_name`` onto the entry.
+
+        The catalogue author owns the name. We refresh the entry's cached
+        value on every read so a rename propagates on the next fetch. An
+        empty / missing value in the catalogue leaves whatever stale
+        value the entry already has (e.g. from the pre-v0.5 subscriber
+        alias migration) so we never blank out a usable label just because
+        the author forgot to set one.
+        """
+        name = (data.get("display_name") or "").strip()
+        if name:
+            entry.display_name = name
+
     # ---- merge logic ---------------------------------------------------
 
     def _merge_catalogue(self, entry, data, base_dir):
         is_remote = entry.is_remote
-        catalogue_name = entry.name
+        catalogue_name = entry.display_name
         catalogue_id = getattr(entry, "catalogue_id", "") or ""
         for pkg_id, pkg_data in (data.get("packages") or {}).items():
             if pkg_id in self._packages:
@@ -359,7 +387,7 @@ class CatalogueClient(object):
         else:
             item["versions"] = {}
 
-        item["_catalogue_name"] = entry.name
+        item["_catalogue_name"] = entry.display_name
         item["_catalogue_id"] = getattr(entry, "catalogue_id", "")
         item["_catalogue_base_dir"] = base_dir
         item["_catalogue_remote"] = is_remote

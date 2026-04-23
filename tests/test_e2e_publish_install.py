@@ -74,7 +74,7 @@ class TestPublishInstallRoundtrip:
 
         src_pkg = _make_nested_source_package(source_root)
         catalogue_path = os.path.join(catalogue_root, "catalogue.json")
-        catalogue_entry = CatalogueEntry("e2e-local", catalogue_path)
+        catalogue_entry = CatalogueEntry(catalogue_path, display_name="e2e-local")
 
         # --- Publisher side ---
         pub_config = Config(
@@ -298,11 +298,12 @@ class TestPublishViaRemoteMirror:
         os.makedirs(os.path.join(mirror_root, "packages"))
 
         mirror_entry = CatalogueEntry(
-            "carton-guru2", mirror_path, catalogue_id=shared_uuid,
+            mirror_path, catalogue_id=shared_uuid,
+            display_name="carton-guru2",
         )
         remote_entry = CatalogueEntry(
-            "ぐるぐる",
             "https://example.com/guru2/catalogue.json",
+            display_name="ぐるぐる",
         )
         # The remote exposes the same UUID via the probe path.
         from carton.core.publisher import Publisher as PubCls

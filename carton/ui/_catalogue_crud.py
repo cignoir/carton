@@ -6,6 +6,13 @@ fallback inside the publish flow — and duplicating the folder /
 file-picker dance wasn't worth the coupling cost. These functions
 mutate ``window._config`` directly and return the newly-registered
 ``CatalogueEntry`` (or ``None`` when cancelled).
+
+v0.5 naming policy: the catalogue author owns ``display_name`` (it
+lives in catalogue.json). Subscribers never get prompted for an alias
+— we adopt the author's label on first read. When no name is present
+(fresh scaffold, or a legacy catalogue that never got one), we fall
+back to the folder basename and stamp it into catalogue.json so the
+catalogue starts carrying its own identity from then on.
 """
 
 import json
@@ -30,14 +37,6 @@ def create_new_catalogue(window, paired_remote=None):
     if not folder:
         return None
 
-    name, ok = QtWidgets.QInputDialog.getText(
-        window, "Catalogue Name",
-        t("setup_catalogue_name"),
-        text=os.path.basename(folder),
-    )
-    if not ok or not name:
-        return None
-
     from carton.core.migrations import (
         CATALOGUE_FILENAME,
         CATALOGUE_SCHEMA_VERSION,
@@ -49,6 +48,11 @@ def create_new_catalogue(window, paired_remote=None):
 
     cat_path = os.path.join(folder, CATALOGUE_FILENAME)
     legacy_path = os.path.join(folder, LEGACY_REGISTRY_FILENAME)
+    # Folder basename is the fallback display_name — an honest default
+    # that the user can still override later in Settings (by editing
+    # catalogue.json directly) or by letting a downstream reader keep
+    # the fetched SoT.
+    default_name = os.path.basename(os.path.normpath(folder))
 
     # Decide the id to stamp — either inherit the remote's (pairing
     # intent) or mint a fresh one.
@@ -72,6 +76,7 @@ def create_new_catalogue(window, paired_remote=None):
         if migrated:
             cat_path = migrated
 
+    display_name = default_name
     if not os.path.exists(cat_path):
         # Fresh scaffold — v5.0 directly, skip the v3.1 detour that
         # only existed to be auto-migrated on next launch.
@@ -80,7 +85,7 @@ def create_new_catalogue(window, paired_remote=None):
             json.dump({
                 "schema_version": CATALOGUE_SCHEMA_VERSION,
                 "catalogue_id": rid,
-                "display_name": name,
+                "display_name": default_name,
                 "packages": {},
             }, f, indent=2, ensure_ascii=False)
         os.makedirs(os.path.join(folder, "packages"), exist_ok=True)
@@ -115,10 +120,20 @@ def create_new_catalogue(window, paired_remote=None):
         # level, not inside catalogue.json itself (v5.0 schema
         # only defines catalogue_id).
         data.pop("registry_id", None)
+        # Stamp the fallback display_name only when the catalogue
+        # doesn't already carry one — don't overwrite the author's
+        # existing choice.
+        existing_display = (data.get("display_name") or "").strip()
+        if existing_display:
+            display_name = existing_display
+        else:
+            data["display_name"] = default_name
         with open(cat_path, "w", encoding="utf-8") as f:
             json.dump(data, f, indent=2, ensure_ascii=False)
 
-    window._config.add_catalogue(name, cat_path, catalogue_id=rid)
+    window._config.add_catalogue(
+        cat_path, catalogue_id=rid, display_name=display_name,
+    )
     window._config.save()
     return window._config.catalogues[-1]
 
@@ -161,16 +176,28 @@ def add_existing_catalogue(window, paired_remote=None):
                 window._config.save()
             return existing
 
-    base = os.path.basename(os.path.dirname(path))
-    name, ok = QtWidgets.QInputDialog.getText(
-        window, "Catalogue Name",
-        t("setup_catalogue_name"),
-        text=base,
-    )
-    if not ok or not name:
-        return None
+    # Adopt the catalogue's own display_name; fall back to the parent
+    # folder when the file is missing one, and stamp the fallback back
+    # into catalogue.json so subsequent subscribers pick up the same
+    # label rather than each inventing their own.
+    display_name = (data.get("display_name") or "").strip() if data else ""
+    if not display_name:
+        display_name = os.path.basename(os.path.dirname(path))
+        if data is not None and display_name:
+            data["display_name"] = display_name
+            try:
+                with open(path, "w", encoding="utf-8") as f:
+                    json.dump(data, f, indent=2, ensure_ascii=False)
+            except OSError:
+                # Non-fatal: the entry still carries the name in the
+                # config cache, but future subscribers won't benefit
+                # from the stamp. Fail quietly rather than aborting
+                # registration the user explicitly asked for.
+                pass
 
-    window._config.add_catalogue(name, path, catalogue_id=rid)
+    window._config.add_catalogue(
+        path, catalogue_id=rid, display_name=display_name,
+    )
     if paired_remote is not None and rid and not paired_remote.catalogue_id:
         paired_remote.catalogue_id = rid
     window._config.save()

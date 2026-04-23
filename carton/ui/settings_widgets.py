@@ -17,7 +17,7 @@ in-memory profile is mutated freely until the user clicks Save.
 import json
 import os
 
-from carton.compat_urllib import Request, urlopen
+from carton.compat_urllib import Request, urlopen, urlparse
 from carton.ui.compat import QtWidgets, Qt
 from carton.ui import theme
 from carton.ui.error_messages import show_error
@@ -25,6 +25,38 @@ from carton.ui.i18n import t
 
 
 # ---------- input dialog helper -------------------------------------------
+
+
+def _default_name_from_url(url):
+    """Derive a best-effort catalogue name from a URL path.
+
+    Used only when the remote catalogue.json doesn't expose a
+    ``display_name`` — we still want *some* label rather than showing
+    the raw URL in the sidebar. Handles the common GitHub raw URL
+    shape (``/owner/repo/branch/...``) by picking the repo segment,
+    and otherwise falls back to the last meaningful path segment.
+    """
+    try:
+        parsed = urlparse(url)
+    except ValueError:
+        return "remote"
+    segments = [p for p in (parsed.path or "").split("/") if p]
+    # Drop the trailing filename (catalogue.json / registry.json).
+    if segments and segments[-1].lower().endswith(".json"):
+        segments = segments[:-1]
+    host = (parsed.netloc or "").lower()
+    if host == "raw.githubusercontent.com" and len(segments) >= 2:
+        # /owner/repo/branch/... — the repo is the recognisable name.
+        return segments[1]
+    # Skip trailing plumbing-ish segments (git branches, common folder
+    # names) so studio URLs like ``.../my-catalogue/main/registry``
+    # collapse to ``my-catalogue``.
+    plumbing = {"main", "master", "raw", "registry", "registries"}
+    while segments and segments[-1].lower() in plumbing:
+        segments.pop()
+    if segments:
+        return segments[-1]
+    return parsed.netloc or "remote"
 
 
 def wide_input(parent, title, label, text="", width=480):
@@ -575,12 +607,14 @@ class RegistriesSection(QtWidgets.QWidget):
         cat_path = os.path.join(folder, CATALOGUE_FILENAME)
         legacy_path = os.path.join(folder, LEGACY_REGISTRY_FILENAME)
 
+        default_name = os.path.basename(os.path.normpath(folder))
         if os.path.exists(cat_path):
-            self._finish_add(cat_path, os.path.basename(folder), catalogue_id="")
+            # Existing catalogue already owns its name; just register.
+            self._finish_add(cat_path, display_name=default_name, catalogue_id="")
             return
         if os.path.exists(legacy_path):
             # CatalogueClient auto-migrates on first read; just register.
-            self._finish_add(legacy_path, os.path.basename(folder), catalogue_id="")
+            self._finish_add(legacy_path, display_name=default_name, catalogue_id="")
             return
 
         try:
@@ -590,14 +624,14 @@ class RegistriesSection(QtWidgets.QWidget):
                 json.dump({
                     "schema_version": CATALOGUE_SCHEMA_VERSION,
                     "catalogue_id": rid,
-                    "display_name": os.path.basename(folder),
+                    "display_name": default_name,
                     "packages": {},
                 }, f, indent=2, ensure_ascii=False)
             os.makedirs(os.path.join(folder, "packages"), exist_ok=True)
         except Exception as e:
             show_error(self, e)
             return
-        self._finish_add(cat_path, os.path.basename(folder), catalogue_id=rid)
+        self._finish_add(cat_path, display_name=default_name, catalogue_id=rid)
 
     def _add_local(self):
         from carton.ui._catalogue_pairing import (
@@ -614,8 +648,12 @@ class RegistriesSection(QtWidgets.QWidget):
         rid, data = read_local_catalogue_id(path)
         if not rid and data is not None:
             rid = stamp_local_catalogue_with_prompt(self, path, data)
-        default_name = os.path.basename(os.path.dirname(path))
-        self._finish_add(path, default_name, catalogue_id=rid)
+        # Prefer the catalogue's own display_name (SoT); fall back to
+        # the parent folder basename when the file is missing one.
+        name = (data.get("display_name") or "").strip() if data else ""
+        if not name:
+            name = os.path.basename(os.path.dirname(path))
+        self._finish_add(path, display_name=name, catalogue_id=rid)
 
     def _add_github(self):
         repo, ok = wide_input(self, "GitHub", t("settings_github_placeholder"))
@@ -671,9 +709,12 @@ class RegistriesSection(QtWidgets.QWidget):
                 self, "Carton", t("settings_github_no_catalogue", repo),
             )
             return
-        from carton.ui._catalogue_pairing import probe_remote_catalogue_id
-        rid = probe_remote_catalogue_id(resolved)
-        self._finish_add(resolved, repo.split("/")[1], catalogue_id=rid)
+        from carton.ui._catalogue_pairing import probe_remote_catalogue_meta
+        meta = probe_remote_catalogue_meta(resolved)
+        # Author-owned display_name wins; fall back to the GitHub repo
+        # name so the entry still renders with a meaningful label.
+        name = meta["display_name"] or repo.split("/")[1]
+        self._finish_add(resolved, display_name=name, catalogue_id=meta["catalogue_id"])
 
     def _try_register_single_package(self, base, repo):
         """Probe ``{base}/package.json`` and register into personal catalogue.
@@ -792,7 +833,7 @@ class RegistriesSection(QtWidgets.QWidget):
         )
 
     def _add_remote(self):
-        from carton.ui._catalogue_pairing import probe_remote_catalogue_id
+        from carton.ui._catalogue_pairing import probe_remote_catalogue_meta
 
         url, ok = wide_input(
             self, t("settings_add_url"), t("settings_url_placeholder"), width=560,
@@ -803,24 +844,24 @@ class RegistriesSection(QtWidgets.QWidget):
         if not url.startswith(("http://", "https://")):
             QtWidgets.QMessageBox.warning(self, "Carton", t("settings_invalid_url"))
             return
-        parts = url.rstrip("/").rsplit("/", 2)
-        default_name = parts[-2] if len(parts) >= 2 else "remote"
-        if default_name in ("raw", "main", "master"):
-            default_name = parts[-3] if len(parts) >= 3 else "remote"
-        rid = probe_remote_catalogue_id(url)
-        self._finish_add(url, default_name, catalogue_id=rid)
+        meta = probe_remote_catalogue_meta(url)
+        # Prefer author-owned display_name over any URL-derived label.
+        name = meta["display_name"] or _default_name_from_url(url)
+        self._finish_add(url, display_name=name, catalogue_id=meta["catalogue_id"])
 
-    def _finish_add(self, path, default_name="", catalogue_id=""):
+    def _finish_add(self, path, display_name="", catalogue_id=""):
         from carton.ui._catalogue_pairing import (
             DuplicateCatalogueChoice,
             find_duplicate_entry,
             resolve_duplicate_catalogue,
         )
 
-        # UUID-based duplicate detection: catches "same registry under a
-        # different alias" before asking the user for a name. Falls back
-        # silently when neither side has a catalogue_id — the legacy
-        # name-based check below still guards.
+        # UUID-based duplicate detection. The ``ADD_ALIAS`` branch
+        # survives the naming refactor in spirit: the user can still
+        # register the same catalogue under a second path/URL, but we
+        # no longer ask for a separate label since display_name is
+        # author-owned and the duplicate will share the same label
+        # anyway.
         existing = find_duplicate_entry(
             self._target.catalogues, catalogue_id, path,
         )
@@ -830,24 +871,22 @@ class RegistriesSection(QtWidgets.QWidget):
                 return
             if choice == DuplicateCatalogueChoice.USE_EXISTING:
                 return
-            # ADD_ALIAS → fall through to the name prompt.
+            # ADD_ALIAS → fall through and register the second entry.
 
-        name, ok = wide_input(
-            self, "Catalogue Name", t("settings_catalogue_name"), text=default_name,
+        self._target.add_catalogue(
+            path, catalogue_id=catalogue_id, display_name=display_name,
         )
-        if not ok or not name:
-            return
-        for r in self._target.catalogues:
-            if r.name == name:
-                QtWidgets.QMessageBox.warning(
-                    self, "Carton", t("settings_already_exists", name),
-                )
-                return
-        self._target.add_catalogue(name, path, catalogue_id=catalogue_id)
         self._persist()
         self._list.addItem(str(self._target.catalogues[-1]))
 
     def _edit(self, item=None):
+        """Edit the path of a catalogue entry.
+
+        Name editing was removed in v0.5: the catalogue author owns
+        ``display_name`` via catalogue.json, so subscribers can't rename
+        their copy. Path edits remain because they are a purely local
+        bookkeeping concern (the subscribed file moved).
+        """
         row = self._list.currentRow()
         if row < 0:
             return
@@ -860,12 +899,6 @@ class RegistriesSection(QtWidgets.QWidget):
         dlg_layout = QtWidgets.QVBoxLayout(dialog)
         dlg_layout.setContentsMargins(20, 20, 20, 20)
         dlg_layout.setSpacing(12)
-
-        name_label = QtWidgets.QLabel(t("settings_catalogue_name"))
-        name_label.setStyleSheet(theme.LABEL_DIM)
-        dlg_layout.addWidget(name_label)
-        name_input = QtWidgets.QLineEdit(entry.name)
-        dlg_layout.addWidget(name_input)
 
         path_label = QtWidgets.QLabel(t("label_path"))
         path_label.setStyleSheet(theme.LABEL_DIM)
@@ -887,12 +920,15 @@ class RegistriesSection(QtWidgets.QWidget):
         dlg_layout.addLayout(btn_layout)
 
         if dialog.exec_() == QtWidgets.QDialog.Accepted:
-            new_name = name_input.text().strip()
             new_path = path_input.text().strip()
-            if not new_name or not new_path:
+            if not new_path:
                 return
             from carton.core.config import CatalogueEntry
-            self._target.catalogues[row] = CatalogueEntry(new_name, new_path)
+            self._target.catalogues[row] = CatalogueEntry(
+                new_path,
+                catalogue_id=entry.catalogue_id,
+                display_name=entry.display_name,
+            )
             self._persist()
             self._refresh()
             self._list.setCurrentRow(row)
@@ -904,11 +940,11 @@ class RegistriesSection(QtWidgets.QWidget):
         entry = self._target.catalogues[row]
         reply = QtWidgets.QMessageBox.question(
             self, "Remove Registry",
-            t("settings_confirm_remove", entry.name),
+            t("settings_confirm_remove", entry.label),
             QtWidgets.QMessageBox.Yes | QtWidgets.QMessageBox.No,
         )
         if reply == QtWidgets.QMessageBox.Yes:
-            self._target.remove_catalogue(entry.name)
+            self._target.remove_catalogue(entry.path)
             self._persist()
             self._list.takeItem(row)
 

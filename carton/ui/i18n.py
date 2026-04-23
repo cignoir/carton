@@ -99,7 +99,6 @@ _STRINGS = {
 
         # Catalogue creation
         "setup_select_folder": "Select folder to create catalogue",
-        "setup_catalogue_name": "Enter catalogue name:",
 
         # Add dialog
         "add_title": "Carton — Register Script",
@@ -222,7 +221,7 @@ _STRINGS = {
         "profile_build_success": "Installer written to:\n{}",
         "profile_edit_title": "Edit Profile — {}",
         "close": "Close",
-        "settings_github_placeholder": "Enter owner/repo (e.g. cignoir/creg-ari):",
+        "settings_github_placeholder": "Enter owner/repo (e.g. cignoir/maya-ref-switcher):",
         "settings_github_invalid": "Please enter in owner/repo format.",
         "settings_github_error": "Failed to access GitHub: {}",
         "settings_github_no_catalogue": "No catalogue.json or registry.json found in {}.",
@@ -230,8 +229,6 @@ _STRINGS = {
         "settings_github_pkg_already_added": "'{}' is already added.",
         "settings_url_placeholder": "Enter catalogue.json URL:",
         "settings_invalid_url": "URL must start with http:// or https://",
-        "settings_catalogue_name": "Enter catalogue name:",
-        "settings_already_exists": "'{}' is already registered.",
         "catalogue_stamp_prompt": "This catalogue has no id yet. Stamp a fresh UUID into the file? (Needed to detect duplicates and route publishes through its remote mirrors.)",
         "catalogue_duplicate_title": "Catalogue already registered",
         "catalogue_duplicate_msg": "This catalogue is already registered as '{}' ({}).\nUse the existing entry, or add this as a separate alias?",
@@ -404,7 +401,6 @@ _STRINGS = {
 
         # Catalogue creation
         "setup_select_folder": "カタログを作成するフォルダを選択",
-        "setup_catalogue_name": "カタログの名前を入力:",
 
         # Add dialog
         "add_title": "Carton — スクリプト登録",
@@ -527,7 +523,7 @@ _STRINGS = {
         "profile_build_success": "インストーラーを書き出しました:\n{}",
         "profile_edit_title": "プロファイル編集 — {}",
         "close": "閉じる",
-        "settings_github_placeholder": "owner/repo を入力 (例: cignoir/creg-ari):",
+        "settings_github_placeholder": "owner/repo を入力 (例: cignoir/maya-ref-switcher):",
         "settings_github_invalid": "owner/repo の形式で入力してください。",
         "settings_github_error": "GitHub へのアクセスに失敗しました: {}",
         "settings_github_no_catalogue": "{} に catalogue.json または registry.json が見つかりません。",
@@ -535,8 +531,6 @@ _STRINGS = {
         "settings_github_pkg_already_added": "'{}' は既に追加されています。",
         "settings_url_placeholder": "catalogue.json の URL を入力:",
         "settings_invalid_url": "URL は http:// または https:// で始まる必要があります",
-        "settings_catalogue_name": "カタログの名前を入力:",
-        "settings_already_exists": "'{}' は既に登録されています。",
         "catalogue_stamp_prompt": "このカタログにはまだ ID が付いていません。新しい UUID をファイルに stamp しますか？（重複検出とリモートミラー経由の公開に必要です）",
         "catalogue_duplicate_title": "カタログは登録済みです",
         "catalogue_duplicate_msg": "このカタログは '{}' ({}) として既に登録済みです。\n既存エントリを使いますか？それとも別名として追加しますか？",

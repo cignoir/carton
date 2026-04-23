@@ -65,21 +65,34 @@ class InstallerProfile:
             if isinstance(r, CatalogueEntry):
                 self.catalogues.append(r)
             else:
+                # Legacy profile JSON stored the subscriber alias under
+                # ``name``; accept it as a display_name fallback so
+                # hand-edited studio profiles keep loading.
+                display_name = r.get("display_name") or r.get("name", "")
                 self.catalogues.append(CatalogueEntry(
-                    name=r.get("name", ""),
                     path=r.get("path", ""),
                     catalogue_id=r.get("catalogue_id", ""),
+                    display_name=display_name,
                 ))
         self.language = language
         self.auto_check_updates = bool(auto_check_updates)
         self.github_repo = github_repo
         self.proxy = proxy
 
-    def add_catalogue(self, name, path, catalogue_id=""):
-        self.catalogues.append(CatalogueEntry(name, path, catalogue_id))
+    def add_catalogue(self, path, catalogue_id="", display_name=""):
+        self.catalogues.append(
+            CatalogueEntry(path, catalogue_id=catalogue_id, display_name=display_name),
+        )
 
-    def remove_catalogue(self, name):
-        self.catalogues = [r for r in self.catalogues if r.name != name]
+    def remove_catalogue(self, path_or_id):
+        key = (path_or_id or "").strip()
+        if not key:
+            return
+        key_id = key.lower()
+        self.catalogues = [
+            r for r in self.catalogues
+            if r.path != key and (not r.catalogue_id or r.catalogue_id != key_id)
+        ]
 
     @classmethod
     def blank(cls):
@@ -96,8 +109,9 @@ class InstallerProfile:
         return cls(
             catalogues=[
                 CatalogueEntry(
-                    name=r.name, path=r.path,
+                    path=r.path,
                     catalogue_id=getattr(r, "catalogue_id", ""),
+                    display_name=getattr(r, "display_name", ""),
                 )
                 for r in getattr(config, "catalogues", []) or []
             ],
@@ -156,11 +170,15 @@ class InstallerProfile:
                 raise InvalidProfileError(
                     "catalogues[{}] must be an object".format(i)
                 )
-            name = entry.get("name", "")
+            # display_name is owned by catalogue.json (authors pick it);
+            # profile entries may carry a stale snapshot but it's not
+            # required. ``name`` is accepted as a legacy alias so hand-
+            # edited studio profiles from v0.4.x keep loading.
+            display_name = entry.get("display_name") or entry.get("name", "")
             path = entry.get("path", "")
-            if not name or not isinstance(name, str):
+            if display_name and not isinstance(display_name, str):
                 raise InvalidProfileError(
-                    "catalogues[{}].name is required".format(i)
+                    "catalogues[{}].display_name must be a string".format(i)
                 )
             if not path or not isinstance(path, str):
                 raise InvalidProfileError(
@@ -184,7 +202,8 @@ class InstallerProfile:
                     )
                 catalogue_id = catalogue_id.strip().lower()
             normalized.append({
-                "name": name, "path": path, "catalogue_id": catalogue_id,
+                "display_name": display_name, "path": path,
+                "catalogue_id": catalogue_id,
             })
 
         language = data.get("language", "auto")

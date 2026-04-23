@@ -23,8 +23,8 @@ class TestRoundtrip:
         path = tmp_path / "studio.json"
         original = InstallerProfile(
             catalogues=[
-                CatalogueEntry("studio-main", "/srv/studio/registry.json"),
-                CatalogueEntry("ari", "https://example.com/registry.json"),
+                CatalogueEntry("/srv/studio/registry.json", display_name="studio-main"),
+                CatalogueEntry("https://example.com/registry.json", display_name="ari"),
             ],
             language="ja",
             auto_check_updates=False,
@@ -34,7 +34,7 @@ class TestRoundtrip:
         original.save(str(path))
         loaded = InstallerProfile.load(str(path))
         assert len(loaded.catalogues) == 2
-        assert loaded.catalogues[0].name == "studio-main"
+        assert loaded.catalogues[0].display_name == "studio-main"
         assert loaded.catalogues[1].path == "https://example.com/registry.json"
         assert loaded.language == "ja"
         assert loaded.auto_check_updates is False
@@ -43,7 +43,7 @@ class TestRoundtrip:
 
     def test_from_config_snapshots_relevant_fields(self):
         c = Config(
-            catalogues=[CatalogueEntry("a", "/x/registry.json")],
+            catalogues=[CatalogueEntry("/x/registry.json", display_name="a")],
             language="en",
             proxy="http://p:80",
         )
@@ -51,7 +51,7 @@ class TestRoundtrip:
         assert profile.language == "en"
         assert profile.proxy == "http://p:80"
         assert len(profile.catalogues) == 1
-        assert profile.catalogues[0].name == "a"
+        assert profile.catalogues[0].display_name == "a"
 
     def test_to_dict_omits_install_dir(self):
         # install_dir is intentionally NOT a profile field — verify it
@@ -75,16 +75,22 @@ class TestValidation:
         with pytest.raises(InvalidProfileError, match="language"):
             InstallerProfile.from_dict({"language": "klingon"})
 
-    def test_registry_without_name_rejected(self):
-        with pytest.raises(InvalidProfileError, match="name is required"):
-            InstallerProfile.from_dict({
-                "catalogues": [{"path": "/x/r.json"}],
-            })
+    def test_registry_without_name_is_allowed(self):
+        """v0.5: display_name is no longer required — catalogue.json is SoT.
+
+        An entry without a name must still round-trip; the display_name
+        cache will fill in on first fetch from the catalogue itself.
+        """
+        profile = InstallerProfile.from_dict({
+            "catalogues": [{"path": "/x/r.json"}],
+        })
+        assert len(profile.catalogues) == 1
+        assert profile.catalogues[0].display_name == ""
 
     def test_registry_without_path_rejected(self):
         with pytest.raises(InvalidProfileError, match="path is required"):
             InstallerProfile.from_dict({
-                "catalogues": [{"name": "n"}],
+                "catalogues": [{"display_name": "n"}],
             })
 
     def test_non_object_root_rejected(self, tmp_path):
@@ -122,7 +128,8 @@ class TestLegacyKeyAliases:
             "registries": [{"name": "studio", "path": "https://ex.com/r.json"}],
         })
         assert len(profile.catalogues) == 1
-        assert profile.catalogues[0].name == "studio"
+        # Legacy ``name`` key maps to display_name for UI rendering.
+        assert profile.catalogues[0].display_name == "studio"
         assert profile.catalogues[0].path == "https://ex.com/r.json"
 
     def test_registry_id_alias_accepted(self):

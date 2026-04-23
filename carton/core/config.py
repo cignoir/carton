@@ -13,6 +13,48 @@ def _is_url(path):
     return path.startswith(("http://", "https://"))
 
 
+def _promote_display_names_to_catalogue(catalogues):
+    """Migrate pre-v0.5 subscriber aliases into catalogue.json.
+
+    Pre-v0.5 config.json stored a subscriber-picked ``name`` alongside
+    each catalogue entry. v0.5 moves naming authority onto the catalogue
+    itself (``catalogue.json.display_name``). On first load, each local
+    catalogue whose display_name cache is populated but whose on-disk
+    file has an empty ``display_name`` gets the cache promoted back into
+    the file — this way the original author's choice (which survived in
+    the old alias for the catalogue's creator on the machine they made
+    it) isn't lost, and other subscribers will pick up the same label
+    on their next fetch. Remote catalogues can't be mutated from here,
+    so they keep the cached value on this machine and wait for the
+    maintainer to stamp the remote file.
+
+    Silent on any I/O or parse failure — a broken file should surface
+    via the normal fetch path, not by failing startup.
+    """
+    for entry in catalogues:
+        if entry.is_remote:
+            continue
+        if not entry.display_name:
+            continue
+        path = entry.path
+        if not path or not os.path.exists(path):
+            continue
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+        except (OSError, ValueError):
+            continue
+        existing = (data.get("display_name") or "").strip() if isinstance(data, dict) else ""
+        if existing:
+            continue
+        data["display_name"] = entry.display_name
+        try:
+            with open(path, "w", encoding="utf-8") as f:
+                json.dump(data, f, indent=2, ensure_ascii=False)
+        except OSError:
+            continue
+
+
 def _detect_install_dir():
     """Return the default install_dir based on the OS."""
     if sys.platform == "win32":
@@ -54,28 +96,45 @@ class CatalogueEntry:
     ``catalogue_id`` is a client-side cache of the UUID stored inside the
     catalogue's ``catalogue.json``. It is populated on fetch (see
     :class:`carton.core.catalogue_client.CatalogueClient`) and persisted
-    alongside ``name`` / ``path`` so duplicate detection can work before
-    the first network round trip. Empty means "not yet known" — the
-    hosted file is always the source of truth.
+    alongside ``path`` so duplicate detection can work before the first
+    network round trip. Empty means "not yet known" — the hosted file is
+    always the source of truth.
+
+    ``display_name`` is a UI-only cache of the catalogue's ``display_name``
+    field. The catalogue's ``catalogue.json`` owns the name (authors pick
+    it at create time, like an npm package name); subscribers never
+    override it. We keep a copy here so the sidebar / Settings list can
+    render something before the first fetch completes and for local
+    catalogues we never need to fetch at all. ``CatalogueClient`` refreshes
+    this on every catalogue read.
     """
 
-    def __init__(self, name, path, catalogue_id=""):
-        self.name = name
+    def __init__(self, path, catalogue_id="", display_name=""):
         self.path = path if _is_url(path) else os.path.normpath(path)
         self.catalogue_id = (catalogue_id or "").strip().lower()
+        self.display_name = display_name or ""
 
     def to_dict(self):
-        d = {"name": self.name, "path": self.path}
+        d = {"path": self.path}
         if self.catalogue_id:
             d["catalogue_id"] = self.catalogue_id
+        if self.display_name:
+            d["display_name"] = self.display_name
         return d
 
     @classmethod
     def from_dict(cls, d):
+        # Back-compat: pre-v5.0 config.json stored the subscriber-named
+        # alias under ``name``. We treat it as the initial display_name
+        # cache — the first fetch will overwrite with the authoritative
+        # catalogue.json value. Local catalogue migration (writing the
+        # alias back to catalogue.json when display_name is empty there)
+        # happens in Config.load's post-load hook.
+        display_name = d.get("display_name") or d.get("name", "")
         return cls(
-            name=d.get("name", ""),
             path=d.get("path", ""),
             catalogue_id=d.get("catalogue_id", ""),
+            display_name=display_name,
         )
 
     def to_home_origin_meta(self):
@@ -85,10 +144,15 @@ class CatalogueEntry:
         dicts ad hoc. A :class:`CatalogueEntry` (=embedded catalogue) always
         emits the embedded variant, so the payload is
         ``{"type": "embedded", "catalogue_name": ..., "catalogue_id": ...,
-        "hint": ...}``. Github/url/local origins construct their own
+        "hint": ...}``. The embedded name is a snapshot of ``display_name``
+        at publish time — if the author later renames the catalogue,
+        existing published packages keep the old label (catalogue_id is
+        the identity key). Github/url/local origins construct their own
         payload at publish time and never go through this helper.
         """
-        meta = {"type": "embedded", "catalogue_name": self.name}
+        meta = {"type": "embedded"}
+        if self.display_name:
+            meta["catalogue_name"] = self.display_name
         if self.catalogue_id:
             meta["catalogue_id"] = self.catalogue_id
         if self.path and self.path != ".":
@@ -96,7 +160,23 @@ class CatalogueEntry:
         return meta
 
     def __str__(self):
-        return "{} — {}".format(self.name, self.path)
+        return "{} — {}".format(self.label, self.path)
+
+    @property
+    def label(self):
+        """Best-effort display label: display_name, else basename, else path.
+
+        UI call sites should use this instead of reading ``display_name``
+        directly so a freshly-registered-but-not-yet-fetched remote
+        catalogue still renders something meaningful (basename of the
+        URL) rather than a blank string.
+        """
+        if self.display_name:
+            return self.display_name
+        if not self.path:
+            return ""
+        base = os.path.basename(self.path.rstrip("/\\"))
+        return base or self.path
 
     @property
     def is_remote(self):
@@ -170,6 +250,12 @@ class Config:
                 data = json.load(f)
             entries_raw = data.get("catalogues", [])
             catalogues = [CatalogueEntry.from_dict(r) for r in entries_raw]
+            # v0.5 one-shot: promote any subscriber-alias cache
+            # (inherited from the legacy ``name`` key) into the local
+            # catalogue.json itself. Subsequent loads become no-ops
+            # once each catalogue owns a display_name on disk.
+            if is_canonical:
+                _promote_display_names_to_catalogue(catalogues)
             cfg = cls(
                 catalogues=catalogues,
                 install_dir=data.get("install_dir", _DEFAULT_INSTALL_DIR),
@@ -385,8 +471,9 @@ class Config:
         """
         self.catalogues = [
             CatalogueEntry(
-                name=r.name, path=r.path,
+                path=r.path,
                 catalogue_id=getattr(r, "catalogue_id", ""),
+                display_name=getattr(r, "display_name", ""),
             )
             for r in profile.catalogues
         ]
@@ -411,13 +498,34 @@ class Config:
         os.environ["http_proxy"] = self.proxy
         os.environ["https_proxy"] = self.proxy
 
-    def add_catalogue(self, name, path, catalogue_id=""):
-        """Add a catalogue entry."""
-        self.catalogues.append(CatalogueEntry(name, path, catalogue_id))
+    def add_catalogue(self, path, catalogue_id="", display_name=""):
+        """Add a catalogue entry.
 
-    def remove_catalogue(self, name):
-        """Remove a catalogue entry by name."""
-        self.catalogues = [r for r in self.catalogues if r.name != name]
+        ``display_name`` is optional — leave it empty and the first
+        catalogue.json fetch will fill it in. Callers that already know
+        the name (e.g. fresh-scaffolded local catalogue) can pass it to
+        avoid a "Untitled" flash in the UI before the first fetch.
+        """
+        self.catalogues.append(
+            CatalogueEntry(path, catalogue_id=catalogue_id, display_name=display_name),
+        )
+
+    def remove_catalogue(self, path_or_id):
+        """Remove a catalogue entry by path or catalogue_id.
+
+        Identity keys for catalogues are ``path`` and ``catalogue_id`` —
+        ``display_name`` is just a label owned by the catalogue author
+        and can collide across catalogues, so we never remove by name.
+        """
+        key = (path_or_id or "").strip()
+        if not key:
+            return
+        key_path = key if _is_url(key) else os.path.normpath(key)
+        key_id = key.lower()
+        self.catalogues = [
+            r for r in self.catalogues
+            if r.path != key_path and (not r.catalogue_id or r.catalogue_id != key_id)
+        ]
 
     def find_catalogue_by_id(self, catalogue_id):
         """Return the first CatalogueEntry whose ``catalogue_id`` matches, or None.

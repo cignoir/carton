@@ -108,14 +108,14 @@ class _PublishTargetDialog(QtWidgets.QDialog):
     def _describe_target(self, entry):
         """Return ``(label, tooltip)`` for a catalogue row in the combo."""
         if not entry.is_remote:
-            return entry.name, entry.path
+            return entry.label, entry.path
         mirror = None
         if entry.catalogue_id:
             mirror = self._config.find_local_mirror(entry.catalogue_id)
         if mirror is not None:
-            label = "{} → {}".format(entry.name, mirror.name)
-            return label, t("publish_mirrors_to", mirror.name, mirror.path)
-        label = "{}  ({})".format(entry.name, t("publish_no_mirror"))
+            label = "{} → {}".format(entry.label, mirror.label)
+            return label, t("publish_mirrors_to", mirror.label, mirror.path)
+        label = "{}  ({})".format(entry.label, t("publish_no_mirror"))
         return label, t("publish_no_mirror_hint")
 
 
@@ -150,7 +150,7 @@ class PublishController:
             if not self._confirm_home_origin_mismatch(pkg_data, target_catalogue):
                 return
             confirm_result = self._confirm_details(
-                pkg_data, target_catalogue.name,
+                pkg_data, target_catalogue.label,
             )
             if not confirm_result:
                 return
@@ -180,7 +180,7 @@ class PublishController:
         for entry in w._config.catalogues:
             if entry.is_remote:
                 continue
-            if entry.name == catalogue_name:
+            if entry.label == catalogue_name:
                 target = entry
                 break
         if target is None:
@@ -229,7 +229,7 @@ class PublishController:
 
             QtWidgets.QMessageBox.information(
                 w, t("unpublish"),
-                t("unpublish_success", display, catalogue_entry.name),
+                t("unpublish_success", display, catalogue_entry.label),
             )
             w.refresh()
         except Exception as e:
@@ -259,8 +259,13 @@ class PublishController:
                     catalogue_data = json.load(f)
             except (json.JSONDecodeError, OSError):
                 continue
+            # Prefer the catalogue's own ``display_name`` (SoT) over the
+            # cached label on the entry — this is the badge text the user
+            # will click to unpublish, so it should always reflect the
+            # author's current naming.
+            badge = (catalogue_data.get("display_name") or "").strip() or entry.label
             for pkg_id in catalogue_data.get("packages", {}).keys():
-                result.setdefault(pkg_id, []).append(entry.name)
+                result.setdefault(pkg_id, []).append(badge)
         return result
 
     def set_publish_button_state(self, pkg_id, busy=True):
@@ -353,7 +358,7 @@ class PublishController:
         if home_id and target_id:
             if home_id == target_id:
                 return True
-        elif home_name and home_name == target_catalogue.name:
+        elif home_name and home_name == target_catalogue.label:
             return True
         elif not home_name and not home_id:
             return True
@@ -361,7 +366,7 @@ class PublishController:
         reply = QtWidgets.QMessageBox.question(
             w, t("publish"),
             t("publish_home_catalogue_mismatch",
-              home_name or home_id, target_catalogue.name),
+              home_name or home_id, target_catalogue.label),
             QtWidgets.QMessageBox.Yes | QtWidgets.QMessageBox.No,
         )
         return reply == QtWidgets.QMessageBox.Yes
@@ -441,7 +446,7 @@ class PublishController:
         # Re-key the installed entry under the canonical namespace/name.
         # The local path we actually wrote to may differ from the user's
         # selection (remote → mirror), so resolve the name via the result.
-        written_name = result.get("published_via") or target_catalogue.name
+        written_name = result.get("published_via") or target_catalogue.label
         written_entry = self._find_catalogue_by_name(written_name) or target_catalogue
         fields = {
             "namespace": result["namespace"],
@@ -550,7 +555,7 @@ class PublishController:
 
     def _find_catalogue_by_name(self, name):
         for entry in self._w._config.catalogues:
-            if entry.name == name:
+            if entry.label == name:
                 return entry
         return None
 
@@ -566,14 +571,14 @@ class PublishController:
         if err.reason == "no_remote_id":
             QtWidgets.QMessageBox.warning(
                 w, t("publish"),
-                t("publish_no_remote_id", remote.name),
+                t("publish_no_remote_id", remote.label),
             )
             return
 
         box = QtWidgets.QMessageBox(w)
         box.setIcon(QtWidgets.QMessageBox.Question)
         box.setWindowTitle(t("publish"))
-        box.setText(t("publish_no_mirror_prompt", remote.name))
+        box.setText(t("publish_no_mirror_prompt", remote.label))
         create_btn = box.addButton(
             t("publish_create_mirror"), QtWidgets.QMessageBox.AcceptRole,
         )

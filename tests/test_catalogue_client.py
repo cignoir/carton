@@ -63,7 +63,7 @@ class TestCatalogueClientEmbedded:
         )
 
         config = Config(install_dir=str(tmp_path / "install"))
-        config.add_catalogue("studio", str(catalogue_path))
+        config.add_catalogue(str(catalogue_path), display_name="studio")
 
         client = CatalogueClient(config, cache=isolated_cache)
         client.fetch()
@@ -108,7 +108,7 @@ class TestCatalogueClientEmbedded:
         }), encoding="utf-8")
 
         config = Config(install_dir=str(tmp_path / "install"))
-        config.add_catalogue("studio", str(legacy_path))
+        config.add_catalogue(str(legacy_path), display_name="studio")
 
         client = CatalogueClient(config, cache=isolated_cache)
         client.fetch()
@@ -149,8 +149,8 @@ class TestCatalogueClientEmbedded:
         }, catalogue_id="bbbbbbbb-2222-4222-8222-bbbbbbbbbbbb")), encoding="utf-8")
 
         config = Config(install_dir=str(tmp_path / "install"))
-        config.add_catalogue("a", str(cat_a))
-        config.add_catalogue("b", str(cat_b))
+        config.add_catalogue(str(cat_a), display_name="a")
+        config.add_catalogue(str(cat_b), display_name="b")
 
         client = CatalogueClient(config, cache=isolated_cache)
         client.fetch()
@@ -188,7 +188,7 @@ class TestCatalogueClientGithub:
         )
 
         config = Config(install_dir=str(tmp_path / "install"))
-        config.add_catalogue("studio", str(catalogue_path))
+        config.add_catalogue(str(catalogue_path), display_name="studio")
 
         client = CatalogueClient(config, cache=isolated_cache)
         client.fetch()
@@ -209,7 +209,7 @@ class TestCatalogueClientGithub:
         })), encoding="utf-8")
 
         config = Config(install_dir=str(tmp_path / "install"))
-        config.add_catalogue("studio", str(catalogue_path))
+        config.add_catalogue(str(catalogue_path), display_name="studio")
 
         client = CatalogueClient(config, cache=isolated_cache)
         client.fetch()
@@ -231,7 +231,7 @@ class TestCatalogueClientPersonal:
                      github_stub=None, monkeypatch=None):
         config = Config(install_dir=str(tmp_path / "install"))
         for name, catalogue_path in (subscribed or []):
-            config.add_catalogue(name, str(catalogue_path))
+            config.add_catalogue(str(catalogue_path), display_name=name)
         if github_stub is not None:
             # Personal github origins will try to hit the GitHub API via
             # the Origin layer when resolving versions. Stub it out so
@@ -402,7 +402,7 @@ class TestCatalogueClientUrlOrigin:
             "size_bytes": 42,
         })
         path = self._write_catalogue(tmp_path, "https://example.com/tool/package.json")
-        cfg = Config(catalogues=[CatalogueEntry("url-cat", str(path),
+        cfg = Config(catalogues=[CatalogueEntry(str(path), display_name="url-cat",
                                                 catalogue_id=_VALID_UUID)])
         client = CatalogueClient(cfg, cache=isolated_cache)
         client.fetch()
@@ -436,7 +436,7 @@ class TestCatalogueClientUrlOrigin:
             "download_url": "https://example.com/x.zip",
         })
         path = self._write_catalogue(tmp_path, "https://example.com/tool/package.json")
-        cfg = Config(catalogues=[CatalogueEntry("url-cat", str(path),
+        cfg = Config(catalogues=[CatalogueEntry(str(path), display_name="url-cat",
                                                 catalogue_id=_VALID_UUID)])
         client = CatalogueClient(cfg, cache=isolated_cache)
         client.fetch()
@@ -459,7 +459,7 @@ class TestCatalogueClientUrlOrigin:
             "download_url": "https://example.com/x.zip",
         })
         path = self._write_catalogue(tmp_path, "https://example.com/tool/package.json")
-        cfg = Config(catalogues=[CatalogueEntry("url-cat", str(path),
+        cfg = Config(catalogues=[CatalogueEntry(str(path), display_name="url-cat",
                                                 catalogue_id=_VALID_UUID)])
         client = CatalogueClient(cfg, cache=isolated_cache)
         client.fetch()
@@ -483,7 +483,7 @@ class TestCatalogueClientUrlOrigin:
         monkeypatch.setattr(url_mod, "urlopen", _boom)
 
         path = self._write_catalogue(tmp_path, "https://example.com/tool/package.json")
-        cfg = Config(catalogues=[CatalogueEntry("url-cat", str(path),
+        cfg = Config(catalogues=[CatalogueEntry(str(path), display_name="url-cat",
                                                 catalogue_id=_VALID_UUID)])
         client = CatalogueClient(cfg, cache=isolated_cache)
         client.fetch()
@@ -529,7 +529,7 @@ class TestCatalogueClientLocalOrigin:
             "sha256": "b" * 64,
         })
         path = self._write_catalogue(tmp_path, str(src))
-        cfg = Config(catalogues=[CatalogueEntry("local-cat", str(path),
+        cfg = Config(catalogues=[CatalogueEntry(str(path), display_name="local-cat",
                                                 catalogue_id=_VALID_UUID)])
         client = CatalogueClient(cfg, cache=isolated_cache)
         client.fetch()
@@ -549,7 +549,7 @@ class TestCatalogueClientLocalOrigin:
         the package (so the UI can show 'source moved') but hold empty
         versions — no crash."""
         path = self._write_catalogue(tmp_path, str(tmp_path / "does_not_exist"))
-        cfg = Config(catalogues=[CatalogueEntry("local-cat", str(path),
+        cfg = Config(catalogues=[CatalogueEntry(str(path), display_name="local-cat",
                                                 catalogue_id=_VALID_UUID)])
         client = CatalogueClient(cfg, cache=isolated_cache)
         client.fetch()
@@ -569,7 +569,7 @@ class TestCatalogueClientLocalOrigin:
         )
 
         config = Config(install_dir=str(tmp_path / "install"))
-        config.add_catalogue("studio", str(catalogue_path))
+        config.add_catalogue(str(catalogue_path), display_name="studio")
 
         client = CatalogueClient(
             config, cache=isolated_cache,
