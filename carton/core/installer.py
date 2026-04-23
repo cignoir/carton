@@ -315,8 +315,23 @@ class InstallManager:
         self._save_installed()
 
     def activate_all(self):
-        """Activate all installed packages."""
+        """Activate registry-installed packages.
+
+        My Tools entries (``source="local"``) live in the user's own
+        source tree, don't carry a ``path`` under install_dir, and are
+        wired up separately via ``ScriptManager.activate`` from
+        ``carton.startup()``. Without this filter a My Tools entry's
+        empty ``path`` collapses to ``install_dir`` itself through
+        ``os.path.join``, passes the existence check, and dispatches to
+        a handler against a directory that doesn't match the package
+        layout — for an ``auto_load`` plugin that means a ``loadPlugin``
+        call on an unresolvable name, which raises and takes the whole
+        ``startup()`` down before the Carton menu is registered.
+        """
+        from carton.core.install_state import is_registry_installed
         for pkg_id, pkg_data in self._installed.get("packages", {}).items():
+            if not is_registry_installed(pkg_data):
+                continue
             pkg_type = pkg_data.get("type", "python_package")
             package_dir = os.path.join(
                 self._config.install_dir, pkg_data.get("path", "")
