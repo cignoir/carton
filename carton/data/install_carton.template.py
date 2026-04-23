@@ -122,7 +122,6 @@ def start():
 # SEED_CONFIG was baked in by the profile-aware builder.
 DEFAULT_CONFIG = {
     "catalogues": [],
-    "install_dir": "",
     "auto_check_updates": True,
     "github_repo": "cignoir/carton",
 }
@@ -235,7 +234,10 @@ def onMayaDroppedPythonFile(*args, **kwargs):
     else:
         config = DEFAULT_CONFIG.copy()
     # Always set/refresh language (the user picked a localized installer
-    # variant) and stamp install_dir if it isn't already there.
+    # variant) and stamp install_dir if the key is absent. We don't
+    # "repair" an existing empty string — surfacing a misconfigured
+    # config.json via the downstream error is preferable to silently
+    # rewriting values the user might have chosen.
     config["language"] = CARTON_LANGUAGE
     config.setdefault("install_dir", install_dir)
     # On a fresh install built from a named profile, also stamp the
