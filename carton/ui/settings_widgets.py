@@ -510,7 +510,7 @@ class RegistriesSection(QtWidgets.QWidget):
         btn_row = QtWidgets.QHBoxLayout()
 
         add_btn = QtWidgets.QPushButton(t("add"))
-        add_btn.setStyleSheet(theme.btn_success())
+        add_btn.setStyleSheet(theme.btn_success_dark())
         add_btn.clicked.connect(self._add)
         btn_row.addWidget(add_btn)
 
