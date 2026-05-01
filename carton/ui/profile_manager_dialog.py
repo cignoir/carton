@@ -295,7 +295,7 @@ class ProfileManagerDialog(QtWidgets.QDialog):
         if not out_path:
             return
         try:
-            from carton.core.installer_builder import build_from_profile
+            from carton.core.installer_artifact import build_from_profile
             build_from_profile(profile_path, out_path)
         except Exception as e:
             QtWidgets.QMessageBox.warning(
