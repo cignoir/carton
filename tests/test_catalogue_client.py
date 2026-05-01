@@ -475,8 +475,7 @@ class TestCatalogueClientUrlOrigin:
         package but produce an empty versions dict (no crash, card
         degrades to 'unavailable')."""
         from carton.core.origins import url_origin as url_mod
-        from carton.compat_urllib import URLError
-
+        from urllib.error import URLError
         def _boom(req, timeout=10):
             raise URLError("connection refused")
 

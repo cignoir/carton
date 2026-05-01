@@ -12,9 +12,8 @@ a proper secret store.
 
 import json
 
-from carton.compat_urllib import urlopen, Request, URLError
-
-
+from urllib.request import Request, urlopen
+from urllib.error import URLError
 _API_BASE = "https://api.github.com"
 _RAW_BASE = "https://raw.githubusercontent.com"
 _ARCHIVE_BASE = "https://github.com"

@@ -29,7 +29,9 @@ they don't host themselves.
 
 import json
 
-from carton.compat_urllib import Request, URLError, urljoin, urlopen
+from urllib.request import Request, urlopen
+from urllib.error import URLError
+from urllib.parse import urljoin
 from carton.core.origins.base import (
     ArtifactRef,
     Origin,

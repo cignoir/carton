@@ -11,7 +11,7 @@ import io
 
 import pytest
 
-from carton.compat_urllib import URLError
+from urllib.error import URLError
 from carton.core.origins import UrlOrigin, OriginError
 from carton.core.origins import url_origin as url_module
 

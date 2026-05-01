@@ -18,7 +18,8 @@ working while consumers migrate over.
 import os
 import shutil
 
-from carton.compat_urllib import urlopen, URLError
+from urllib.request import urlopen
+from urllib.error import URLError
 from carton.core.hash_verify import compute_sha256, verify_sha256
 
 _MAX_RETRIES = 3

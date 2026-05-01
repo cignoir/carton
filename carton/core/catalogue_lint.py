@@ -246,7 +246,7 @@ def _check_url_origin(pkg_id, origin, result, check_network):
 
     if check_network:
         try:
-            from carton.compat_urllib import urlopen, Request
+            from urllib.request import Request, urlopen
             req = Request(url, method="HEAD")
             try:
                 urlopen(req, timeout=5).close()

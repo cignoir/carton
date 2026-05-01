@@ -10,7 +10,8 @@ UI paths can't drift apart.
 import json
 import os
 
-from carton.compat_urllib import urlopen, Request, URLError
+from urllib.request import Request, urlopen
+from urllib.error import URLError
 from carton.core.uuid_id import (
     read_uuid,
     stamp_uuid,

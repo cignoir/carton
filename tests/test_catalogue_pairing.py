@@ -10,7 +10,7 @@ dialog — which is where the most user-facing bug lives.
 import json
 import os
 
-from carton.compat_urllib import URLError
+from urllib.error import URLError
 from carton.core.config import Config, CatalogueEntry
 from carton.ui._catalogue_pairing import (
     find_duplicate_entry,

@@ -12,7 +12,8 @@ import os
 import shutil
 from datetime import datetime, timezone
 
-from carton.compat_urllib import urlopen, Request, URLError
+from urllib.request import Request, urlopen
+from urllib.error import URLError
 from carton.core import gh_cli as _default_gh_cli
 from carton.core._publisher_catalogue import update_catalogue
 from carton.core._publisher_zip import create_zip

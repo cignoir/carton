@@ -17,7 +17,8 @@ in-memory profile is mutated freely until the user clicks Save.
 import json
 import os
 
-from carton.compat_urllib import Request, urlopen, urlparse
+from urllib.request import Request, urlopen
+from urllib.parse import urlparse
 from carton.ui.compat import QtWidgets, Qt
 from carton.ui import theme
 from carton.ui.error_messages import show_error

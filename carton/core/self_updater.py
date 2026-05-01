@@ -4,8 +4,8 @@ import json
 import os
 from datetime import datetime, timezone
 
-from carton.compat_urllib import urlopen, Request, URLError
-
+from urllib.request import Request, urlopen
+from urllib.error import URLError
 import carton
 from carton.core.config import default_bootstrap_dir
 from carton.models.version import Version

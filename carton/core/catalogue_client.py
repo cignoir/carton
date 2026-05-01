@@ -15,7 +15,10 @@ import json
 import os
 import zipfile
 
-from carton.compat_urllib import urlopen, Request, URLError, urljoin, BytesIO
+from urllib.request import Request, urlopen
+from urllib.error import URLError
+from urllib.parse import urljoin
+from io import BytesIO
 from carton.core.migrations import (
     CATALOGUE_FILENAME,
     LEGACY_REGISTRY_FILENAME,

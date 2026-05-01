@@ -11,7 +11,7 @@ for sha256 / size_bytes.
 
 import os
 
-from carton.compat_urllib import urljoin
+from urllib.parse import urljoin
 from carton.core.origins.base import ArtifactRef, Origin, OriginError, VersionMeta
 
 

@@ -5,9 +5,7 @@ import os
 import shutil
 import sys
 
-from carton.compat_urllib import urlparse
-
-
+from urllib.parse import urlparse
 def _is_url(path):
     """Check if a path is an HTTP/HTTPS URL."""
     return path.startswith(("http://", "https://"))
