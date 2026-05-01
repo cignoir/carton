@@ -10,6 +10,7 @@ from urllib.parse import urljoin
 from carton.core.display_name_resolver import resolve_display_name
 from carton.core.install_state import is_my_tools, is_pure_local
 from carton.ui._catalogue_crud import add_existing_catalogue, create_new_catalogue
+from carton.ui._icon_fetch import IconFetcher, resolve_icon_path
 from carton.ui._install_controller import InstallController
 from carton.ui._publish_controller import PublishController
 from carton.ui._self_update_controller import SelfUpdateController
@@ -33,26 +34,6 @@ _WINDOW_WIDTH = 780
 _WINDOW_HEIGHT = 600
 
 
-def _icon_filename(pkg_data):
-    """Return the bare icon filename (e.g. ``"AriMirror.png"``) for a package.
-
-    Resolution order:
-      1. If ``icon`` is a string ending in an image extension, treat it as the
-         filename and return its basename verbatim — this preserves whatever
-         the package author chose, including PascalCase / non-ASCII names.
-      2. If ``icon`` is the literal ``"@auto"``, fall back to ``<name>.png``.
-      3. Otherwise return None.
-    """
-    icon_value = pkg_data.get("icon", "")
-    if isinstance(icon_value, str) and icon_value.endswith((".png", ".jpg", ".svg")):
-        return os.path.basename(icon_value)
-    if icon_value == "@auto":
-        name = pkg_data.get("name", "")
-        if name:
-            return "{}.png".format(name)
-    return None
-
-
 class _ClickableLabel(QtWidgets.QLabel):
     """QLabel that emits ``clicked`` on left mouse press.
 
@@ -67,47 +48,6 @@ class _ClickableLabel(QtWidgets.QLabel):
         if event.button() == Qt.LeftButton:
             self.clicked.emit()
         super().mousePressEvent(event)
-
-
-class _IconFetcher(QtCore.QThread):
-    """Background thread that downloads remote icons in bulk."""
-
-    icon_ready = QtCore.Signal(str, str)  # (pkg_id, local_path)
-
-    def __init__(self, tasks, config, parent=None):
-        """tasks: list of (pkg_id, base_url, icon_filename)"""
-        super().__init__(parent)
-        self._tasks = tasks
-        self._config = config
-
-    def run(self):
-        if not self._config:
-            return
-        cache_dir = self._config.icon_cache_dir
-        os.makedirs(cache_dir, exist_ok=True)
-        for pkg_id, base_url, icon_filename in self._tasks:
-            cached = os.path.join(cache_dir, icon_filename)
-            if os.path.exists(cached):
-                # Touch atime so the LRU eviction sees this file as "used".
-                try:
-                    os.utime(cached, None)
-                except OSError:
-                    pass
-                self.icon_ready.emit(pkg_id, cached)
-                continue
-            icon_url = urljoin(base_url, "icons/{}".format(icon_filename))
-            try:
-                req = Request(icon_url)
-                resp = urlopen(req, timeout=5)
-                data = resp.read()
-                with open(cached, "wb") as f:
-                    f.write(data)
-                self.icon_ready.emit(pkg_id, cached)
-            except Exception:
-                pass
-        # Keep the cache from growing unboundedly across sessions.
-        from carton.core.icon_cache import enforce_size_limit
-        enforce_size_limit(cache_dir)
 
 
 _STYLE = theme.MAIN_STYLE
@@ -731,58 +671,6 @@ class CartonWindow(QtWidgets.QDialog):
 
     # ---- internal ----
 
-    def _resolve_icon_path(self, pkg_data):
-        """Resolve an icon file path from package data. Returns path or None."""
-        icon_value = pkg_data.get("icon", "")
-        # Absolute file path on disk (locally registered scripts)
-        if (isinstance(icon_value, str)
-                and icon_value.endswith((".png", ".jpg", ".svg"))
-                and os.path.isabs(icon_value)
-                and os.path.exists(icon_value)):
-            return icon_value
-
-        icon_filename = _icon_filename(pkg_data)
-        if not icon_filename:
-            return None
-
-        base_dir = pkg_data.get("_catalogue_base_dir", "")
-        is_remote = pkg_data.get("_catalogue_remote", False)
-        if not base_dir:
-            return None
-        if is_remote:
-            if self._config:
-                cached = os.path.join(
-                    self._config.icon_cache_dir, icon_filename,
-                )
-                if os.path.exists(cached):
-                    return cached
-        else:
-            candidate = os.path.join(base_dir, "icons", icon_filename)
-            if os.path.exists(candidate):
-                return candidate
-        return None
-
-    def _fetch_remote_icon(self, base_url, icon_filename):
-        """Download a remote icon and cache locally. Returns local path or None."""
-        if not self._config or not icon_filename:
-            return None
-        cache_dir = self._config.icon_cache_dir
-        cached = os.path.join(cache_dir, icon_filename)
-        if os.path.exists(cached):
-            return cached
-
-        icon_url = urljoin(base_url, "icons/{}".format(icon_filename))
-        try:
-            req = Request(icon_url)
-            resp = urlopen(req, timeout=5)
-            data = resp.read()
-            os.makedirs(cache_dir, exist_ok=True)
-            with open(cached, "wb") as f:
-                f.write(data)
-            return cached
-        except Exception:
-            return None
-
     def _rebuild_cards(self):
         """Rebuild the card list based on sidebar selection."""
         self._stop_icon_fetcher()
@@ -884,7 +772,7 @@ class CartonWindow(QtWidgets.QDialog):
         """Kick off background icon download for uncached remote icons."""
         if not tasks:
             return
-        self._icon_fetcher = _IconFetcher(tasks, self._config, parent=self)
+        self._icon_fetcher = IconFetcher(tasks, self._config, parent=self)
         self._icon_fetcher.icon_ready.connect(self._on_icon_ready)
         self._icon_fetcher.start()
 
@@ -1011,9 +899,10 @@ class CartonWindow(QtWidgets.QDialog):
         in the background.
         """
         # Icon resolution
-        icon_path = self._resolve_icon_path(pkg_data)
+        icon_path = resolve_icon_path(pkg_data, self._config)
         if not icon_path:
-            icon_filename = _icon_filename(pkg_data)
+            from carton.ui._icon_fetch import make_icon_filename
+            icon_filename = make_icon_filename(pkg_data)
             base_dir = pkg_data.get("_catalogue_base_dir", "")
             is_remote = pkg_data.get("_catalogue_remote", False)
             if icon_filename and is_remote and base_dir:
@@ -1100,7 +989,7 @@ class CartonWindow(QtWidgets.QDialog):
         installed_ver = installed.get(pkg_id, {}).get("version")
 
         # Resolve icon path for the detail panel
-        icon_path = self._resolve_icon_path(pkg_data)
+        icon_path = resolve_icon_path(pkg_data, self._config)
 
         self._detail.show_package(pkg_id, pkg_data, installed_version=installed_ver,
                                   icon_path=icon_path)
@@ -1301,7 +1190,7 @@ class CartonWindow(QtWidgets.QDialog):
                 self._detail.show_package(
                     pkg_id, pkg_data,
                     installed_version=installed.get(pkg_id, {}).get("version"),
-                    icon_path=self._resolve_icon_path(pkg_data),
+                    icon_path=resolve_icon_path(pkg_data, self._config),
                 )
 
     def _on_update(self, pkg_id):
