@@ -90,22 +90,25 @@ class PackageInfo:
         self.origin = origin
 
     @classmethod
-    def from_registry_entry(cls, pkg_id, pkg_data, version_key=None):
-        """Create from a catalogue package entry. Key is '<namespace>/<name>'.
+    def from_catalogue_entry(cls, pkg_id, pkg_data, version_key=None, origin=None):
+        """Project a v5.0 catalogue row into a ``PackageInfo``.
 
-        (The ``_registry_`` in the method name is historical — it's the
-        public entry point used by CatalogueClient to project a catalogue
-        row into a ``PackageInfo``.)
+        ``pkg_data`` is the legacy-shape dict produced by
+        :class:`carton.core.catalogue.client.CatalogueClient` (scalar
+        identity fields + ``versions`` + ``latest_version``). ``origin``
+        is the resolved :class:`Origin` instance for the same package,
+        captured here so downstream flows can re-resolve artifacts
+        (reinstall, upgrade, pinned/unpinned check) without re-reading
+        the catalogue. Pass ``origin=None`` for placeholder rows that
+        haven't been hooked up to an origin yet.
 
-        ``platform`` follows the override rule: the version-level platform
-        (if present) wins, otherwise the package-level platform is
-        inherited.
+        ``platform`` follows the override rule: the version-level
+        platform (if present) wins, otherwise the package-level platform
+        is inherited.
         """
         version_key = version_key or pkg_data.get("latest_version", "0.0.0")
         version_info = pkg_data.get("versions", {}).get(version_key, {})
-        platform = version_info.get("platform")
-        if not platform:
-            platform = pkg_data.get("platform", [])
+        platform = version_info.get("platform") or pkg_data.get("platform", [])
         return cls(
             pkg_id=pkg_id,
             namespace=pkg_data.get("namespace", ""),
@@ -118,24 +121,8 @@ class PackageInfo:
             maya_versions=version_info.get("maya_versions", []),
             platform=platform,
             tags=pkg_data.get("tags", []),
+            origin=origin,
         )
-
-    @classmethod
-    def from_origin(cls, pkg_id, pkg_data, version_key=None, origin=None):
-        """Create from a v5.0 catalogue package entry + its resolved Origin.
-
-        ``pkg_data`` is the projected legacy-shape dict produced by
-        :class:`carton.core.catalogue.client.CatalogueClient` — so scalar
-        fields (``namespace``/``name``/``display_name``/...) and the
-        per-version info still live under ``pkg_data["versions"]`` and can
-        be parsed by :meth:`from_registry_entry`. ``origin`` is the
-        :class:`Origin` instance backing the same package, captured here so
-        downstream flows can re-resolve artifacts (reinstall, upgrade,
-        pinned/unpinned check) without re-reading the catalogue.
-        """
-        info = cls.from_registry_entry(pkg_id, pkg_data, version_key=version_key)
-        info.origin = origin
-        return info
 
     @classmethod
     def from_installed_entry(cls, pkg_id, data):

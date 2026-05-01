@@ -4,9 +4,8 @@ Covers:
 
 * ``origin`` kwarg on :class:`PackageInfo.__init__` — accepted, stored,
   defaults to ``None`` so v4.0 call sites stay untouched.
-* :meth:`PackageInfo.from_origin` — builds from a v5.0 catalogue row +
-  :class:`Origin` instance, reusing :meth:`from_registry_entry` for
-  scalar fields.
+* :meth:`PackageInfo.from_catalogue_entry` — builds from a v5.0
+  catalogue row + optional :class:`Origin` instance.
 * :meth:`PackageInfo.to_installed_dict` emits an ``origin`` block when
   one is attached, and omits it otherwise.
 * Round-trip through installed.json (to_installed_dict →
@@ -31,7 +30,7 @@ _EMBEDDED_VERSIONS = {
 
 
 def _catalogue_pkg_data():
-    """Legacy-shape dict that CatalogueClient hands to from_origin."""
+    """Legacy-shape dict that CatalogueClient hands to from_catalogue_entry."""
     return {
         "namespace": "studio",
         "name": "tool",
@@ -58,12 +57,12 @@ class TestOriginField:
         assert info.origin is origin
 
 
-class TestFromOrigin:
+class TestFromCatalogueEntry:
     def test_copies_scalar_fields_from_pkg_data(self):
         origin = EmbeddedOrigin(
             versions=_EMBEDDED_VERSIONS, latest_version="1.0.0", base_dir="/tmp/cat"
         )
-        info = PackageInfo.from_origin(
+        info = PackageInfo.from_catalogue_entry(
             "studio/tool", _catalogue_pkg_data(), version_key="1.0.0", origin=origin,
         )
         assert info.id == "studio/tool"
@@ -78,14 +77,14 @@ class TestFromOrigin:
 
     def test_defaults_version_to_latest(self):
         origin = EmbeddedOrigin(versions=_EMBEDDED_VERSIONS, base_dir="")
-        info = PackageInfo.from_origin(
+        info = PackageInfo.from_catalogue_entry(
             "studio/tool", _catalogue_pkg_data(), origin=origin
         )
         assert info.version == "1.0.0"
 
     def test_accepts_none_origin(self):
         """from_origin without an origin still works (e.g. placeholder rows)."""
-        info = PackageInfo.from_origin(
+        info = PackageInfo.from_catalogue_entry(
             "studio/tool", _catalogue_pkg_data(), version_key="1.0.0",
         )
         assert info.origin is None
