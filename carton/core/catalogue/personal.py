@@ -1,9 +1,13 @@
 """Personal catalogue — URL 直指定 single-package の受け皿.
 
-Settings > Add > "Add package by URL" や GitHub add dialog で単品 repo を
-受け取ったときに、CatalogueEntry に登録する代わりにここへ積む。plan v5.0
-では「全 package は何らかの catalogue 配下」という統一を保つため、購読
-catalogue 群と別に "personal catalogue" をローカルに持たせる。
+This is **a catalogue, not a third concept beside Origin/Catalogue**:
+Settings > Add > "Add package by URL" or GitHub add-by-repo accumulate
+single-package origins here, and CatalogueClient folds the result into
+the merged dict via a synthetic CatalogueEntry. The entry shape on
+disk is byte-identical to a v5.0 catalogue.json — the only special
+thing is its fixed home (``~/.carton/personal_catalogue.json``) so it
+survives ``install_dir`` moves and is always present without an
+explicit subscribe step.
 
 仕様:
 
@@ -106,9 +110,8 @@ class PersonalCatalogue(object):
             return False
         if pkg_id in self._packages:
             return False
-        self._packages[pkg_id] = {
-            "origin": {"type": "github", "repo": repo},
-        }
+        from carton.core.origins.github_origin import GithubOrigin
+        self._packages[pkg_id] = {"origin": GithubOrigin(repo=repo).to_dict()}
         return True
 
     def add_url_package(self, pkg_id, url):
@@ -117,9 +120,8 @@ class PersonalCatalogue(object):
             return False
         if pkg_id in self._packages:
             return False
-        self._packages[pkg_id] = {
-            "origin": {"type": "url", "url": url},
-        }
+        from carton.core.origins.url_origin import UrlOrigin
+        self._packages[pkg_id] = {"origin": UrlOrigin(url=url).to_dict()}
         return True
 
     def remove(self, pkg_id):
