@@ -1,0 +1,50 @@
+[build-system]
+requires = ["setuptools>=61", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "carton-maya"
+version = "0.5.6"
+description = "Local-first package manager for Autodesk Maya tools"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [
+    { name = "cignoir" },
+]
+keywords = ["maya", "autodesk", "package-manager", "vfx", "dcc"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Multimedia :: Graphics :: 3D Modeling",
+    "Topic :: Software Development :: Build Tools",
+]
+dependencies = [
+    "jsonschema>=4",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7",
+    "pytest-qt",
+]
+
+[project.scripts]
+carton-maya = "carton.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/cignoir/carton"
+Repository = "https://github.com/cignoir/carton"
+Issues = "https://github.com/cignoir/carton/issues"
+
+[tool.setuptools.packages.find]
+include = ["carton*"]
+
+[tool.setuptools.package-data]
+carton = ["data/**/*"]
