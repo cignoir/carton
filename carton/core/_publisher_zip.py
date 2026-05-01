@@ -11,16 +11,10 @@ import os
 import zipfile
 
 from carton.core.catalogue_icons import normalise_icon_for_storage
+from carton.core.pack_filters import EXCLUDE_DIRS, EXCLUDE_FILES
 
 
 _DEFAULT_MAYA_VERSIONS = ["2024", "2025", "2026", "2027"]
-
-_EXCLUDE_DIRS = {
-    "__pycache__", ".git", ".svn", ".hg",
-    "tests", "test", "dist", "build",
-    ".vscode", ".idea",
-}
-_EXCLUDE_FILES = {".gitignore", ".gitattributes", ".DS_Store", "Thumbs.db"}
 
 
 def create_zip(staging_dir, local_path, namespace, name, version, is_folder,
@@ -66,7 +60,7 @@ def create_zip(staging_dir, local_path, namespace, name, version, is_folder,
     with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as zf:
         if is_folder:
             for root, dirs, files in os.walk(local_path):
-                dirs[:] = [d for d in dirs if d not in _EXCLUDE_DIRS]
+                dirs[:] = [d for d in dirs if d not in EXCLUDE_DIRS]
                 file_set = set(files)
                 for f in files:
                     # Strip .pyc that have a .py sibling — those are
@@ -79,7 +73,7 @@ def create_zip(staging_dir, local_path, namespace, name, version, is_folder,
                         sibling_py = f[:-1]  # foo.pyc -> foo.py
                         if sibling_py in file_set and not include_compiled:
                             continue
-                    if f in _EXCLUDE_FILES:
+                    if f in EXCLUDE_FILES:
                         continue
                     # Skip stale package.json — we'll inject the canonical one
                     if f == "package.json" and root == local_path:
