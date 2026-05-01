@@ -7,7 +7,6 @@ actually touched. The inputs are data, the outputs are a mutated
 catalogue file on disk and a warnings list (author mismatch, etc.).
 """
 
-import json
 import os
 from datetime import datetime, timezone
 
@@ -15,10 +14,8 @@ from carton.core.catalogue.icons import (
     normalise_icon_for_storage,
     rebuild_icons_archive,
 )
-from carton.core.migrations import (
-    CATALOGUE_SCHEMA_VERSION,
-    migrate_registry_to_catalogue,
-)
+from carton.core.catalogue.io import read_catalogue_dict, write_catalogue_dict
+from carton.core.migrations import CATALOGUE_SCHEMA_VERSION
 from carton.core.uuid_id import stamp_uuid
 
 
@@ -38,13 +35,8 @@ def update_catalogue(catalogue_path, catalogue_entry, pkg_id,
     """
     out_path = os.path.normpath(catalogue_path)
 
-    if os.path.exists(out_path):
-        with open(out_path, "r", encoding="utf-8") as f:
-            catalogue = json.load(f)
-        # In-memory upgrade of any lingering v4.0 registry shape so the
-        # rest of this function only has to think about v5.0.
-        catalogue, _ = migrate_registry_to_catalogue(catalogue)
-    else:
+    catalogue, _ = read_catalogue_dict(out_path, auto_migrate_file=False)
+    if not catalogue:
         catalogue = {
             "schema_version": CATALOGUE_SCHEMA_VERSION,
             "catalogue_id": "",
@@ -119,9 +111,7 @@ def update_catalogue(catalogue_path, catalogue_entry, pkg_id,
 
     catalogue["last_updated"] = now
 
-    os.makedirs(os.path.dirname(out_path), exist_ok=True)
-    with open(out_path, "w", encoding="utf-8") as f:
-        json.dump(catalogue, f, indent=2, ensure_ascii=False)
+    write_catalogue_dict(out_path, catalogue)
 
     rebuild_icons_archive(catalogue_entry.base_dir)
     return warnings

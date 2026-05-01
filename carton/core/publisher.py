@@ -389,18 +389,11 @@ class Publisher:
 
     @staticmethod
     def _check_version_conflict(pkg_id, version, catalogue_path):
-        """Raise :class:`VersionConflictError` if ``version`` already exists.
-
-        Reads the catalogue.json at ``catalogue_path`` (if any) and
-        checks ``packages[pkg_id]["origin"]["versions"]``. Accepts v4.0
-        registries transparently by running them through the in-memory
-        migrator first.
-        """
-        if not os.path.exists(catalogue_path):
-            return
-        with open(catalogue_path, "r", encoding="utf-8") as f:
-            data = json.load(f)
-        data, _ = migrate_registry_to_catalogue(data, stamp_id=False)
+        """Raise :class:`VersionConflictError` if ``version`` already exists."""
+        from carton.core.catalogue.io import read_catalogue_dict
+        data, _ = read_catalogue_dict(
+            catalogue_path, stamp_id=False, auto_migrate_file=False,
+        )
         entry = (data.get("packages") or {}).get(pkg_id)
         if not entry:
             return
@@ -578,9 +571,8 @@ class Publisher:
         if not os.path.exists(catalogue_path):
             raise RuntimeError("Catalogue not found: {}".format(catalogue_path))
 
-        with open(catalogue_path, "r", encoding="utf-8") as f:
-            catalogue = json.load(f)
-        catalogue, _ = migrate_registry_to_catalogue(catalogue)
+        from carton.core.catalogue.io import read_catalogue_dict, write_catalogue_dict
+        catalogue, _ = read_catalogue_dict(catalogue_path, auto_migrate_file=False)
 
         packages = catalogue.get("packages", {})
         if pkg_id not in packages:
@@ -610,26 +602,23 @@ class Publisher:
             "%Y-%m-%dT%H:%M:%SZ"
         )
 
-        with open(catalogue_path, "w", encoding="utf-8") as f:
-            json.dump(catalogue, f, indent=2, ensure_ascii=False)
+        write_catalogue_dict(catalogue_path, catalogue)
 
         return {"id": pkg_id, "name": name}
 
     def find_published_catalogues(self, pkg_id):
         """Find all local catalogues that contain a given package id."""
+        from carton.core.catalogue.io import read_catalogue_dict
         results = []
         for entry in self._config.catalogues:
             if entry.is_remote:
                 continue
             catalogue_path = self._resolve_catalogue_write_path(entry.path)
-            if not catalogue_path or not os.path.exists(catalogue_path):
+            if not catalogue_path:
                 continue
-            try:
-                with open(catalogue_path, "r", encoding="utf-8") as f:
-                    data = json.load(f)
-                data, _ = migrate_registry_to_catalogue(data, stamp_id=False)
-                if pkg_id in (data.get("packages") or {}):
-                    results.append(entry)
-            except (json.JSONDecodeError, OSError):
-                continue
+            data, _ = read_catalogue_dict(
+                catalogue_path, stamp_id=False, auto_migrate_file=False,
+            )
+            if pkg_id in (data.get("packages") or {}):
+                results.append(entry)
         return results
