@@ -1,0 +1,10 @@
+{
+  "name": "{{name}}",
+  "display_name": "{{display_name}}",
+  "version": "{{version}}",
+  "type": "maya_module",
+  "description": "{{description}}",
+  "author": "{{author}}",
+  "maya_versions": {{maya_versions_json}},
+  "icon": "@auto"
+}

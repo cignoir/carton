@@ -27,6 +27,7 @@ classifiers = [
 ]
 dependencies = [
     "jsonschema>=4",
+    "questionary>=2",
 ]
 
 [project.optional-dependencies]
@@ -45,6 +46,7 @@ Issues = "https://github.com/cignoir/carton/issues"
 
 [tool.setuptools.packages.find]
 include = ["carton*"]
+exclude = ["carton.data.templates*"]
 
 [tool.setuptools.package-data]
 carton = ["data/**/*"]

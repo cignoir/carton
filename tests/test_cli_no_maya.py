@@ -6,6 +6,7 @@ pull any ``maya.*`` module. Subprocess-driven so other tests in this
 session that legitimately import maya stubs don't pollute the check.
 """
 
+import os
 import subprocess
 import sys
 
@@ -59,3 +60,43 @@ def test_carton_cli_help_does_not_load_maya():
         encoding="utf-8",
     )
     assert result.returncode == 0, "stderr=\n" + (result.stderr or "")
+
+
+def test_init_then_pack_e2e_without_maya(tmp_path):
+    """End-to-end: ``package init`` scaffold lints clean and ``pack`` builds a zip."""
+    workdir = tmp_path / "fresh_tool"
+    init_result = subprocess.run(
+        [
+            sys.executable, "-m", "carton",
+            "package", "init", str(workdir),
+            "--non-interactive",
+            "--type", "python_package",
+            "--name", "fresh_tool",
+            "--display-name", "Fresh Tool",
+            "--version", "0.1.0",
+            "--description", "scaffold smoke test",
+            "--author", "tester",
+            "--maya-versions", "2025,2026",
+        ],
+        capture_output=True, text=True, encoding="utf-8",
+    )
+    assert init_result.returncode == 0, init_result.stderr
+    assert (workdir / "package.json").is_file()
+    assert (workdir / "fresh_tool" / "__init__.py").is_file()
+
+    check_result = subprocess.run(
+        [sys.executable, "-m", "carton", "package", "check", str(workdir)],
+        capture_output=True, text=True, encoding="utf-8",
+    )
+    assert check_result.returncode == 0, check_result.stderr
+
+    pack_result = subprocess.run(
+        [
+            sys.executable, "-m", "carton",
+            "package", "pack", str(workdir),
+            "--out", str(tmp_path / "dist"),
+        ],
+        capture_output=True, text=True, encoding="utf-8",
+    )
+    assert pack_result.returncode == 0, pack_result.stderr
+    assert (tmp_path / "dist" / "fresh_tool-0.1.0.zip").is_file()

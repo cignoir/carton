@@ -1,0 +1,16 @@
+{
+  "name": "{{name}}",
+  "display_name": "{{display_name}}",
+  "version": "{{version}}",
+  "type": "plugin",
+  "description": "{{description}}",
+  "author": "{{author}}",
+  "maya_versions": {{maya_versions_json}},
+  "platform": {{platform_json}},
+  "entry_point": {
+    "type": "plugin",
+    "plugin_file": "{{name}}",
+    "auto_load": false
+  },
+  "icon": "@auto"
+}

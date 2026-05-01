@@ -1,0 +1,15 @@
+{
+  "name": "{{name}}",
+  "display_name": "{{display_name}}",
+  "version": "{{version}}",
+  "type": "python_package",
+  "description": "{{description}}",
+  "author": "{{author}}",
+  "maya_versions": {{maya_versions_json}},
+  "entry_point": {
+    "type": "python",
+    "module": "{{name}}",
+    "function": "show"
+  },
+  "icon": "@auto"
+}

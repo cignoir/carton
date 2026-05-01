@@ -1,0 +1,15 @@
+{
+  "name": "{{name}}",
+  "display_name": "{{display_name}}",
+  "version": "{{version}}",
+  "type": "mel_script",
+  "description": "{{description}}",
+  "author": "{{author}}",
+  "maya_versions": {{maya_versions_json}},
+  "entry_point": {
+    "type": "mel",
+    "script": "{{name}}.mel",
+    "procedure": "{{name}}"
+  },
+  "icon": "@auto"
+}

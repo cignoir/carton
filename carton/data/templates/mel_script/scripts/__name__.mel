@@ -1,0 +1,4 @@
+// {{display_name}} - Carton entry point
+global proc {{name}}() {
+    print("[{{name}}] hello from {{display_name}} v{{version}}\n");
+}
