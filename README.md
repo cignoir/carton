@@ -401,8 +401,8 @@ At launch: `import my_tool; my_tool.show()` (or the function you picked).
 
 If you bundle a `package.json` in the folder root, Carton skips the run-mode
 UI entirely and just trusts the metadata. This is the recommended way to make
-folder packages portable across teams. See [package.json](#packagejson)
-below.
+folder packages portable across teams. See the
+[Carton Developer Guide](docs/developer-guide.md) for details.
 
 ### 5. Folder package — MEL (`mel_script`)
 
@@ -513,89 +513,17 @@ your own use without one) but **required to publish**. If you type
 `MyStudio` it gets auto-converted to `mystudio`; the canonical form is
 shown live below the input.
 
-## package.json
+## Developer documentation
 
-Place this in your tool's root to define metadata:
+Documentation for the **author** side — building Carton-compatible packages
+— lives in [docs/developer-guide.md](docs/developer-guide.md). It covers:
 
-```json
-{
-  "namespace": "mystudio",
-  "name": "my_tool",
-  "display_name": "My Tool",
-  "version": "1.0.0",
-  "type": "python_package",
-  "description": "What this tool does",
-  "author": "your_name",
-  "maya_versions": ["2024", "2025", "2026", "2027"],
-  "entry_point": {
-    "type": "python",
-    "module": "my_tool",
-    "function": "show"
-  },
-  "icon": "🔧",
-  "home_origin": {"type": "embedded", "catalogue_name": "studio-main"}
-}
-```
-
-Supported types: `python_package`, `mel_script`, `plugin`, `maya_module`
-
-`package.json` is the **source of truth** for `entry_point`, `maya_versions`,
-and `icon`. The publisher copies them into the target catalogue (as previews)
-and into the package zip; at install time Carton reads them from the zip's
-inner `package.json` rather than trusting any cached copy.
-
-`icon` accepts:
-
-- An emoji (e.g. `"🔧"`)
-- A relative file path (e.g. `"resources/icon.png"`)
-- The literal `"@auto"` to use `icons/<name>.png` from the catalogue
-- `null` for no icon
-
-`home_origin` records where this package likes to be published (embedded
-catalogue / github repo / url / local). It's a tagged union over the four
-origin types and replaces the v0.4 `home_registry` field.
-
-### Identity model
-
-Packages are identified by **`namespace/name`** (npm-style, e.g. `mystudio/rigger`).
-Both fields are lowercase (`a-z 0-9 - _`). The `namespace` is **required to publish**;
-locally-registered tools that you don't intend to share can omit it.
-
-Once `namespace`/`name` live in `package.json`, **commit the file** so that other
-people who clone your source converge on the same identity automatically — Add /
-Publish on their side will update the same catalogue entry instead of creating a
-duplicate.
-
-### Single-file scripts (sidecar)
-
-A single `.py` / `.mel` / `.mll` script has nowhere to put `package.json`, so
-Carton uses a **sidecar** named `<filename>.carton.json` placed next to it:
-
-```
-tools/
-├── quickRename.mel
-└── quickRename.mel.carton.json   ← commit this alongside the script
-```
-
-The sidecar carries the same fields as `package.json`. Carton creates it
-automatically the first time you publish.
-
-## CLI
-
-```bash
-# List packages in a catalogue or registry
-python -m carton list path/to/catalogue.json
-
-# Unpublish a package from a catalogue
-python -m carton unpublish --catalogue path/to/catalogue.json --id mystudio/rigger
-
-# Migrate a v0.4 registry.json into a v5.0 catalogue.json in place
-python -m carton catalogue migrate path/to/registry.json
-
-# Inspect or stamp a v5.0 catalogue's UUID
-python -m carton catalogue id path/to/catalogue.json
-python -m carton catalogue id path/to/catalogue.json --stamp
-```
+- `package.json` full reference (per-type `entry_point` examples,
+  `platform` requirements, etc.)
+- How to choose a package type (`plugin` vs `maya_module` decision matrix)
+- Distributing as a Maya Module (`.mod`) with concrete steps
+- Carton CLI (`uvx carton-maya`) usage
+- Pre-publish checklist and common pitfalls
 
 ## Development
 

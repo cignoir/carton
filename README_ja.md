@@ -318,7 +318,7 @@ my_tool/
 
 起動時には `import my_tool; my_tool.show()`（または選択した関数）を実行します。
 
-フォルダルートに `package.json` を置いておくと、Carton は実行モード設定の UI を一切表示せず、メタデータを信頼してそのまま使います。チームでフォルダパッケージを共有するなら、この方法を推奨します。詳細は後述の [package.json](#packagejson) を参照してください。
+フォルダルートに `package.json` を置いておくと、Carton は実行モード設定の UI を一切表示せず、メタデータを信頼してそのまま使います。チームでフォルダパッケージを共有するなら、この方法を推奨します。詳細は [Carton 開発者ガイド](docs/developer-guide_ja.md) を参照してください。
 
 ### 5. フォルダパッケージ — MEL（`mel_script`）
 
@@ -397,77 +397,15 @@ my_plugin/
 
 **Namespace** フィールドは Add 時には任意で（個人用途のみのツールなら省略可能）、**公開時には必須**です。`MyStudio` のように入力すると自動的に `mystudio` に正規化され、入力欄の下に正規化後の形式がライブで表示されます。
 
-## package.json
+## 開発者向けドキュメント
 
-ツールのルートに以下のメタデータファイルを置きます。
+Carton と互換性のあるパッケージを **作る** 側のドキュメントは [docs/developer-guide_ja.md](docs/developer-guide_ja.md) にまとめています。次の内容を扱います：
 
-```json
-{
-  "namespace": "mystudio",
-  "name": "my_tool",
-  "display_name": "My Tool",
-  "version": "1.0.0",
-  "type": "python_package",
-  "description": "ツールの説明",
-  "author": "your_name",
-  "maya_versions": ["2024", "2025", "2026", "2027"],
-  "entry_point": {
-    "type": "python",
-    "module": "my_tool",
-    "function": "show"
-  },
-  "icon": "🔧",
-  "home_origin": {"type": "embedded", "catalogue_name": "studio-main"}
-}
-```
-
-対応タイプ: `python_package`, `mel_script`, `plugin`, `maya_module`
-
-`package.json` は `entry_point`、`maya_versions`、`icon` の **Source of Truth** です。Publisher がこれらを公開先カタログ（プレビュー用）とパッケージ zip 内に転写します。インストール後は zip 内の `package.json` を読み直すため、カタログや installed.json のキャッシュ値が古くても起動時の挙動には影響しません。
-
-`icon` には次の値を指定できます。
-
-- 絵文字（例: `"🔧"`）
-- 相対ファイルパス（例: `"resources/icon.png"`）
-- 文字列リテラル `"@auto"`（カタログの `icons/<name>.png` を自動解決）
-- `null`（アイコンなし）
-
-`home_origin` はこのパッケージが通常どこに publish されるかを記録します（embedded カタログ / github リポジトリ / url / local の 4 種のタグドユニオン）。v0.4 の `home_registry` フィールドの後継です。
-
-### 識別子モデル
-
-パッケージは **`namespace/name`** という npm 風の組み合わせで識別されます（例: `mystudio/rigger`）。どちらのフィールドも小文字 `a-z 0-9 - _` のみが使用可能です。`namespace` は**公開時には必須**ですが、共有を想定しないローカル個人用ツールでは省略できます。
-
-`namespace` と `name` を `package.json` に書き込んだら、**そのファイルを必ず VCS にコミット**してください。同じソースをクローンした別のメンバーが Add や Publish を行っても、自動的に同一の識別子に揃うため、カタログ上では「同じパッケージの更新」として正しく扱われ、重複登録を防げます。
-
-### 単体ファイルスクリプト（サイドカー）
-
-単体の `.py` / `.mel` / `.mll` には `package.json` を置く場所がありません。そのため Carton は、**サイドカーファイル** `<filename>.carton.json` を同じディレクトリに配置します。
-
-```
-tools/
-├── quickRename.mel
-└── quickRename.mel.carton.json   ← スクリプトと一緒にコミットする
-```
-
-サイドカーの中身は `package.json` と同じスキーマです。初回 publish の際に Carton が自動生成するので、生成されたファイルをコミットしてチームに行き渡らせてください。
-
-## CLI
-
-```bash
-# カタログ or registry 内のパッケージ一覧
-python -m carton list path/to/catalogue.json
-
-# カタログから特定パッケージを unpublish
-python -m carton unpublish --catalogue path/to/catalogue.json --id mystudio/rigger
-
-# v0.4 の registry.json を v5.0 の catalogue.json に migrate
-python -m carton catalogue migrate path/to/registry.json
-
-# v5.0 カタログの UUID を確認・stamp
-python -m carton catalogue id path/to/catalogue.json
-python -m carton catalogue id path/to/catalogue.json --stamp
-```
+- `package.json` 完全リファレンス（全タイプの `entry_point` 例、`platform` 必須要件等）
+- パッケージタイプの選び方（`plugin` vs `maya_module` の判断軸）
+- Maya Module (`.mod`) として配布する具体手順
+- Carton CLI (`uvx carton-maya`) の使い方
+- 公開前チェックリストと よくある落とし穴
 
 ## 開発
 
