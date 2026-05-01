@@ -230,7 +230,7 @@ def _check_schema(data, result):
         _check_required_fields_minimal(data, result)
         return
 
-    schema_path = _bundled_schema_path("package.schema.json")
+    schema_path = bundled_schema_path("package.schema.json")
     if not schema_path:
         result.add(
             SEVERITY_ERROR, "schema_missing",
@@ -403,8 +403,13 @@ def _check_mod_files(folder, result):
 # Helpers
 # ---------------------------------------------------------------------------
 
-def _bundled_schema_path(filename):
-    """Return path to a bundled schema file inside the carton-maya wheel."""
+def bundled_schema_path(filename):
+    """Return absolute path to a schema bundled inside the carton-maya wheel.
+
+    Returns ``None`` if the file isn't shipped (which would be a
+    packaging bug, since ``carton/data/schemas/`` is included via
+    ``pyproject.toml`` package-data).
+    """
     # carton/data/schemas/<filename>
     here = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     candidate = os.path.join(here, "data", "schemas", filename)

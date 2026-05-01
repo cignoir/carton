@@ -197,6 +197,29 @@ def _package_check(args):
         sys.exit(1)
 
 
+def _print_bundled_schema(filename):
+    """Stream a bundled JSON Schema file to stdout."""
+    from carton.core.lint import bundled_schema_path
+
+    path = bundled_schema_path(filename)
+    if not path:
+        print("ERROR: bundled {} not found in carton-maya install".format(filename),
+              file=sys.stderr)
+        sys.exit(1)
+    with open(path, "r", encoding="utf-8") as f:
+        sys.stdout.write(f.read())
+
+
+def _package_schema(args):
+    """Print the package.json JSON Schema."""
+    _print_bundled_schema("package.schema.json")
+
+
+def _catalogue_schema(args):
+    """Print the catalogue.json JSON Schema."""
+    _print_bundled_schema("catalogue.schema.json")
+
+
 def main():
     # On Windows with cp932 (Japanese) locale, argparse help and any
     # non-ASCII output crashes with UnicodeEncodeError. Force UTF-8 so
@@ -233,6 +256,11 @@ def main():
         help="Path to package folder or single file (default: .)",
     )
 
+    pkg_sub.add_parser(
+        "schema",
+        help="Print the package.json JSON Schema (for IDE completion)",
+    )
+
     # ---- list ----
     ls = sub.add_parser("list", help="List packages in a catalogue")
     ls.add_argument("catalogue", help="Path to catalogue.json")
@@ -265,6 +293,10 @@ def main():
         "--stamp", action="store_true",
         help="Write a fresh UUID into the file if it doesn't already have one",
     )
+    cat_sub.add_parser(
+        "schema",
+        help="Print the catalogue.json JSON Schema (for IDE completion)",
+    )
 
     args = parser.parse_args()
 
@@ -272,6 +304,8 @@ def main():
         _package_lint(args)
     elif args.command == "package" and getattr(args, "package_command", None) == "check":
         _package_check(args)
+    elif args.command == "package" and getattr(args, "package_command", None) == "schema":
+        _package_schema(args)
     elif args.command == "list":
         _list_packages(args)
     elif args.command == "unpublish":
@@ -280,6 +314,8 @@ def main():
         _catalogue_migrate(args)
     elif args.command == "catalogue" and getattr(args, "catalogue_command", None) == "id":
         _catalogue_id(args)
+    elif args.command == "catalogue" and getattr(args, "catalogue_command", None) == "schema":
+        _catalogue_schema(args)
     else:
         parser.print_help()
 
