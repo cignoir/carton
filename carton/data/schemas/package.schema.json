@@ -4,7 +4,7 @@
   "title": "Carton Package Metadata",
   "description": "Carton パッケージの package.json スキーマ (v4.0). この package.json が entry_point / maya_versions / icon の SoT",
   "type": "object",
-  "required": ["name", "display_name", "version", "description", "author", "maya_versions", "entry_point"],
+  "required": ["name", "display_name", "version", "description", "author", "maya_versions"],
   "properties": {
     "schema_version": {
       "type": "string",
@@ -166,6 +166,16 @@
       },
       "then": {
         "required": ["platform"]
+      }
+    },
+    {
+      "if": {
+        "properties": { "type": { "const": "maya_module" } },
+        "required": ["type"]
+      },
+      "then": {},
+      "else": {
+        "required": ["entry_point"]
       }
     }
   ],

@@ -137,3 +137,20 @@ def test_rendered_python_package_passes_lint(tmp_path):
     assert not result.has_errors(), [
         (i.rule, i.message) for i in result.errors
     ]
+
+
+def test_rendered_maya_module_passes_lint(tmp_path):
+    """maya_module scaffold lints clean even though entry_point is omitted."""
+    from carton.core.lint import lint_package
+
+    target = tmp_path / "fresh_mod"
+    ctx = build_context(
+        name="fresh_mod", display_name="Fresh Mod", version="0.1.0",
+        description="d", author="a", maya_versions=["2025"],
+    )
+    render_template("maya_module", str(target), ctx)
+
+    result = lint_package(str(target))
+    assert not result.has_errors(), [
+        (i.rule, i.message) for i in result.errors
+    ]
