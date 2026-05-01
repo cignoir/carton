@@ -1,0 +1,44 @@
+name: Publish to PyPI
+on:
+  push:
+    tags: ["v*"]
+
+# OIDC trusted publishing (no API token needed) requires this permission.
+# Configure the matching publisher under PyPI -> Manage -> Publishing.
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  publish:
+    name: Build and publish carton-maya
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Extract version from tag
+        id: version
+        run: echo "VERSION=${GITHUB_REF#refs/tags/v}" >> "$GITHUB_OUTPUT"
+
+      - name: Sync version into pyproject.toml + carton/__init__.py
+        run: |
+          VERSION="${{ steps.version.outputs.VERSION }}"
+          sed -i "s/^version = \".*\"/version = \"$VERSION\"/" pyproject.toml
+          sed -i "s/__version__ = \".*\"/__version__ = \"$VERSION\"/" carton/__init__.py
+
+      - name: Build wheel and sdist
+        run: |
+          python -m pip install --upgrade pip build
+          python -m build
+
+      - name: Publish to PyPI (trusted publishing)
+        uses: pypa/gh-action-pypi-publish@release/v1
+        # Defaults to https://upload.pypi.org/legacy/ when no
+        # repository-url is set. To publish to TestPyPI for a dry run,
+        # add: repository-url: https://test.pypi.org/legacy/
