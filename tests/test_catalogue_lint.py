@@ -1,11 +1,11 @@
-"""Tests for ``carton.core.catalogue_lint``."""
+"""Tests for ``carton.core.catalogue.lint``."""
 
 import json
 import os
 
 import pytest
 
-from carton.core.catalogue_lint import lint_catalogue
+from carton.core.catalogue.lint import lint_catalogue
 from carton.core.lint import SEVERITY_ERROR, SEVERITY_WARNING, SEVERITY_INFO
 
 

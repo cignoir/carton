@@ -17,7 +17,7 @@ from urllib.error import URLError
 from carton.core import gh_cli as _default_gh_cli
 from carton.core._publisher_catalogue import update_catalogue
 from carton.core._publisher_zip import create_zip
-from carton.core.catalogue_icons import (
+from carton.core.catalogue.icons import (
     copy_icon_to_catalogue,
     is_icon_file,
 )

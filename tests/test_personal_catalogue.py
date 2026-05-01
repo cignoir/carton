@@ -1,4 +1,4 @@
-"""Tests for :mod:`carton.core.personal_catalogue` (Step 4-B).
+"""Tests for :mod:`carton.core.catalogue.personal` (Step 4-B).
 
 Personal catalogue is the receptacle for URL 直指定 single-package repos
 added via Settings > Add. It shares v5.0 catalogue.json shape so that
@@ -24,7 +24,7 @@ import os
 
 import pytest
 
-from carton.core import personal_catalogue as pc
+from carton.core.catalogue import personal as pc
 from carton.core.uuid_id import is_valid_uuid
 
 

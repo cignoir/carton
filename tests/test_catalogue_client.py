@@ -7,7 +7,7 @@ import tempfile
 import pytest
 
 from carton.core import github_api
-from carton.core.catalogue_client import CatalogueClient
+from carton.core.catalogue.client import CatalogueClient
 from carton.core.config import Config, CatalogueEntry
 from carton.core.migrations import (
     CATALOGUE_FILENAME,
@@ -247,7 +247,7 @@ class TestCatalogueClientPersonal:
         return CatalogueClient(config, cache=cache, personal_catalogue=personal)
 
     def test_merges_personal_github_package(self, tmp_path, isolated_cache, monkeypatch):
-        from carton.core.personal_catalogue import (
+        from carton.core.catalogue.personal import (
             PERSONAL_DISPLAY_NAME,
             PersonalCatalogue,
         )
@@ -278,7 +278,7 @@ class TestCatalogueClientPersonal:
 
     def test_empty_personal_is_noop(self, tmp_path, isolated_cache):
         """Empty personal catalogue must not mask subscribed catalogue data."""
-        from carton.core.personal_catalogue import PersonalCatalogue
+        from carton.core.catalogue.personal import PersonalCatalogue
 
         catalogue_path = tmp_path / CATALOGUE_FILENAME
         catalogue_path.write_text(
@@ -302,7 +302,7 @@ class TestCatalogueClientPersonal:
         Personal is a user's ad-hoc fallback; an official source
         should always take precedence to keep behaviour predictable.
         """
-        from carton.core.personal_catalogue import PersonalCatalogue
+        from carton.core.catalogue.personal import PersonalCatalogue
 
         catalogue_path = tmp_path / CATALOGUE_FILENAME
         catalogue_path.write_text(
@@ -327,7 +327,7 @@ class TestCatalogueClientPersonal:
 
     def test_loads_personal_from_explicit_path(self, tmp_path, isolated_cache, monkeypatch):
         """``personal_catalogue_path`` param bypasses the default ~/.carton/ path."""
-        from carton.core.personal_catalogue import PersonalCatalogue
+        from carton.core.catalogue.personal import PersonalCatalogue
 
         personal_path = tmp_path / "alt" / "personal_catalogue.json"
         cat = PersonalCatalogue()

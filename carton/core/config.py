@@ -93,7 +93,7 @@ class CatalogueEntry:
 
     ``catalogue_id`` is a client-side cache of the UUID stored inside the
     catalogue's ``catalogue.json``. It is populated on fetch (see
-    :class:`carton.core.catalogue_client.CatalogueClient`) and persisted
+    :class:`carton.core.catalogue.client.CatalogueClient`) and persisted
     alongside ``path`` so duplicate detection can work before the first
     network round trip. Empty means "not yet known" — the hosted file is
     always the source of truth.

@@ -22,7 +22,7 @@ Artifact resolution:
 
 Url origins are typically registered through ``Settings > Add >
 "Single package by URL"`` and stored in
-:mod:`carton.core.personal_catalogue`; they can also appear in a
+:mod:`carton.core.catalogue.personal`; they can also appear in a
 subscribed catalogue whose maintainer wants to index a third-party tool
 they don't host themselves.
 """

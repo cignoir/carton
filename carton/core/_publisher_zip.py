@@ -10,7 +10,7 @@ import json
 import os
 import zipfile
 
-from carton.core.catalogue_icons import normalise_icon_for_storage
+from carton.core.catalogue.icons import normalise_icon_for_storage
 from carton.core.pack_filters import EXCLUDE_DIRS, EXCLUDE_FILES
 
 

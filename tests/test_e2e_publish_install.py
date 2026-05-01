@@ -14,12 +14,12 @@ import os
 import tempfile
 import zipfile
 
-from carton.core.catalogue_client import CatalogueClient
+from carton.core.catalogue.client import CatalogueClient
 from carton.core.config import Config, CatalogueEntry
 from carton.core.downloader import Downloader
 from carton.core.env_manager import MayaEnvManager
 from carton.core.installer import InstallManager
-from carton.core.personal_catalogue import PersonalCatalogue
+from carton.core.catalogue.personal import PersonalCatalogue
 from carton.core.publisher import Publisher
 
 

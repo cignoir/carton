@@ -11,7 +11,7 @@ import json
 import os
 from datetime import datetime, timezone
 
-from carton.core.catalogue_icons import (
+from carton.core.catalogue.icons import (
     normalise_icon_for_storage,
     rebuild_icons_archive,
 )

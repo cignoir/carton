@@ -125,7 +125,7 @@ class PackageInfo:
         """Create from a v5.0 catalogue package entry + its resolved Origin.
 
         ``pkg_data`` is the projected legacy-shape dict produced by
-        :class:`carton.core.catalogue_client.CatalogueClient` — so scalar
+        :class:`carton.core.catalogue.client.CatalogueClient` — so scalar
         fields (``namespace``/``name``/``display_name``/...) and the
         per-version info still live under ``pkg_data["versions"]`` and can
         be parsed by :meth:`from_registry_entry`. ``origin`` is the

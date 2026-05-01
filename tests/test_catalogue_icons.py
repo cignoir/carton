@@ -5,7 +5,7 @@ import zipfile
 
 import pytest
 
-from carton.core.catalogue_icons import (
+from carton.core.catalogue.icons import (
     copy_icon_to_catalogue,
     is_icon_file,
     normalise_icon_for_storage,

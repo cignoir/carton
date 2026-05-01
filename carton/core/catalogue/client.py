@@ -79,7 +79,7 @@ class CatalogueClient(object):
         self._origins = {}
         self._catalogue_meta = {}  # pkg_id -> {"name": ..., "id": ..., "remote": bool}
         # Personal catalogue = local receptacle for URL-direct single-package
-        # adds (see :mod:`carton.core.personal_catalogue`). Injection shape:
+        # adds (see :mod:`carton.core.catalogue.personal`). Injection shape:
         #   * ``personal_catalogue=<instance>`` → use it directly
         #   * ``personal_catalogue_path=<path>`` → load from that path on fetch
         #   * both None → load from the default ``~/.carton/`` location
@@ -137,7 +137,7 @@ class CatalogueClient(object):
         or on the fixed virtual entry path.
         """
         from carton.core.config import CatalogueEntry
-        from carton.core.personal_catalogue import (
+        from carton.core.catalogue.personal import (
             PERSONAL_DISPLAY_NAME,
             PersonalCatalogue,
         )

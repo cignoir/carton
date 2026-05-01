@@ -161,7 +161,7 @@ class TestCatalogueClientDisplayNameCache:
     """CatalogueClient should refresh the entry's display_name on every read."""
 
     def test_cache_display_name_picks_up_fetched_value(self, tmp_path):
-        from carton.core.catalogue_client import CatalogueClient
+        from carton.core.catalogue.client import CatalogueClient
         from carton.core.source_cache import SourceCache
 
         cat_path = tmp_path / "catalogue.json"
@@ -183,7 +183,7 @@ class TestCatalogueClientDisplayNameCache:
 
     def test_cache_display_name_keeps_stale_when_source_empty(self, tmp_path):
         """An empty value in catalogue.json must not clobber a usable cache."""
-        from carton.core.catalogue_client import CatalogueClient
+        from carton.core.catalogue.client import CatalogueClient
         from carton.core.source_cache import SourceCache
 
         cat_path = tmp_path / "catalogue.json"

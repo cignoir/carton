@@ -732,7 +732,7 @@ class RegistriesSection(QtWidgets.QWidget):
         (``self._list``) only reflects subscribed catalogues, so nothing
         needs to change there.
         """
-        from carton.core.personal_catalogue import PersonalCatalogue, derive_pkg_id
+        from carton.core.catalogue.personal import PersonalCatalogue, derive_pkg_id
         from carton.ui._catalogue_pairing import probe_github_package_json
 
         pkg_data = probe_github_package_json(base)
@@ -778,7 +778,7 @@ class RegistriesSection(QtWidgets.QWidget):
         No ``_target.catalogues`` mutation — personal catalogue lives
         under ``~/.carton/`` and is machine-local (plan v5.0 spec).
         """
-        from carton.core.personal_catalogue import (
+        from carton.core.catalogue.personal import (
             PersonalCatalogue, derive_pkg_id,
         )
 

@@ -134,7 +134,7 @@ def _load_catalogue(path, migrate=True):
 
 def _catalogue_lint(args):
     """Run the catalogue linter and print human-readable output."""
-    from carton.core.catalogue_lint import lint_catalogue
+    from carton.core.catalogue.lint import lint_catalogue
     from carton.cli._format import format_lint_output
 
     target = os.path.abspath(args.path)
@@ -146,7 +146,7 @@ def _catalogue_lint(args):
 
 def _catalogue_check(args):
     """Run the catalogue linter in CI mode (errors only, exit code only)."""
-    from carton.core.catalogue_lint import lint_catalogue
+    from carton.core.catalogue.lint import lint_catalogue
 
     target = os.path.abspath(args.path)
     result = lint_catalogue(target, check_network=args.check_network)

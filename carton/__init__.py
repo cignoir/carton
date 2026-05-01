@@ -34,7 +34,7 @@ def startup():
     # (auto-migrated in memory) and v5.0 catalogues with the Origin
     # abstraction. The legacy RegistryClient has been removed; its API
     # was a subset of this one.
-    from carton.core.catalogue_client import CatalogueClient
+    from carton.core.catalogue.client import CatalogueClient
     from carton.core.downloader import Downloader
     from carton.core.self_updater import SelfUpdater
     from carton.core.script_manager import ScriptManager

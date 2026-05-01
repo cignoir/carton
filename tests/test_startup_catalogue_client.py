@@ -30,7 +30,7 @@ import zipfile
 import pytest
 
 import carton
-from carton.core.catalogue_client import CatalogueClient
+from carton.core.catalogue.client import CatalogueClient
 from carton.core.config import Config, CatalogueEntry
 
 
@@ -89,7 +89,7 @@ class TestFetchIconsArchive:
         def _raise(*args, **kwargs):
             raise RuntimeError("offline")
         monkeypatch.setattr(
-            "carton.core.catalogue_client.urlopen", _raise,
+            "carton.core.catalogue.client.urlopen", _raise,
         )
 
         client = CatalogueClient(config)
@@ -107,7 +107,7 @@ class TestFetchIconsArchive:
         def _fake_urlopen(req, timeout=None):
             return _FakeResponse(zip_bytes)
         monkeypatch.setattr(
-            "carton.core.catalogue_client.urlopen", _fake_urlopen,
+            "carton.core.catalogue.client.urlopen", _fake_urlopen,
         )
 
         client = CatalogueClient(config)
@@ -125,7 +125,7 @@ class TestFetchIconsArchive:
         def _fake_urlopen(req, timeout=None):
             return _FakeResponse(b"not a zip at all")
         monkeypatch.setattr(
-            "carton.core.catalogue_client.urlopen", _fake_urlopen,
+            "carton.core.catalogue.client.urlopen", _fake_urlopen,
         )
 
         client = CatalogueClient(config)
