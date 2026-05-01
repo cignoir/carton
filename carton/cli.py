@@ -1,4 +1,4 @@
-"""Carton CLI — admin commands for catalogue management."""
+"""Carton CLI - admin commands for catalogue management."""
 
 import argparse
 import json
@@ -38,7 +38,7 @@ def _list_packages(args):
         name = pkg_data.get("display_name", pkg_data.get("name", "?"))
         origin = pkg_data.get("origin") or {}
         latest = origin.get("latest_version", "?")
-        print("  {} — {} v{}".format(pkg_id, name, latest))
+        print("  {} - {} v{}".format(pkg_id, name, latest))
 
 
 def _unpublish(args):
@@ -146,18 +146,98 @@ def _catalogue_migrate(args):
         print("Backed up legacy registry.json next to it (look for '*.bak-v0.4.*').")
 
 
+_SEVERITY_PREFIX = {
+    "error": "[X]",
+    "warning": "[!]",
+    "info": "[i]",
+}
+
+
+def _format_lint_output(result, path):
+    """Pretty-print a LintResult for the human-facing 'lint' command."""
+    print("Linting: {}".format(path))
+    print("")
+
+    if not result.issues:
+        print("[OK] No issues found.")
+        return
+
+    for issue in result.issues:
+        prefix = _SEVERITY_PREFIX.get(issue.severity, "[?]")
+        print("{} {}: {}".format(prefix, issue.rule, issue.message))
+        if issue.path:
+            print("    in: {}".format(issue.path))
+
+    print("")
+    print("Summary: {} error(s), {} warning(s), {} info(s)".format(
+        len(result.errors), len(result.warnings), len(result.infos),
+    ))
+
+
+def _package_lint(args):
+    """Run the package linter and print human-readable output."""
+    from carton.core.lint import lint_package
+
+    target = os.path.abspath(args.path or ".")
+    result = lint_package(target)
+    _format_lint_output(result, target)
+    if result.has_errors():
+        sys.exit(1)
+
+
+def _package_check(args):
+    """Run the package linter in CI mode (errors only, exit code only)."""
+    from carton.core.lint import lint_package
+
+    target = os.path.abspath(args.path or ".")
+    result = lint_package(target)
+    if result.has_errors():
+        for issue in result.errors:
+            print("ERROR {}: {}".format(issue.rule, issue.message), file=sys.stderr)
+        sys.exit(1)
+
+
 def main():
+    # On Windows with cp932 (Japanese) locale, argparse help and any
+    # non-ASCII output crashes with UnicodeEncodeError. Force UTF-8 so
+    # modern terminals (Windows Terminal, PowerShell 7+) render correctly.
+    if hasattr(sys.stdout, "reconfigure"):
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+        sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+
     parser = argparse.ArgumentParser(
-        prog="carton",
-        description="Carton — Maya package manager CLI",
+        prog="carton-maya",
+        description="Carton - Maya package manager CLI",
     )
     sub = parser.add_subparsers(dest="command")
 
-    # list
+    # ---- package subgroup (author-facing) ----
+    pkg = sub.add_parser("package", help="Per-package operations (author-facing)")
+    pkg_sub = pkg.add_subparsers(dest="package_command")
+
+    lint_p = pkg_sub.add_parser(
+        "lint",
+        help="Validate a package's metadata and structure (warnings + errors)",
+    )
+    lint_p.add_argument(
+        "path", nargs="?", default=".",
+        help="Path to package folder or single file (default: .)",
+    )
+
+    check_p = pkg_sub.add_parser(
+        "check",
+        help="Lint in CI mode (errors only, exit code only)",
+    )
+    check_p.add_argument(
+        "path", nargs="?", default=".",
+        help="Path to package folder or single file (default: .)",
+    )
+
+    # ---- list ----
     ls = sub.add_parser("list", help="List packages in a catalogue")
     ls.add_argument("catalogue", help="Path to catalogue.json")
 
-    # unpublish
+    # ---- unpublish ----
     unpub = sub.add_parser("unpublish", help="Force-unpublish a package")
     unpub.add_argument("--catalogue", required=True, help="Path to catalogue.json")
     unpub.add_argument("--id", required=True,
@@ -165,7 +245,7 @@ def main():
     unpub.add_argument("--force", "-f", action="store_true",
                        help="Skip confirmation prompt")
 
-    # catalogue subgroup (v5.0)
+    # ---- catalogue subgroup (v5.0) ----
     cat = sub.add_parser("catalogue", help="Catalogue (v5.0) utilities")
     cat_sub = cat.add_subparsers(dest="catalogue_command")
     mig_p = cat_sub.add_parser(
@@ -188,7 +268,11 @@ def main():
 
     args = parser.parse_args()
 
-    if args.command == "list":
+    if args.command == "package" and getattr(args, "package_command", None) == "lint":
+        _package_lint(args)
+    elif args.command == "package" and getattr(args, "package_command", None) == "check":
+        _package_check(args)
+    elif args.command == "list":
         _list_packages(args)
     elif args.command == "unpublish":
         _unpublish(args)
