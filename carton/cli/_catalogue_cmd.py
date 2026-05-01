@@ -15,7 +15,7 @@ def register_catalogue_subparser(sub):
     """Wire the ``catalogue`` group onto the top-level parser."""
     cat = sub.add_parser(
         "catalogue",
-        help="Catalogue (v5.0) maintenance — list, migrate, unpublish, ...",
+        help="Catalogue (v5.0) maintenance - list, lint, migrate, ...",
     )
     cat_sub = cat.add_subparsers(dest="catalogue_command")
 
@@ -24,6 +24,26 @@ def register_catalogue_subparser(sub):
         help="List packages in a catalogue",
     )
     ls.add_argument("catalogue", help="Path to catalogue.json")
+
+    lint_p = cat_sub.add_parser(
+        "lint",
+        help="Validate a catalogue.json and its references",
+    )
+    lint_p.add_argument("path", help="Path to catalogue.json")
+    lint_p.add_argument(
+        "--check-network", action="store_true",
+        help="Probe URL origins with HEAD requests (off by default)",
+    )
+
+    check_p = cat_sub.add_parser(
+        "check",
+        help="Lint a catalogue in CI mode (errors only, exit code only)",
+    )
+    check_p.add_argument("path", help="Path to catalogue.json")
+    check_p.add_argument(
+        "--check-network", action="store_true",
+        help="Probe URL origins with HEAD requests (off by default)",
+    )
 
     unpub = cat_sub.add_parser(
         "unpublish",
@@ -71,6 +91,10 @@ def dispatch_catalogue(args, parser):
     cmd = getattr(args, "catalogue_command", None)
     if cmd == "list":
         _list_packages(args)
+    elif cmd == "lint":
+        _catalogue_lint(args)
+    elif cmd == "check":
+        _catalogue_check(args)
     elif cmd == "unpublish":
         _unpublish(args)
     elif cmd == "migrate":
@@ -106,6 +130,30 @@ def _load_catalogue(path, migrate=True):
         from carton.core.migrations import migrate_registry_to_catalogue
         data, _ = migrate_registry_to_catalogue(data, stamp_id=False)
     return data, path
+
+
+def _catalogue_lint(args):
+    """Run the catalogue linter and print human-readable output."""
+    from carton.core.catalogue_lint import lint_catalogue
+    from carton.cli._format import format_lint_output
+
+    target = os.path.abspath(args.path)
+    result = lint_catalogue(target, check_network=args.check_network)
+    format_lint_output(result, target)
+    if result.has_errors():
+        sys.exit(1)
+
+
+def _catalogue_check(args):
+    """Run the catalogue linter in CI mode (errors only, exit code only)."""
+    from carton.core.catalogue_lint import lint_catalogue
+
+    target = os.path.abspath(args.path)
+    result = lint_catalogue(target, check_network=args.check_network)
+    if result.has_errors():
+        for issue in result.errors:
+            print("ERROR {}: {}".format(issue.rule, issue.message), file=sys.stderr)
+        sys.exit(1)
 
 
 def _list_packages(args):
