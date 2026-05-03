@@ -16,7 +16,7 @@ from carton.ui._namespace_grouping import (
     group_by_namespace,
     toggle_collapsed,
 )
-from carton.ui.compat import QtWidgets, QtCore, Qt, wrapInstance
+from carton.ui.compat import QtWidgets, QtCore, Qt
 from carton.ui.error_messages import show_error
 from carton.ui.i18n import t
 from carton.ui import theme
@@ -111,11 +111,35 @@ class _IconFetcher(QtCore.QThread):
 _STYLE = theme.MAIN_STYLE
 
 
-class CartonWindow(QtWidgets.QDialog):
+# Maya provides MayaQWidgetDockableMixin so a QWidget can be hosted inside a
+# workspaceControl — the same dock/tab/float machinery Maya's own panels use.
+# Outside Maya (CI, standalone tests) the mixin doesn't exist; in that case we
+# fall back to a plain QWidget so the same class still constructs cleanly.
+try:
+    from maya.app.general.mayaMixin import MayaQWidgetDockableMixin
+
+    class _CartonWindowBase(MayaQWidgetDockableMixin, QtWidgets.QWidget):
+        pass
+except ImportError:
+    class _CartonWindowBase(QtWidgets.QWidget):
+        pass
+
+
+# Stable objectName so Maya re-uses the same workspaceControl across show() calls
+# instead of spawning a new floating panel every time.
+WINDOW_OBJECT_NAME = "CartonWindow"
+
+
+class CartonWindow(_CartonWindowBase):
     """Carton package manager main window."""
 
     def __init__(self, parent=None):
-        super().__init__(parent)
+        super().__init__(parent=parent)
+        self.setObjectName(WINDOW_OBJECT_NAME)
+        # Top-level window flag is required so Qt doesn't embed us as a child
+        # widget when parent is the Maya main window — the mixin still wraps
+        # us in a workspaceControl when show(dockable=True) is called.
+        self.setWindowFlags(self.windowFlags() | Qt.Window)
         import carton
         self.setWindowTitle("{} v{}".format(_WINDOW_TITLE, carton.__version__))
         self.setMinimumSize(_WINDOW_WIDTH, _WINDOW_HEIGHT)
@@ -1347,12 +1371,8 @@ class CartonWindow(QtWidgets.QDialog):
         self._install_ctl.show_launch_error(exc)
 
 def create_window(parent=None):
-    if parent is None:
-        try:
-            import maya.OpenMayaUI as omui
-            main_win_ptr = omui.MQtUtil.mainWindow()
-            if main_win_ptr:
-                parent = wrapInstance(int(main_win_ptr), QtWidgets.QWidget)
-        except ImportError:
-            pass
+    # In Maya, leave parent=None: MayaQWidgetDockableMixin parents us to a
+    # workspaceControl when show(dockable=True) is called. Forcing the Maya
+    # main window as parent here would compete with that and produce orphaned
+    # floating widgets when the workspaceControl is closed.
     return CartonWindow(parent)
