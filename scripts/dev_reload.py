@@ -1,19 +1,30 @@
 """Carton development reload script.
 
 Run the following in Maya's Script Editor:
-    exec(open(r"F:\\workspace\\carton\\scripts\\dev_reload.py", encoding="utf-8").read())
+    exec(open(r"G:\\workspace\\carton\\scripts\\dev_reload.py", encoding="utf-8").read())
 """
 
 import os
 import shutil
 import sys
 
-_SRC = r"F:\workspace\carton\carton"
+_SRC = r"G:\workspace\carton\carton"
 _BOOTSTRAP_DIR = os.path.expanduser("~/Documents/maya/carton")
 _DST = os.path.join(_BOOTSTRAP_DIR, "carton")
 
 
 def reload_carton():
+    # Bail out before any destructive step if the dev source tree isn't
+    # where we think it is — the previous version rmtree'd _DST first and
+    # then failed at copytree, leaving the deployed package missing.
+    if not os.path.isdir(_SRC):
+        raise RuntimeError(
+            "[dev_reload] Source tree not found: {}\n"
+            "Update _SRC at the top of this script to point at your local"
+            " carton/ checkout before running again."
+            .format(_SRC)
+        )
+
     # 1. Close the window
     if "carton" in sys.modules:
         import carton
