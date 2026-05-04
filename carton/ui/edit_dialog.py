@@ -42,6 +42,25 @@ class EditDialog(QtWidgets.QDialog):
         layout.setContentsMargins(20, 20, 20, 20)
         layout.setSpacing(10)
 
+        # ── Refresh-from-disk row ───────────────────────────────────────
+        # Sits above the form so the button reads as "this repopulates
+        # everything below". Click → re-read package.json/sidecar from
+        # the registered local_path → fill the form fields. User reviews
+        # and clicks Save to persist into installed.json.
+        refresh_row = QtWidgets.QHBoxLayout()
+        refresh_row.addStretch(1)
+        self._refresh_btn = QtWidgets.QPushButton(t("edit_refresh_btn"))
+        self._refresh_btn.setStyleSheet(theme.btn_ghost_text())
+        self._refresh_btn.setToolTip(t("edit_refresh_tooltip"))
+        self._refresh_btn.clicked.connect(self._on_refresh_from_disk)
+        # Catalogue-installed entries don't have a local source manifest
+        # to refresh from; only My Tools (or double-bound entries with a
+        # local_path) get the button.
+        if not self._pkg_data.get("local_path"):
+            self._refresh_btn.setVisible(False)
+        refresh_row.addWidget(self._refresh_btn)
+        layout.addLayout(refresh_row)
+
         form = QtWidgets.QFormLayout()
         form.setSpacing(8)
 
@@ -309,6 +328,75 @@ class EditDialog(QtWidgets.QDialog):
             "namespace": slugify_namespace(self._namespace_input.text()),
         }
         self.accept()
+
+    def _on_refresh_from_disk(self):
+        """Re-read package.json (or the sidecar) and repopulate every
+        form field with the latest values from disk.
+
+        We don't persist anything ourselves — the user reviews the
+        repopulated form and clicks Save to commit. That keeps the
+        confirmation step where every other Edit interaction has it,
+        and means undo (= just hit Cancel) does the right thing.
+        """
+        from carton.core.refresh_from_disk import (
+            RefreshError, diff_fields, read_manifest,
+        )
+
+        local_path = self._pkg_data.get("local_path", "")
+        is_folder = bool(self._pkg_data.get("is_folder", False))
+        try:
+            fresh = read_manifest(local_path, is_folder)
+        except RefreshError as e:
+            QtWidgets.QMessageBox.warning(self, "Carton", str(e))
+            return
+
+        if fresh is None:
+            QtWidgets.QMessageBox.information(
+                self, "Carton", t("edit_refresh_no_manifest"),
+            )
+            return
+
+        changes = diff_fields(self._pkg_data, fresh)
+        if not changes:
+            QtWidgets.QMessageBox.information(
+                self, "Carton", t("edit_refresh_no_change"),
+            )
+            return
+
+        # Repopulate the form fields. Each set is guarded so a manifest
+        # missing a field doesn't blank the corresponding input — the
+        # diff already filtered to keys actually present.
+        if "display_name" in fresh:
+            self._name_input.setText(fresh.get("display_name") or "")
+        if "version" in fresh:
+            self._ver_input.setText(fresh.get("version") or "0.0.0")
+        if "icon" in fresh:
+            self._icon_input.setText(fresh.get("icon") or "")
+        if "homepage" in fresh:
+            self._homepage_input.setText(fresh.get("homepage") or "")
+        if "author" in fresh:
+            self._author_input.setText(fresh.get("author") or "")
+        if "description" in fresh:
+            self._desc_input.set_value(fresh.get("description"))
+        if "entry_point" in fresh:
+            ep = fresh.get("entry_point") or {}
+            if isinstance(ep, dict) and ep.get("function"):
+                # Keep the dropdown's typed value and the parsed list in
+                # sync — Save reads currentText().
+                self._func_combo.setEditText(ep["function"])
+            if isinstance(ep, dict) and ep.get("module"):
+                # Module override is only visible for folder packages
+                # whose import target diverges from the slug; leave the
+                # widget alone if it's hidden but still update its text
+                # so a future toggle picks up the fresh value.
+                self._module_input.setText(ep.get("module") or "")
+
+        # Brief summary so the user can tell what changed before saving.
+        summary = ", ".join(sorted(changes.keys()))
+        QtWidgets.QMessageBox.information(
+            self, "Carton",
+            t("edit_refresh_done", summary=summary),
+        )
 
     def _on_remove(self):
         display = self._pkg_data.get("display_name", self._pkg_id)

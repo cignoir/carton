@@ -142,6 +142,11 @@ _STRINGS = {
         # Edit dialog
         "edit_title": "Carton — Edit",
         "edit_confirm_remove": "Remove {} from Carton?\nThe original file will not be deleted.",
+        "edit_refresh_btn": "⟳ Refresh from package.json",
+        "edit_refresh_tooltip": "Re-read metadata from the source folder's package.json (or sidecar) and repopulate the form. Click Save to persist the changes.",
+        "edit_refresh_no_manifest": "No package.json or sidecar found at the registered local path. Nothing to refresh from.",
+        "edit_refresh_no_change": "Already up to date — the form already matches package.json.",
+        "edit_refresh_done": "Form refreshed. Updated fields: {summary}\n\nReview the changes and click Save to persist.",
 
         # Settings
         "settings_title": "Carton — Settings",
@@ -450,6 +455,11 @@ _STRINGS = {
         # Edit dialog
         "edit_title": "Carton — 編集",
         "edit_confirm_remove": "{} の登録を解除しますか？\n元ファイルは削除されません。",
+        "edit_refresh_btn": "⟳ package.json から再読込",
+        "edit_refresh_tooltip": "登録元フォルダの package.json (または sidecar) を読み直し、フォーム内容を最新に置き換えます。実際に保存するには Save を押してください。",
+        "edit_refresh_no_manifest": "登録パスに package.json も sidecar も見つかりませんでした。再読込元がありません。",
+        "edit_refresh_no_change": "差分なし — フォームは既に package.json と一致しています。",
+        "edit_refresh_done": "フォームを更新しました。変更項目: {summary}\n\n内容を確認して Save を押すと保存されます。",
 
         # Settings
         "settings_title": "Carton — 設定",
