@@ -25,7 +25,13 @@ def reload_carton():
             .format(_SRC)
         )
 
-    # 1. Close the window
+    # 1. Close the window. ``QWidget.close()`` hides the widget but
+    # MayaQWidgetDockableMixin leaves the surrounding workspaceControl
+    # alive — Maya keeps the dock slot around for re-attach. After we
+    # clear sys.modules and re-show, the new CartonWindow tries to
+    # register a workspaceControl with the same name and Maya rejects
+    # it ("object name '...' is not unique"). Delete the control here
+    # so the next show() starts from a clean slate.
     if "carton" in sys.modules:
         import carton
         if carton._window is not None:
@@ -33,6 +39,13 @@ def reload_carton():
                 carton._window.close()
             except Exception:
                 pass
+    try:
+        import maya.cmds as cmds
+        for ctl in ("CartonWindowWorkspaceControl",):
+            if cmds.workspaceControl(ctl, exists=True):
+                cmds.deleteUI(ctl)
+    except ImportError:
+        pass
 
     # 2. Clear module cache
     to_remove = [k for k in sys.modules if k.startswith("carton")]
