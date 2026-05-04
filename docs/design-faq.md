@@ -100,6 +100,20 @@ Carton は **Maya 向けプラグイン/ツールの配布・バージョン管�
 - `main_window.py:1466` `_filter_cards` で textChanged 時フィルタ
 - namespace 別フィルタも `_library_ns_filter` / `_mytools_ns_filter` で実装済
 
+### Q. `description` を多言語対応するときに、なぜ別ファイル (`package.nls.<locale>.json`) ではなく package.json 内のオブジェクト形式？
+
+VSCode の拡張機能のような外部 NLS ファイル方式は採らず、package.json の `description` フィールド内に `{en: "...", ja: "...", ...}` を書く inline 方式を採用している。
+
+理由:
+
+- **ロケール数が少ない** — DCC ツールは studio 単位の配布が多く、世界配信を前提とした多数言語対応は稀。`description` だけ多言語化したいケースが大半なので、ファイル分割するほどの規模にならない。
+- **package.json 1 ファイルが SoT** — 複数ファイル方式にすると "どのファイルがどのスコープを持つか" の説明が必要になり、Carton の Package-first 原則 (package.json が SoT) を曇らせる。
+- **後方互換**: スキーマは `oneOf [string, object]` なので、単一文字列の既存 package.json はそのまま動く。多言語化は opt-in。
+- **解決ロジック**: `carton.ui.i18n.resolve_localized` が「アクティブ言語 → 言語ステム (`en-US` → `en`) → `en` フォールバック → 任意の最初の文字列」の順で文字列に flatten する。Carton 本体の言語設定 (`config.language`) と連動。
+- **編集 UI**: Add / Edit ダイアログの `LocalizedDescriptionInput` は `[locale code] [text] [×]` の可変長行 + 「言語追加」ボタン構成。en/ja ハードコードは避け、スキーマが受け付ける任意の ISO-639-1 コードを編集できる。
+
+スコープが広がって `display_name` や `tags` の多言語化が必要になった場合も同じ pattern (string | {locale: string}) を流用できる。NLS ファイル分割は、ロケール数が増えて inline では辛くなったタイミングで再検討する。
+
 ---
 
 ## UI

@@ -9,6 +9,7 @@ from carton.ui.utils import list_functions
 from carton.ui._dialog_widgets import (
     make_dim_label, make_readonly_input, make_namespace_preview_label,
     update_namespace_preview, make_icon_row, browse_icon_into,
+    LocalizedDescriptionInput,
 )
 from carton.core.identity import slugify_namespace
 
@@ -101,8 +102,11 @@ class EditDialog(QtWidgets.QDialog):
         self._author_input = QtWidgets.QLineEdit(self._pkg_data.get("author", ""))
         form.addRow(make_dim_label(t("label_author")), self._author_input)
 
-        # Description
-        self._desc_input = QtWidgets.QLineEdit(self._pkg_data.get("description", ""))
+        # Description — two fields, one per supported language. The
+        # widget round-trips plain strings unchanged and only emits a
+        # locale dict when the user actually fills both languages.
+        self._desc_input = LocalizedDescriptionInput()
+        self._desc_input.set_value(self._pkg_data.get("description", ""))
         form.addRow(make_dim_label(t("label_description")), self._desc_input)
 
         # Local Path (read-only)
@@ -298,7 +302,7 @@ class EditDialog(QtWidgets.QDialog):
             "author": self._author_input.text().strip(),
             "icon": self._icon_input.text().strip() or "🔧",
             "homepage": self._homepage_input.text().strip(),
-            "description": self._desc_input.text().strip(),
+            "description": self._desc_input.get_value(),
             # Round-trip the auto-detected flag without exposing it in UI.
             "include_compiled": bool(self._pkg_data.get("include_compiled", False)),
             "entry_point": entry_point,

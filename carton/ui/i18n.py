@@ -37,6 +37,9 @@ _STRINGS = {
         "label_homepage": "Homepage",
         "label_author": "Author",
         "label_description": "Description",
+        "desc_add_locale": "+ Add language",
+        "desc_add_locale_tooltip": "Add another translation. Each row is one language code (en, ja, zh, fr, …) plus its text.",
+        "desc_remove_locale_tooltip": "Remove this language",
         "label_path": "Path",
         "label_run_mode": "Run Mode",
         "label_function": "function name",
@@ -324,6 +327,9 @@ _STRINGS = {
         "label_homepage": "ホームページ",
         "label_author": "作者",
         "label_description": "説明",
+        "desc_add_locale": "＋ 言語を追加",
+        "desc_add_locale_tooltip": "別の言語の説明を追加します。各行は言語コード (en, ja, zh, fr, …) と本文の組です。",
+        "desc_remove_locale_tooltip": "この言語を削除",
         "label_path": "パス",
         "label_run_mode": "実行モード",
         "label_function": "関数名",
@@ -649,3 +655,46 @@ def t(key, *args):
     if args:
         return text.format(*args)
     return text
+
+
+def resolve_localized(value, language=None):
+    """Resolve a possibly-localized value to a display string.
+
+    ``value`` is what was loaded from a manifest field (e.g. ``description``
+    out of ``package.json``). It can be:
+
+    * ``str`` — returned as-is. Single-language packages keep working
+      without any change.
+    * ``dict`` — keys are ISO-639-1 language codes (``"en"``, ``"ja"``)
+      with optional region suffix (``"en-US"``); values are strings. The
+      requested ``language`` wins; if absent, falls back to the language
+      stem (``"en-US"`` → ``"en"``), then to ``"en"``, then to any
+      non-empty string in the dict.
+    * anything else — coerced to ``""`` (treat malformed manifests as
+      "no description" rather than raising mid-render).
+
+    ``language`` defaults to the current Carton UI language so display
+    sites don't need to thread it through manually.
+    """
+    if isinstance(value, str):
+        return value
+    if not isinstance(value, dict) or not value:
+        return ""
+
+    lang = language or get_language() or "en"
+
+    if lang in value and isinstance(value[lang], str):
+        return value[lang]
+
+    if "-" in lang:
+        stem = lang.split("-", 1)[0]
+        if stem in value and isinstance(value[stem], str):
+            return value[stem]
+
+    if "en" in value and isinstance(value["en"], str):
+        return value["en"]
+
+    for v in value.values():
+        if isinstance(v, str) and v.strip():
+            return v
+    return ""

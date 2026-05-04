@@ -4,7 +4,10 @@
   "display_name": "Hello Carton",
   "version": "1.0.0",
   "type": "python_package",
-  "description": "Carton テスト用サンプルツール — シーン情報をポップアップ表示",
+  "description": {
+    "en": "Sample tool for testing Carton — pops up Maya scene info.",
+    "ja": "Carton テスト用サンプルツール — シーン情報をポップアップ表示"
+  },
   "author": "cignoir",
   "maya_versions": ["2024", "2025", "2026", "2027"],
   "entry_point": {

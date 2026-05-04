@@ -116,8 +116,20 @@
           "description": "My Tools (source=local) のみ. 絶対パスを保存して再フェッチ不要にする"
         },
         "description": {
-          "type": "string",
-          "description": "My Tools (source=local) のみ"
+          "description": "My Tools (source=local) のみ。単一文字列、または {ja: '...', en: '...'} 形式の多言語オブジェクト。表示時は Carton の言語設定に追従",
+          "oneOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "object",
+              "minProperties": 1,
+              "patternProperties": {
+                "^[a-z]{2}(-[A-Z]{2})?$": { "type": "string" }
+              },
+              "additionalProperties": false
+            }
+          ]
         },
         "author": {
           "type": "string",
