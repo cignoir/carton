@@ -25,25 +25,66 @@ def reload_carton():
             .format(_SRC)
         )
 
-    # 1. Close the window. ``QWidget.close()`` hides the widget but
-    # MayaQWidgetDockableMixin leaves the surrounding workspaceControl
-    # alive — Maya keeps the dock slot around for re-attach. After we
-    # clear sys.modules and re-show, the new CartonWindow tries to
-    # register a workspaceControl with the same name and Maya rejects
-    # it ("object name '...' is not unique"). Delete the control here
-    # so the next show() starts from a clean slate.
-    if "carton" in sys.modules:
-        import carton
-        if carton._window is not None:
+    # 1. Tear down every Qt widget that came from carton.* and the
+    # surrounding workspaceControl. ``QWidget.close()`` alone is not
+    # enough — MayaQWidgetDockableMixin keeps the workspaceControl
+    # alive on close (so the dock slot can re-attach later), and a
+    # plain ``deleteUI`` doesn't always finish the job in Maya 2027:
+    # the wrapper lingers and the next ``carton.show()`` ends up with
+    # two visible windows side-by-side. Three nudges in order:
+    #
+    #   a. Close every QWidget whose class came from carton.*
+    #      (catches main window, dialogs, popup pickers, …).
+    #   b. ``cmds.workspaceControl(..., e=True, close=True)`` to mark
+    #      the dock closed first — required on some Maya versions
+    #      before deleteUI actually destroys the C++ wrapper.
+    #   c. ``cmds.deleteUI`` to remove the named control.
+    #
+    # Wrapped in best-effort guards so a missing optional dependency
+    # (PySide, maya.cmds in unit-test contexts) doesn't abort reload.
+    try:
+        from carton.ui.compat import QtWidgets
+    except ImportError:
+        try:
+            from PySide6 import QtWidgets  # type: ignore[no-redef]
+        except ImportError:
             try:
-                carton._window.close()
-            except Exception:
-                pass
+                from PySide2 import QtWidgets  # type: ignore[no-redef]
+            except ImportError:
+                QtWidgets = None  # type: ignore[assignment]
+
+    if QtWidgets is not None:
+        app = QtWidgets.QApplication.instance()
+        if app is not None:
+            for w in list(app.allWidgets()):
+                klass = type(w)
+                mod = getattr(klass, "__module__", "") or ""
+                if mod == "carton" or mod.startswith("carton."):
+                    try:
+                        w.close()
+                        w.deleteLater()
+                    except RuntimeError:
+                        pass
+
+    if "carton" in sys.modules:
+        try:
+            import carton
+            carton._window = None
+        except Exception:
+            pass
+
     try:
         import maya.cmds as cmds
         for ctl in ("CartonWindowWorkspaceControl",):
             if cmds.workspaceControl(ctl, exists=True):
-                cmds.deleteUI(ctl)
+                try:
+                    cmds.workspaceControl(ctl, edit=True, close=True)
+                except (RuntimeError, TypeError):
+                    pass
+                try:
+                    cmds.deleteUI(ctl)
+                except RuntimeError:
+                    pass
     except ImportError:
         pass
 

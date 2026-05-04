@@ -442,9 +442,13 @@ def _delete_dockable_wrapper(widget):
     check Maya runs at workspaceControl creation time
     (``RuntimeError: object name '...' is not unique``).
 
-    Calling ``cmds.deleteUI`` removes the control outright. If the call
-    fails because the control is already gone (race with Qt tear-down) or
-    Maya isn't loaded, we skip silently — the caller has fallback paths.
+    Two-step teardown because ``deleteUI`` alone doesn't always finish the
+    job on Maya 2027 — retained workspaceControls can outlive deleteUI and
+    re-appear next to the freshly-built one ("two windows" symptom). First
+    ``close=True`` forces the dock closed; *then* ``deleteUI`` reliably
+    destroys the C++ wrapper. Each call is independently best-effort: if
+    one is rejected (older Maya, race with Qt tear-down), we still try the
+    next.
     """
     try:
         name = widget.objectName()
@@ -457,8 +461,13 @@ def _delete_dockable_wrapper(widget):
     except ImportError:
         return
     ctl = name + "WorkspaceControl"
-    if cmds.workspaceControl(ctl, exists=True):
-        try:
-            cmds.deleteUI(ctl)
-        except RuntimeError:
-            pass
+    if not cmds.workspaceControl(ctl, exists=True):
+        return
+    try:
+        cmds.workspaceControl(ctl, edit=True, close=True)
+    except (RuntimeError, TypeError):
+        pass
+    try:
+        cmds.deleteUI(ctl)
+    except RuntimeError:
+        pass
