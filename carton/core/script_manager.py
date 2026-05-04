@@ -255,6 +255,7 @@ class ScriptManager:
                 for k in stale:
                     del _sys.modules[k]
             mod = importlib.import_module(module_name)
+            self._apply_tool_language(mod)
             func = getattr(mod, func_name)
             func()
         else:
@@ -279,6 +280,44 @@ class ScriptManager:
         unit tests so legacy launch tests keep their cached-import semantics.
         """
         return bool(getattr(self._config, "dev_reload_my_tools", False))
+
+    def _apply_tool_language(self, mod):
+        """Sync the tool's UI language to Carton's active language.
+
+        Two channels, both best-effort and tolerant of failure:
+
+        * ``CARTON_LANGUAGE`` environment variable — set unconditionally
+          so tools that don't implement the ``set_language`` hook can
+          still pick up the active language at startup (or pass it on
+          to their own subprocess workers).
+        * ``mod.set_language(code)`` — the explicit hook. If the tool's
+          top-level package exposes the function, we call it with the
+          resolved code. ``carton.tool_i18n`` provides a re-exportable
+          ``set_language`` so the contract is satisfied by a single
+          import in the tool's ``__init__.py``.
+
+        Failures are swallowed: a faulty translator must not prevent the
+        tool from launching.
+        """
+        try:
+            from carton.ui.i18n import get_language
+            lang = get_language() or "en"
+        except ImportError:
+            lang = "en"
+
+        # Make the env var visible to anything the tool spawns later.
+        os.environ["CARTON_LANGUAGE"] = lang
+
+        hook = getattr(mod, "set_language", None)
+        if not callable(hook):
+            return
+        try:
+            hook(lang)
+        except Exception:
+            # A bug in the tool's i18n wiring shouldn't block launch.
+            # The tool will simply render in whatever language it
+            # defaulted to.
+            pass
 
     def _add_to_env(self, path, pkg_type, is_folder):
         """Add a path to Maya environment variables."""
