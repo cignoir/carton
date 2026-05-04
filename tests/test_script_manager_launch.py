@@ -10,12 +10,13 @@ silence again.
 import os
 import sys
 import tempfile
+import types
 
 import pytest
 
 from carton.core.config import Config
 from carton.core.env_manager import MayaEnvManager
-from carton.core.script_manager import ScriptManager
+from carton.core.script_manager import ScriptManager, _delete_dockable_wrapper
 
 
 class _DummyEnv:
@@ -188,3 +189,79 @@ class TestDevReloadOnLaunch:
         sys.modules[name]._sentinel = "config-none"
         sm.launch(data)
         assert getattr(sys.modules[name], "_sentinel", None) == "config-none"
+
+
+# ---------- Dockable wrapper cleanup --------------------------------------
+
+
+class _FakeWidget:
+    """Just enough surface for ``_delete_dockable_wrapper``."""
+    def __init__(self, name):
+        self._name = name
+    def objectName(self):
+        return self._name
+
+
+def _stub_maya_cmds(monkeypatch, existing_controls):
+    """Install a fake ``maya.cmds`` whose workspaceControl/deleteUI record calls."""
+    calls = []
+    cmds_stub = types.ModuleType("maya.cmds")
+
+    def workspaceControl(name, **kw):
+        calls.append(("workspaceControl", name, kw))
+        if kw.get("exists"):
+            return name in existing_controls
+        return None
+
+    def deleteUI(name):
+        calls.append(("deleteUI", name))
+        existing_controls.discard(name)
+
+    cmds_stub.workspaceControl = workspaceControl
+    cmds_stub.deleteUI = deleteUI
+    maya_mod = types.ModuleType("maya")
+    maya_mod.cmds = cmds_stub
+    monkeypatch.setitem(sys.modules, "maya", maya_mod)
+    monkeypatch.setitem(sys.modules, "maya.cmds", cmds_stub)
+    return calls
+
+
+class TestDeleteDockableWrapper:
+    def test_deletes_existing_control(self, monkeypatch):
+        existing = {"MyWidgetWorkspaceControl"}
+        calls = _stub_maya_cmds(monkeypatch, existing)
+
+        _delete_dockable_wrapper(_FakeWidget("MyWidget"))
+
+        assert ("deleteUI", "MyWidgetWorkspaceControl") in calls
+        assert "MyWidgetWorkspaceControl" not in existing
+
+    def test_noop_when_control_absent(self, monkeypatch):
+        """Tools that never opted into dockable mode have no workspaceControl
+        — the cleanup helper must not call deleteUI in that case."""
+        calls = _stub_maya_cmds(monkeypatch, set())
+
+        _delete_dockable_wrapper(_FakeWidget("FreestandingWidget"))
+
+        assert not any(call[0] == "deleteUI" for call in calls)
+
+    def test_noop_when_widget_has_no_object_name(self, monkeypatch):
+        """Without an objectName Maya can't have built a named control for
+        us, so we shouldn't ask deleteUI to chase a phantom name."""
+        calls = _stub_maya_cmds(monkeypatch, {"WorkspaceControl"})
+
+        _delete_dockable_wrapper(_FakeWidget(""))
+
+        assert not any(call[0] == "deleteUI" for call in calls)
+
+    def test_silent_when_maya_unavailable(self, monkeypatch):
+        """Outside Maya the helper must not raise — dev-reload tests run
+        without maya.cmds installed."""
+        # Make sure no ``maya.cmds`` is masquerading from a previous test.
+        for k in [k for k in list(sys.modules) if k == "maya" or k.startswith("maya.")]:
+            monkeypatch.delitem(sys.modules, k, raising=False)
+        # Block the import explicitly so it definitely fails.
+        monkeypatch.setitem(sys.modules, "maya", None)
+
+        # Should return without raising.
+        _delete_dockable_wrapper(_FakeWidget("AnyName"))

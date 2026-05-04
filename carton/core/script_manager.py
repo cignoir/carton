@@ -379,11 +379,22 @@ class ScriptManager:
 
 
 def _close_widgets_from_module(module_name):
-    """Close any top-level QWidget whose class came from ``module_name`` (or a
+    """Close any QWidget whose class came from ``module_name`` (or a
     submodule). Best-effort cleanup before evicting a My Tools package from
     ``sys.modules``: if the package built a dockable workspaceControl on its
     last launch, the C++ side stays alive after the Python module is dropped,
-    so the next ``show()`` would create a second window on top of the orphan.
+    so the next ``show(dockable=True)`` collides on the unique-name check
+    Maya runs against existing workspaceControls.
+
+    Walks ``allWidgets()`` (not just top-level) because Maya's
+    ``MayaQWidgetDockableMixin`` re-parents the widget into a workspaceControl
+    — the user's QWidget is then a child of Maya's dock wrapper, not a
+    top-level itself. Filtering by ``type().__module__`` keeps us from
+    touching unrelated widgets the iteration sweeps up.
+
+    Each matched widget is also fed to :func:`_delete_dockable_wrapper` so
+    the workspaceControl C++ object is torn down — ``QWidget.close()`` alone
+    only hides the dock and leaves the named control behind.
 
     Skipped silently when Qt isn't importable (CLI tools, headless tests) or
     when no QApplication exists yet — the caller should still proceed with
@@ -401,14 +412,53 @@ def _close_widgets_from_module(module_name):
     if app is None:
         return
     targets = []
-    for w in app.topLevelWidgets():
+    seen = set()
+    for w in app.allWidgets():
+        if id(w) in seen:
+            continue
+        seen.add(id(w))
         klass = type(w)
         mod = getattr(klass, "__module__", "") or ""
         if mod == module_name or mod.startswith(module_name + "."):
             targets.append(w)
     for w in targets:
+        _delete_dockable_wrapper(w)
         try:
             w.close()
             w.deleteLater()
+        except RuntimeError:
+            pass
+
+
+def _delete_dockable_wrapper(widget):
+    """Delete the Maya workspaceControl that wraps this widget, if any.
+
+    ``MayaQWidgetDockableMixin.show(dockable=True)`` creates a control named
+    ``<objectName>WorkspaceControl`` and registers it with Maya. The control
+    survives ``QWidget.close()`` — Maya keeps the dock slot around so a
+    subsequent ``show()`` can re-attach the widget. That's exactly what we
+    don't want during a dev reload: the next launch builds a brand-new
+    widget instance, so the lingering control collides on the unique-name
+    check Maya runs at workspaceControl creation time
+    (``RuntimeError: object name '...' is not unique``).
+
+    Calling ``cmds.deleteUI`` removes the control outright. If the call
+    fails because the control is already gone (race with Qt tear-down) or
+    Maya isn't loaded, we skip silently — the caller has fallback paths.
+    """
+    try:
+        name = widget.objectName()
+    except RuntimeError:
+        return
+    if not name:
+        return
+    try:
+        import maya.cmds as cmds  # type: ignore[import-not-found]
+    except ImportError:
+        return
+    ctl = name + "WorkspaceControl"
+    if cmds.workspaceControl(ctl, exists=True):
+        try:
+            cmds.deleteUI(ctl)
         except RuntimeError:
             pass
