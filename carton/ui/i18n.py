@@ -653,17 +653,28 @@ def detect_language():
     return "en"
 
 
-def t(key, *args):
-    """Translate a key. Supports format arguments.
+def t(key, *args, **kwargs):
+    """Translate a key. Supports both positional and named format args.
 
-    Usage:
+    Usage::
+
         t("confirm_update", "CigRef", "1.0.0")
-        → "CigRef を v1.0.0 に更新しますか？"
+        # → "CigRef を v1.0.0 に更新しますか？"     (positional, "{}")
+
+        t("edit_refresh_done", summary="version, icon")
+        # → "Form refreshed. Updated fields: version, icon ..."  (named, "{summary}")
+
+    A translation that fails to format (e.g. a typo'd placeholder)
+    surfaces the unformatted text instead of raising — the rule is
+    "translation bugs must never block the UI".
     """
     strings = _STRINGS.get(_current_lang, _STRINGS["en"])
     text = strings.get(key, _STRINGS["en"].get(key, key))
-    if args:
-        return text.format(*args)
+    if args or kwargs:
+        try:
+            return text.format(*args, **kwargs)
+        except (KeyError, IndexError, ValueError):
+            return text
     return text
 
 
