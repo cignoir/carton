@@ -399,10 +399,13 @@ def _close_widgets_from_module(module_name):
            child's parent might be invalid by the time we reach it).
         2. For each target, delete its workspaceControl wrapper while it's
            still parented in (``_delete_dockable_wrapper`` detaches first).
-        3. Synchronously ``shiboken.delete()`` the C++ object so the
-           orphan is GONE before control returns to the caller. Falls back
-           to ``hide() + close() + deleteLater()`` if shiboken can't
-           import.
+        3. Call ``close()`` so the widget's ``closeEvent`` fires — that's
+           where well-behaved tools disconnect signals and kill Maya
+           scriptJobs. ``shiboken.delete`` skips closeEvent, so calling
+           ``close()`` first prevents callback leaks.
+        4. Synchronously ``shiboken.delete()`` the C++ object so the
+           orphan is GONE before control returns to the caller. Falls
+           back to ``deleteLater()`` if shiboken can't import.
 
     Skipped silently when Qt isn't importable (CLI / headless tests) or
     when no QApplication exists yet.
@@ -449,6 +452,18 @@ def _close_widgets_from_module(module_name):
 
     for w in targets:
         _delete_dockable_wrapper(w)
+        # close() first so closeEvent fires and the widget can run its own
+        # teardown — disconnect signals, kill Maya scriptJobs, drop event
+        # filters. ``shiboken.delete`` skips closeEvent entirely, so without
+        # this any tool that relied on closeEvent for cleanup would leak
+        # callbacks (e.g. a SceneSaved scriptJob that fires later and
+        # touches the now-deleted Qt objects). Each call is independent
+        # best-effort: a widget that ``ignore``s its close event still
+        # gets reached by the destruction step below.
+        try:
+            w.close()
+        except RuntimeError:
+            pass
         try:
             w.hide()
         except RuntimeError:
@@ -457,7 +472,6 @@ def _close_widgets_from_module(module_name):
             if _delete is not None:
                 _delete(w)
             else:
-                w.close()
                 w.deleteLater()
         except RuntimeError:
             pass
