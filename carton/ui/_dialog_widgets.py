@@ -6,7 +6,7 @@ which fields appear and whether they're editable. The actual builders
 live here so neither dialog has to re-implement the styling.
 """
 
-from carton.ui.compat import QtWidgets
+from carton.ui.compat import QtCore, QtWidgets, Qt
 from carton.ui.i18n import t
 from carton.ui import theme
 from carton.core.identity import slugify_namespace
@@ -100,8 +100,8 @@ _LOCALE_SUGGESTIONS = (
 def _locale_completer(parent):
     """Build a QCompleter populated with the suggestion list."""
     completer = QtWidgets.QCompleter(list(_LOCALE_SUGGESTIONS), parent)
-    completer.setCaseSensitivity(0)  # Qt.CaseInsensitive — avoids the import
-    completer.setFilterMode(1)         # Qt.MatchStartsWith
+    completer.setCaseSensitivity(Qt.CaseInsensitive)
+    completer.setFilterMode(Qt.MatchStartsWith)
     return completer
 
 
