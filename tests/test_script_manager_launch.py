@@ -200,6 +200,10 @@ class _FakeWidget:
         self._name = name
     def objectName(self):
         return self._name
+    def setParent(self, parent):
+        pass
+    def hide(self):
+        pass
 
 
 def _stub_maya_cmds(monkeypatch, existing_controls):

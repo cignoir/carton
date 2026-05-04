@@ -379,30 +379,38 @@ class ScriptManager:
 
 
 def _close_widgets_from_module(module_name):
-    """Close any QWidget whose class came from ``module_name`` (or a
-    submodule). Best-effort cleanup before evicting a My Tools package from
-    ``sys.modules``: if the package built a dockable workspaceControl on its
-    last launch, the C++ side stays alive after the Python module is dropped,
-    so the next ``show(dockable=True)`` collides on the unique-name check
-    Maya runs against existing workspaceControls.
+    """Synchronously destroy every QWidget whose class came from
+    ``module_name`` (or a submodule), tearing down any wrapping Maya
+    workspaceControl first.
 
-    Walks ``allWidgets()`` (not just top-level) because Maya's
-    ``MayaQWidgetDockableMixin`` re-parents the widget into a workspaceControl
-    — the user's QWidget is then a child of Maya's dock wrapper, not a
-    top-level itself. Filtering by ``type().__module__`` keeps us from
-    touching unrelated widgets the iteration sweeps up.
+    Why so aggressive: the obvious ``close() + deleteLater()`` was leaving
+    orphans alive after dev-reload. When Maya's ``deleteUI`` tears down a
+    workspaceControl, Qt re-parents the inner widget to None and restores
+    its ``Qt.Window`` flag — turning what was a docked panel into a
+    free-floating top-level. ``close()`` on that orphan is unreliable
+    (the close event ordering loses to Maya's tear-down) and
+    ``deleteLater()`` is async, so the new widget gets created and shown
+    before the old orphan vanishes — and the user sees both at once.
 
-    Each matched widget is also fed to :func:`_delete_dockable_wrapper` so
-    the workspaceControl C++ object is torn down — ``QWidget.close()`` alone
-    only hides the dock and leaves the named control behind.
+    Strategy:
+        1. Filter to top-level / window-flagged widgets only — child
+           widgets are destroyed automatically when their parent dies, and
+           operating on them individually creates ordering hazards (a
+           child's parent might be invalid by the time we reach it).
+        2. For each target, delete its workspaceControl wrapper while it's
+           still parented in (``_delete_dockable_wrapper`` detaches first).
+        3. Synchronously ``shiboken.delete()`` the C++ object so the
+           orphan is GONE before control returns to the caller. Falls back
+           to ``hide() + close() + deleteLater()`` if shiboken can't
+           import.
 
-    Skipped silently when Qt isn't importable (CLI tools, headless tests) or
-    when no QApplication exists yet — the caller should still proceed with
-    the module eviction in those cases.
+    Skipped silently when Qt isn't importable (CLI / headless tests) or
+    when no QApplication exists yet.
 
     The ``except RuntimeError`` here catches Qt's "already deleted" error,
-    which happens naturally when one widget's ``close()`` tears down a child
-    that's later in our list. That's tear-down race, not a swallowed bug.
+    which happens naturally when one widget's destruction tears down a
+    child that's later in our list. That's tear-down race, not a
+    swallowed bug.
     """
     try:
         from carton.ui.compat import QtWidgets
@@ -411,6 +419,15 @@ def _close_widgets_from_module(module_name):
     app = QtWidgets.QApplication.instance()
     if app is None:
         return
+
+    try:
+        from shiboken6 import delete as _delete  # type: ignore[import-not-found]
+    except ImportError:
+        try:
+            from shiboken2 import delete as _delete  # type: ignore[import-not-found]
+        except ImportError:
+            _delete = None  # type: ignore[assignment]
+
     targets = []
     seen = set()
     for w in app.allWidgets():
@@ -419,13 +436,29 @@ def _close_widgets_from_module(module_name):
         seen.add(id(w))
         klass = type(w)
         mod = getattr(klass, "__module__", "") or ""
-        if mod == module_name or mod.startswith(module_name + "."):
+        if mod != module_name and not mod.startswith(module_name + "."):
+            continue
+        # Only act on top-level / window widgets — children are destroyed
+        # transitively when their parent goes away.
+        try:
+            is_root = w.isWindow() or w.parent() is None
+        except RuntimeError:
+            continue
+        if is_root:
             targets.append(w)
+
     for w in targets:
         _delete_dockable_wrapper(w)
         try:
-            w.close()
-            w.deleteLater()
+            w.hide()
+        except RuntimeError:
+            pass
+        try:
+            if _delete is not None:
+                _delete(w)
+            else:
+                w.close()
+                w.deleteLater()
         except RuntimeError:
             pass
 
@@ -437,18 +470,22 @@ def _delete_dockable_wrapper(widget):
     ``<objectName>WorkspaceControl`` and registers it with Maya. The control
     survives ``QWidget.close()`` — Maya keeps the dock slot around so a
     subsequent ``show()`` can re-attach the widget. That's exactly what we
-    don't want during a dev reload: the next launch builds a brand-new
-    widget instance, so the lingering control collides on the unique-name
-    check Maya runs at workspaceControl creation time
-    (``RuntimeError: object name '...' is not unique``).
+    don't want during a dev reload.
 
-    Two-step teardown because ``deleteUI`` alone doesn't always finish the
-    job on Maya 2027 — retained workspaceControls can outlive deleteUI and
-    re-appear next to the freshly-built one ("two windows" symptom). First
-    ``close=True`` forces the dock closed; *then* ``deleteUI`` reliably
-    destroys the C++ wrapper. Each call is independently best-effort: if
-    one is rejected (older Maya, race with Qt tear-down), we still try the
-    next.
+    Three-step teardown:
+
+      1. ``setParent(None)`` + ``hide()`` on the widget so it's detached
+         from the dock and explicitly hidden BEFORE ``deleteUI`` runs —
+         otherwise Maya's tear-down silently re-orphans the widget back
+         into a visible top-level (Qt.Window flag restoration), and our
+         caller's destruction races against it.
+      2. ``cmds.workspaceControl(..., e=True, close=True)`` — required on
+         some Maya versions before ``deleteUI`` actually destroys the C++
+         wrapper instead of just retaining it.
+      3. ``cmds.deleteUI`` to remove the named control.
+
+    Each call is independently best-effort: if one is rejected (older
+    Maya, race with Qt tear-down), we still try the next.
     """
     try:
         name = widget.objectName()
@@ -463,6 +500,13 @@ def _delete_dockable_wrapper(widget):
     ctl = name + "WorkspaceControl"
     if not cmds.workspaceControl(ctl, exists=True):
         return
+    # Detach + hide BEFORE Maya tears the dock down — orphaning the widget
+    # via deleteUI would otherwise make it a visible top-level.
+    try:
+        widget.setParent(None)
+        widget.hide()
+    except RuntimeError:
+        pass
     try:
         cmds.workspaceControl(ctl, edit=True, close=True)
     except (RuntimeError, TypeError):
