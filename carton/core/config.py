@@ -209,6 +209,7 @@ class Config:
         active_profile="",
         strict_verify=True,
         profile_order=None,
+        dev_reload_my_tools=True,
     ):
         self.catalogues = catalogues or []
         self.install_dir = install_dir
@@ -228,6 +229,12 @@ class Config:
         # this affects are very old or hand-rolled ones. Disable in
         # Settings if you need to install from such a catalogue.
         self.strict_verify = bool(strict_verify)
+        # When True, ``ScriptManager.launch`` clears ``sys.modules`` for any
+        # My Tools python package before re-importing, so source edits are
+        # picked up without restarting Maya. Off makes Carton behave like
+        # plain ``importlib.import_module`` (cached) — useful when an author
+        # wants to test the same import semantics end users will see.
+        self.dev_reload_my_tools = bool(dev_reload_my_tools)
         # User-facing ordering of profiles in the sidebar dropdown.
         # Names not in this list (newly created profiles, or profiles
         # added on disk by another machine) are appended at the end on
@@ -266,6 +273,7 @@ class Config:
                 active_profile=data.get("active_profile", ""),
                 strict_verify=data.get("strict_verify", True),
                 profile_order=data.get("profile_order", []),
+                dev_reload_my_tools=data.get("dev_reload_my_tools", True),
             )
             # Only overlay the profile when loading from the canonical
             # location — explicit `path=` callers (tests, multi-config
@@ -460,6 +468,7 @@ class Config:
             "active_profile": self.active_profile,
             "strict_verify": self.strict_verify,
             "profile_order": list(self.profile_order),
+            "dev_reload_my_tools": self.dev_reload_my_tools,
         }
 
     def apply_profile(self, profile):

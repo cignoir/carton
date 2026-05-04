@@ -309,6 +309,42 @@ class StrictVerifySection(QtWidgets.QWidget):
         self._persist()
 
 
+# ---------- DevReloadSection ----------------------------------------------
+
+
+class DevReloadSection(QtWidgets.QWidget):
+    """Checkbox bound to ``target.dev_reload_my_tools``.
+
+    When on, ``ScriptManager.launch`` evicts a My Tools package's modules from
+    ``sys.modules`` before re-importing — source edits are picked up on the
+    next Launch click without restarting Maya. Catalogue-installed packages
+    are unaffected.
+    """
+
+    def __init__(self, target, persist, parent=None):
+        super().__init__(parent)
+        self._target = target
+        self._persist = persist
+
+        layout = QtWidgets.QVBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(6)
+
+        self._checkbox = QtWidgets.QCheckBox(t("settings_dev_reload"))
+        self._checkbox.setChecked(bool(getattr(self._target, "dev_reload_my_tools", False)))
+        self._checkbox.toggled.connect(self._on_toggled)
+        layout.addWidget(self._checkbox)
+
+        hint = QtWidgets.QLabel(t("settings_dev_reload_hint"))
+        hint.setWordWrap(True)
+        hint.setStyleSheet("color: {}; font-size: 11px;".format(theme.TEXT_MUTED))
+        layout.addWidget(hint)
+
+    def _on_toggled(self, checked):
+        self._target.dev_reload_my_tools = bool(checked)
+        self._persist()
+
+
 # ---------- Add-catalogue method picker -----------------------------------
 
 

@@ -5,6 +5,7 @@ import os
 from datetime import datetime, timezone
 
 from carton.core.identity import normalize
+from carton.core.install_state import is_my_tools
 from carton.core.path_utils import resolve_local_path, store_local_path
 
 
@@ -235,6 +236,24 @@ class ScriptManager:
             # "this name has already been tried and was not found".
             if module_name in _sys.modules and _sys.modules[module_name] is None:
                 del _sys.modules[module_name]
+            # Dev reload: for My Tools packages, evict the cached module
+            # tree so the next import re-reads the source. Lets authors
+            # iterate without restarting Maya. Existing top-level widgets
+            # whose class came from this module are closed first to avoid
+            # leaving zombie workspaceControls when the new show() builds
+            # a fresh window. Catalogue-installed packages skip this so
+            # ordinary users keep the cached-import speed.
+            if (module_name
+                    and self._dev_reload_enabled()
+                    and is_my_tools(pkg_data)
+                    and module_name in _sys.modules):
+                _close_widgets_from_module(module_name)
+                stale = [
+                    k for k in list(_sys.modules)
+                    if k == module_name or k.startswith(module_name + ".")
+                ]
+                for k in stale:
+                    del _sys.modules[k]
             mod = importlib.import_module(module_name)
             func = getattr(mod, func_name)
             func()
@@ -252,6 +271,14 @@ class ScriptManager:
             return "{}"
         keys = ", ".join(sorted(entry.keys()))
         return "{{{}}}".format(keys)
+
+    def _dev_reload_enabled(self):
+        """Whether to evict cached My Tools modules on launch.
+
+        ``getattr(None, ..., False)`` covers the ``config=None`` case used in
+        unit tests so legacy launch tests keep their cached-import semantics.
+        """
+        return bool(getattr(self._config, "dev_reload_my_tools", False))
 
     def _add_to_env(self, path, pkg_type, is_folder):
         """Add a path to Maya environment variables."""
@@ -349,3 +376,39 @@ class ScriptManager:
                 self._env_mgr.remove_python_path(script_dir)
             elif pkg_type == "mel_script":
                 self._env_mgr.remove_env_path("MAYA_SCRIPT_PATH", script_dir)
+
+
+def _close_widgets_from_module(module_name):
+    """Close any top-level QWidget whose class came from ``module_name`` (or a
+    submodule). Best-effort cleanup before evicting a My Tools package from
+    ``sys.modules``: if the package built a dockable workspaceControl on its
+    last launch, the C++ side stays alive after the Python module is dropped,
+    so the next ``show()`` would create a second window on top of the orphan.
+
+    Skipped silently when Qt isn't importable (CLI tools, headless tests) or
+    when no QApplication exists yet — the caller should still proceed with
+    the module eviction in those cases.
+
+    The ``except RuntimeError`` here catches Qt's "already deleted" error,
+    which happens naturally when one widget's ``close()`` tears down a child
+    that's later in our list. That's tear-down race, not a swallowed bug.
+    """
+    try:
+        from carton.ui.compat import QtWidgets
+    except ImportError:
+        return
+    app = QtWidgets.QApplication.instance()
+    if app is None:
+        return
+    targets = []
+    for w in app.topLevelWidgets():
+        klass = type(w)
+        mod = getattr(klass, "__module__", "") or ""
+        if mod == module_name or mod.startswith(module_name + "."):
+            targets.append(w)
+    for w in targets:
+        try:
+            w.close()
+            w.deleteLater()
+        except RuntimeError:
+            pass

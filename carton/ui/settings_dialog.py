@@ -14,6 +14,7 @@ from carton.ui.i18n import t
 from carton.ui import theme
 from carton.ui.settings_widgets import (
     AutoUpdateSection,
+    DevReloadSection,
     StrictVerifySection,
     LanguageSection,
     ProxySection,
@@ -99,6 +100,11 @@ class SettingsDialog(QtWidgets.QDialog):
 
         # Strict integrity verification
         layout.addWidget(StrictVerifySection(
+            self._config, self._config.save,
+        ))
+
+        # Dev reload — evict My Tools modules from sys.modules on Launch
+        layout.addWidget(DevReloadSection(
             self._config, self._config.save,
         ))
 

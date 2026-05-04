@@ -15,6 +15,16 @@ class TestConfig:
         assert c.catalogues == []
         assert c.auto_check_updates is True
         assert c.github_repo == "cignoir/carton"
+        # My Tools dev-reload defaults on so authors don't have to flip
+        # a toggle to get edit-and-relaunch behaviour out of the box.
+        assert c.dev_reload_my_tools is True
+
+    def test_dev_reload_round_trips(self, tmp_path):
+        path = tmp_path / "config.json"
+        c = Config(dev_reload_my_tools=False)
+        c.save(str(path))
+        loaded = Config.load(str(path))
+        assert loaded.dev_reload_my_tools is False
 
     def test_save_and_load(self):
         with tempfile.TemporaryDirectory() as tmpdir:
