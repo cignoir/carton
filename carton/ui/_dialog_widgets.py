@@ -156,6 +156,14 @@ class LocalizedDescriptionInput(QtWidgets.QWidget):
       are dropped.
     """
 
+    # Pin enough vertical room for the tab strip + text input. Without
+    # these explicit heights, QFormLayout sometimes squishes a composite
+    # widget down to a few pixels because its layout-derived sizeHint
+    # doesn't propagate the way a plain QLineEdit's does.
+    _TAB_ROW_HEIGHT = 22
+    _INPUT_MIN_HEIGHT = 28
+    _OUTER_SPACING = 4
+
     def __init__(self, parent=None, default_locale=_DEFAULT_LOCALE):
         super().__init__(parent)
         self._default_locale = default_locale
@@ -168,12 +176,22 @@ class LocalizedDescriptionInput(QtWidgets.QWidget):
         self._active: str = default_locale
         self._tab_buttons: dict[str, QtWidgets.QPushButton] = {}
 
+        # Vertical Fixed so neighbouring form rows can't steal our height.
+        self.setSizePolicy(
+            QtWidgets.QSizePolicy.Preferred,
+            QtWidgets.QSizePolicy.Fixed,
+        )
+        self.setMinimumHeight(
+            self._TAB_ROW_HEIGHT + self._OUTER_SPACING + self._INPUT_MIN_HEIGHT
+        )
+
         outer = QtWidgets.QVBoxLayout(self)
         outer.setContentsMargins(0, 0, 0, 0)
-        outer.setSpacing(4)
+        outer.setSpacing(self._OUTER_SPACING)
 
         # ── Tab row ──
         tab_row_widget = QtWidgets.QWidget(self)
+        tab_row_widget.setFixedHeight(self._TAB_ROW_HEIGHT)
         self._tab_row = QtWidgets.QHBoxLayout(tab_row_widget)
         self._tab_row.setContentsMargins(0, 0, 0, 0)
         self._tab_row.setSpacing(2)
@@ -181,6 +199,7 @@ class LocalizedDescriptionInput(QtWidgets.QWidget):
 
         # ── Text input (shared, swaps content on tab click) ──
         self._text_input = QtWidgets.QLineEdit(self)
+        self._text_input.setMinimumHeight(self._INPUT_MIN_HEIGHT)
         self._text_input.textChanged.connect(self._on_text_changed)
         outer.addWidget(self._text_input)
 
