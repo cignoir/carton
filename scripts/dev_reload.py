@@ -1,27 +1,92 @@
 """Carton development reload script.
 
 Run the following in Maya's Script Editor:
-    exec(open(r"F:\\workspace\\carton\\scripts\\dev_reload.py", encoding="utf-8").read())
+    exec(open(r"G:\\workspace\\carton\\scripts\\dev_reload.py", encoding="utf-8").read())
 """
 
 import os
 import shutil
 import sys
 
-_SRC = r"F:\workspace\carton\carton"
+_SRC = r"G:\workspace\carton\carton"
 _BOOTSTRAP_DIR = os.path.expanduser("~/Documents/maya/carton")
 _DST = os.path.join(_BOOTSTRAP_DIR, "carton")
 
 
 def reload_carton():
-    # 1. Close the window
-    if "carton" in sys.modules:
-        import carton
-        if carton._window is not None:
+    # Bail out before any destructive step if the dev source tree isn't
+    # where we think it is — the previous version rmtree'd _DST first and
+    # then failed at copytree, leaving the deployed package missing.
+    if not os.path.isdir(_SRC):
+        raise RuntimeError(
+            "[dev_reload] Source tree not found: {}\n"
+            "Update _SRC at the top of this script to point at your local"
+            " carton/ checkout before running again."
+            .format(_SRC)
+        )
+
+    # 1. Tear down every Qt widget that came from carton.* and the
+    # surrounding workspaceControl. ``QWidget.close()`` alone is not
+    # enough — MayaQWidgetDockableMixin keeps the workspaceControl
+    # alive on close (so the dock slot can re-attach later), and a
+    # plain ``deleteUI`` doesn't always finish the job in Maya 2027:
+    # the wrapper lingers and the next ``carton.show()`` ends up with
+    # two visible windows side-by-side. Three nudges in order:
+    #
+    #   a. Close every QWidget whose class came from carton.*
+    #      (catches main window, dialogs, popup pickers, …).
+    #   b. ``cmds.workspaceControl(..., e=True, close=True)`` to mark
+    #      the dock closed first — required on some Maya versions
+    #      before deleteUI actually destroys the C++ wrapper.
+    #   c. ``cmds.deleteUI`` to remove the named control.
+    #
+    # Wrapped in best-effort guards so a missing optional dependency
+    # (PySide, maya.cmds in unit-test contexts) doesn't abort reload.
+    try:
+        from carton.ui.compat import QtWidgets
+    except ImportError:
+        try:
+            from PySide6 import QtWidgets  # type: ignore[no-redef]
+        except ImportError:
             try:
-                carton._window.close()
-            except Exception:
-                pass
+                from PySide2 import QtWidgets  # type: ignore[no-redef]
+            except ImportError:
+                QtWidgets = None  # type: ignore[assignment]
+
+    if QtWidgets is not None:
+        app = QtWidgets.QApplication.instance()
+        if app is not None:
+            for w in list(app.allWidgets()):
+                klass = type(w)
+                mod = getattr(klass, "__module__", "") or ""
+                if mod == "carton" or mod.startswith("carton."):
+                    try:
+                        w.close()
+                        w.deleteLater()
+                    except RuntimeError:
+                        pass
+
+    if "carton" in sys.modules:
+        try:
+            import carton
+            carton._window = None
+        except Exception:
+            pass
+
+    try:
+        import maya.cmds as cmds
+        for ctl in ("CartonWindowWorkspaceControl",):
+            if cmds.workspaceControl(ctl, exists=True):
+                try:
+                    cmds.workspaceControl(ctl, edit=True, close=True)
+                except (RuntimeError, TypeError):
+                    pass
+                try:
+                    cmds.deleteUI(ctl)
+                except RuntimeError:
+                    pass
+    except ImportError:
+        pass
 
     # 2. Clear module cache
     to_remove = [k for k in sys.modules if k.startswith("carton")]

@@ -3,10 +3,10 @@
 try:
     from PySide6 import QtWidgets, QtCore, QtGui
     from PySide6.QtCore import Qt, Signal, Slot
-    from shiboken6 import wrapInstance
+    from shiboken6 import wrapInstance, isValid
 except ImportError:
     from PySide2 import QtWidgets, QtCore, QtGui
     from PySide2.QtCore import Qt, Signal, Slot
-    from shiboken2 import wrapInstance
+    from shiboken2 import wrapInstance, isValid
 
-__all__ = ["QtWidgets", "QtCore", "QtGui", "Qt", "Signal", "Slot", "wrapInstance"]
+__all__ = ["QtWidgets", "QtCore", "QtGui", "Qt", "Signal", "Slot", "wrapInstance", "isValid"]

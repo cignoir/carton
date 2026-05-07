@@ -37,6 +37,10 @@ _STRINGS = {
         "label_homepage": "Homepage",
         "label_author": "Author",
         "label_description": "Description",
+        "desc_add_locale": "Add language",
+        "desc_add_locale_tooltip": "Add another translation. Click a language tab to switch which one you're editing.",
+        "desc_add_locale_prompt": "Language code (e.g. en, ja, zh, fr, en-US):",
+        "desc_remove_locale_tooltip": "Remove this language (right-click)",
         "label_path": "Path",
         "label_run_mode": "Run Mode",
         "label_function": "function name",
@@ -113,6 +117,8 @@ _STRINGS = {
         "add_invalid_module_name": "'{}' is not a valid Python module name. Rename the file/folder to use only letters, digits and underscores (no spaces or hyphens), then try again.",
         "settings_strict_verify": "Strict integrity verification",
         "settings_strict_verify_hint": "Refuse to install packages whose catalogue entry has no SHA256, and treat hash mismatches as fatal. Recommended for shared/remote catalogues.",
+        "settings_dev_reload": "Reload My Tools on launch",
+        "settings_dev_reload_hint": "Evict My Tools packages from sys.modules before re-importing, so source edits are picked up on the next Launch click without restarting Maya. Catalogue-installed packages keep the cached-import speed.",
         "verified_badge": "Verified",
         "verified_badge_tooltip": "Hash matched at download time — the installed file is the same one that was published.",
         "origin_verified_tooltip": "The source (catalogue / GitHub Release) publishes a canonical hash, so downloads are checked for tampering.",
@@ -137,6 +143,11 @@ _STRINGS = {
         # Edit dialog
         "edit_title": "Carton — Edit",
         "edit_confirm_remove": "Remove {} from Carton?\nThe original file will not be deleted.",
+        "edit_refresh_btn": "⟳ Refresh from package.json",
+        "edit_refresh_tooltip": "Re-read metadata from the source folder's package.json (or sidecar) and repopulate the form. Click Save to persist the changes.",
+        "edit_refresh_no_manifest": "No package.json or sidecar found at the registered local path. Nothing to refresh from.",
+        "edit_refresh_no_change": "Already up to date — the form already matches package.json.",
+        "edit_refresh_done": "Form refreshed. Updated fields: {summary}\n\nReview the changes and click Save to persist.",
 
         # Settings
         "settings_title": "Carton — Settings",
@@ -322,6 +333,10 @@ _STRINGS = {
         "label_homepage": "ホームページ",
         "label_author": "作者",
         "label_description": "説明",
+        "desc_add_locale": "言語を追加",
+        "desc_add_locale_tooltip": "別の言語の説明を追加します。タブをクリックすると編集対象の言語が切り替わります。",
+        "desc_add_locale_prompt": "言語コード（例: en, ja, zh, fr, en-US）:",
+        "desc_remove_locale_tooltip": "この言語を削除（右クリック）",
         "label_path": "パス",
         "label_run_mode": "実行モード",
         "label_function": "関数名",
@@ -416,6 +431,8 @@ _STRINGS = {
         "add_invalid_module_name": "'{}' は Python のモジュール名として無効です。ファイル／フォルダ名を英数字とアンダースコアのみ（スペース・ハイフン不可）にリネームしてから再度お試しください。",
         "settings_strict_verify": "厳密な整合性検証",
         "settings_strict_verify_hint": "SHA256 が登録されていないパッケージのインストールを拒否し、ハッシュ不一致を致命エラーとして扱います。共有／リモートカタログ利用時に推奨。",
+        "settings_dev_reload": "My Tools を起動時にリロード",
+        "settings_dev_reload_hint": "Launch 時に My Tools パッケージを sys.modules から落として再 import します。Maya を再起動せずソース編集が反映されます。カタログ経由でインストールしたパッケージはこれまで通りキャッシュされた import で高速に起動します。",
         "verified_badge": "検証済",
         "verified_badge_tooltip": "ダウンロード時にハッシュが一致することを確認済み。配布時と同じファイルがインストールされています。",
         "origin_verified_tooltip": "配布元(カタログ / GitHub Release)が正規ハッシュを公開しているので、ダウンロード時に改ざんチェックが行われます。",
@@ -440,6 +457,11 @@ _STRINGS = {
         # Edit dialog
         "edit_title": "Carton — 編集",
         "edit_confirm_remove": "{} の登録を解除しますか？\n元ファイルは削除されません。",
+        "edit_refresh_btn": "⟳ package.json から再読込",
+        "edit_refresh_tooltip": "登録元フォルダの package.json (または sidecar) を読み直し、フォーム内容を最新に置き換えます。実際に保存するには Save を押してください。",
+        "edit_refresh_no_manifest": "登録パスに package.json も sidecar も見つかりませんでした。再読込元がありません。",
+        "edit_refresh_no_change": "差分なし — フォームは既に package.json と一致しています。",
+        "edit_refresh_done": "フォームを更新しました。変更項目: {summary}\n\n内容を確認して Save を押すと保存されます。",
 
         # Settings
         "settings_title": "Carton — 設定",
@@ -633,15 +655,69 @@ def detect_language():
     return "en"
 
 
-def t(key, *args):
-    """Translate a key. Supports format arguments.
+def t(key, *args, **kwargs):
+    """Translate a key. Supports both positional and named format args.
 
-    Usage:
+    Usage::
+
         t("confirm_update", "CigRef", "1.0.0")
-        → "CigRef を v1.0.0 に更新しますか？"
+        # → "CigRef を v1.0.0 に更新しますか？"     (positional, "{}")
+
+        t("edit_refresh_done", summary="version, icon")
+        # → "Form refreshed. Updated fields: version, icon ..."  (named, "{summary}")
+
+    A translation that fails to format (e.g. a typo'd placeholder)
+    surfaces the unformatted text instead of raising — the rule is
+    "translation bugs must never block the UI".
     """
     strings = _STRINGS.get(_current_lang, _STRINGS["en"])
     text = strings.get(key, _STRINGS["en"].get(key, key))
-    if args:
-        return text.format(*args)
+    if args or kwargs:
+        try:
+            return text.format(*args, **kwargs)
+        except (KeyError, IndexError, ValueError):
+            return text
     return text
+
+
+def resolve_localized(value, language=None):
+    """Resolve a possibly-localized value to a display string.
+
+    ``value`` is what was loaded from a manifest field (e.g. ``description``
+    out of ``package.json``). It can be:
+
+    * ``str`` — returned as-is. Single-language packages keep working
+      without any change.
+    * ``dict`` — keys are ISO-639-1 language codes (``"en"``, ``"ja"``)
+      with optional region suffix (``"en-US"``); values are strings. The
+      requested ``language`` wins; if absent, falls back to the language
+      stem (``"en-US"`` → ``"en"``), then to ``"en"``, then to any
+      non-empty string in the dict.
+    * anything else — coerced to ``""`` (treat malformed manifests as
+      "no description" rather than raising mid-render).
+
+    ``language`` defaults to the current Carton UI language so display
+    sites don't need to thread it through manually.
+    """
+    if isinstance(value, str):
+        return value
+    if not isinstance(value, dict) or not value:
+        return ""
+
+    lang = language or get_language() or "en"
+
+    if lang in value and isinstance(value[lang], str):
+        return value[lang]
+
+    if "-" in lang:
+        stem = lang.split("-", 1)[0]
+        if stem in value and isinstance(value[stem], str):
+            return value[stem]
+
+    if "en" in value and isinstance(value["en"], str):
+        return value["en"]
+
+    for v in value.values():
+        if isinstance(v, str) and v.strip():
+            return v
+    return ""

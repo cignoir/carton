@@ -5,6 +5,7 @@ import os
 from datetime import datetime, timezone
 
 from carton.core.identity import normalize
+from carton.core.install_state import is_my_tools
 from carton.core.path_utils import resolve_local_path, store_local_path
 
 
@@ -235,7 +236,26 @@ class ScriptManager:
             # "this name has already been tried and was not found".
             if module_name in _sys.modules and _sys.modules[module_name] is None:
                 del _sys.modules[module_name]
+            # Dev reload: for My Tools packages, evict the cached module
+            # tree so the next import re-reads the source. Lets authors
+            # iterate without restarting Maya. Existing top-level widgets
+            # whose class came from this module are closed first to avoid
+            # leaving zombie workspaceControls when the new show() builds
+            # a fresh window. Catalogue-installed packages skip this so
+            # ordinary users keep the cached-import speed.
+            if (module_name
+                    and self._dev_reload_enabled()
+                    and is_my_tools(pkg_data)
+                    and module_name in _sys.modules):
+                _close_widgets_from_module(module_name)
+                stale = [
+                    k for k in list(_sys.modules)
+                    if k == module_name or k.startswith(module_name + ".")
+                ]
+                for k in stale:
+                    del _sys.modules[k]
             mod = importlib.import_module(module_name)
+            self._apply_tool_language(mod)
             func = getattr(mod, func_name)
             func()
         else:
@@ -252,6 +272,52 @@ class ScriptManager:
             return "{}"
         keys = ", ".join(sorted(entry.keys()))
         return "{{{}}}".format(keys)
+
+    def _dev_reload_enabled(self):
+        """Whether to evict cached My Tools modules on launch.
+
+        ``getattr(None, ..., False)`` covers the ``config=None`` case used in
+        unit tests so legacy launch tests keep their cached-import semantics.
+        """
+        return bool(getattr(self._config, "dev_reload_my_tools", False))
+
+    def _apply_tool_language(self, mod):
+        """Sync the tool's UI language to Carton's active language.
+
+        Two channels, both best-effort and tolerant of failure:
+
+        * ``CARTON_LANGUAGE`` environment variable — set unconditionally
+          so tools that don't implement the ``set_language`` hook can
+          still pick up the active language at startup (or pass it on
+          to their own subprocess workers).
+        * ``mod.set_language(code)`` — the explicit hook. If the tool's
+          top-level package exposes the function, we call it with the
+          resolved code. ``carton.tool_i18n`` provides a re-exportable
+          ``set_language`` so the contract is satisfied by a single
+          import in the tool's ``__init__.py``.
+
+        Failures are swallowed: a faulty translator must not prevent the
+        tool from launching.
+        """
+        try:
+            from carton.ui.i18n import get_language
+            lang = get_language() or "en"
+        except ImportError:
+            lang = "en"
+
+        # Make the env var visible to anything the tool spawns later.
+        os.environ["CARTON_LANGUAGE"] = lang
+
+        hook = getattr(mod, "set_language", None)
+        if not callable(hook):
+            return
+        try:
+            hook(lang)
+        except Exception:
+            # A bug in the tool's i18n wiring shouldn't block launch.
+            # The tool will simply render in whatever language it
+            # defaulted to.
+            pass
 
     def _add_to_env(self, path, pkg_type, is_folder):
         """Add a path to Maya environment variables."""
@@ -349,3 +415,156 @@ class ScriptManager:
                 self._env_mgr.remove_python_path(script_dir)
             elif pkg_type == "mel_script":
                 self._env_mgr.remove_env_path("MAYA_SCRIPT_PATH", script_dir)
+
+
+def _close_widgets_from_module(module_name):
+    """Synchronously destroy every QWidget whose class came from
+    ``module_name`` (or a submodule), tearing down any wrapping Maya
+    workspaceControl first.
+
+    Why so aggressive: the obvious ``close() + deleteLater()`` was leaving
+    orphans alive after dev-reload. When Maya's ``deleteUI`` tears down a
+    workspaceControl, Qt re-parents the inner widget to None and restores
+    its ``Qt.Window`` flag — turning what was a docked panel into a
+    free-floating top-level. ``close()`` on that orphan is unreliable
+    (the close event ordering loses to Maya's tear-down) and
+    ``deleteLater()`` is async, so the new widget gets created and shown
+    before the old orphan vanishes — and the user sees both at once.
+
+    Strategy:
+        1. Filter to top-level / window-flagged widgets only — child
+           widgets are destroyed automatically when their parent dies, and
+           operating on them individually creates ordering hazards (a
+           child's parent might be invalid by the time we reach it).
+        2. For each target, delete its workspaceControl wrapper while it's
+           still parented in (``_delete_dockable_wrapper`` detaches first).
+        3. Call ``close()`` so the widget's ``closeEvent`` fires — that's
+           where well-behaved tools disconnect signals and kill Maya
+           scriptJobs. ``shiboken.delete`` skips closeEvent, so calling
+           ``close()`` first prevents callback leaks.
+        4. Synchronously ``shiboken.delete()`` the C++ object so the
+           orphan is GONE before control returns to the caller. Falls
+           back to ``deleteLater()`` if shiboken can't import.
+
+    Skipped silently when Qt isn't importable (CLI / headless tests) or
+    when no QApplication exists yet.
+
+    The ``except RuntimeError`` here catches Qt's "already deleted" error,
+    which happens naturally when one widget's destruction tears down a
+    child that's later in our list. That's tear-down race, not a
+    swallowed bug.
+    """
+    try:
+        from carton.ui.compat import QtWidgets
+    except ImportError:
+        return
+    app = QtWidgets.QApplication.instance()
+    if app is None:
+        return
+
+    try:
+        from shiboken6 import delete as _delete  # type: ignore[import-not-found]
+    except ImportError:
+        try:
+            from shiboken2 import delete as _delete  # type: ignore[import-not-found]
+        except ImportError:
+            _delete = None  # type: ignore[assignment]
+
+    targets = []
+    seen = set()
+    for w in app.allWidgets():
+        if id(w) in seen:
+            continue
+        seen.add(id(w))
+        klass = type(w)
+        mod = getattr(klass, "__module__", "") or ""
+        if mod != module_name and not mod.startswith(module_name + "."):
+            continue
+        # Only act on top-level / window widgets — children are destroyed
+        # transitively when their parent goes away.
+        try:
+            is_root = w.isWindow() or w.parent() is None
+        except RuntimeError:
+            continue
+        if is_root:
+            targets.append(w)
+
+    for w in targets:
+        _delete_dockable_wrapper(w)
+        # close() first so closeEvent fires and the widget can run its own
+        # teardown — disconnect signals, kill Maya scriptJobs, drop event
+        # filters. ``shiboken.delete`` skips closeEvent entirely, so without
+        # this any tool that relied on closeEvent for cleanup would leak
+        # callbacks (e.g. a SceneSaved scriptJob that fires later and
+        # touches the now-deleted Qt objects). Each call is independent
+        # best-effort: a widget that ``ignore``s its close event still
+        # gets reached by the destruction step below.
+        try:
+            w.close()
+        except RuntimeError:
+            pass
+        try:
+            w.hide()
+        except RuntimeError:
+            pass
+        try:
+            if _delete is not None:
+                _delete(w)
+            else:
+                w.deleteLater()
+        except RuntimeError:
+            pass
+
+
+def _delete_dockable_wrapper(widget):
+    """Delete the Maya workspaceControl that wraps this widget, if any.
+
+    ``MayaQWidgetDockableMixin.show(dockable=True)`` creates a control named
+    ``<objectName>WorkspaceControl`` and registers it with Maya. The control
+    survives ``QWidget.close()`` — Maya keeps the dock slot around so a
+    subsequent ``show()`` can re-attach the widget. That's exactly what we
+    don't want during a dev reload.
+
+    Three-step teardown:
+
+      1. ``setParent(None)`` + ``hide()`` on the widget so it's detached
+         from the dock and explicitly hidden BEFORE ``deleteUI`` runs —
+         otherwise Maya's tear-down silently re-orphans the widget back
+         into a visible top-level (Qt.Window flag restoration), and our
+         caller's destruction races against it.
+      2. ``cmds.workspaceControl(..., e=True, close=True)`` — required on
+         some Maya versions before ``deleteUI`` actually destroys the C++
+         wrapper instead of just retaining it.
+      3. ``cmds.deleteUI`` to remove the named control.
+
+    Each call is independently best-effort: if one is rejected (older
+    Maya, race with Qt tear-down), we still try the next.
+    """
+    try:
+        name = widget.objectName()
+    except RuntimeError:
+        return
+    if not name:
+        return
+    try:
+        import maya.cmds as cmds  # type: ignore[import-not-found]
+    except ImportError:
+        return
+    ctl = name + "WorkspaceControl"
+    if not cmds.workspaceControl(ctl, exists=True):
+        return
+    # Detach + hide BEFORE Maya tears the dock down — orphaning the widget
+    # via deleteUI would otherwise make it a visible top-level.
+    try:
+        widget.setParent(None)
+        widget.hide()
+    except RuntimeError:
+        pass
+    try:
+        cmds.workspaceControl(ctl, edit=True, close=True)
+    except (RuntimeError, TypeError):
+        pass
+    try:
+        cmds.deleteUI(ctl)
+    except RuntimeError:
+        pass

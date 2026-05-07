@@ -80,25 +80,43 @@ def startup():
 
 
 def show():
-    """Launch the Carton package manager window."""
+    """Launch the Carton package manager window.
+
+    In Maya the window is shown as a dockable workspaceControl — users can
+    drag-tab it next to the Outliner / Channel Box like any native panel.
+    Re-invoking ``carton.show()`` re-uses the existing widget so dock state
+    isn't lost between opens.
+    """
     global _window
 
     if not _initialized:
         startup()
 
     from carton.ui.main_window import create_window
-    _window = create_window()
-    _window.set_services(
-        catalogue_client=_catalogue_client,
-        install_manager=_install_mgr,
-        downloader=_downloader,
-        self_updater=_self_updater,
-        config=_config,
-        script_manager=_script_mgr,
-        publisher=_publisher,
-    )
-    _window.show()
-    _window.deferred_init()
+    from carton.ui.compat import isValid
+
+    if _window is None or not isValid(_window):
+        _window = create_window()
+        _window.set_services(
+            catalogue_client=_catalogue_client,
+            install_manager=_install_mgr,
+            downloader=_downloader,
+            self_updater=_self_updater,
+            config=_config,
+            script_manager=_script_mgr,
+            publisher=_publisher,
+        )
+        _window.deferred_init()
+
+    # MayaQWidgetDockableMixin.show accepts ``dockable=True`` to wrap the
+    # widget in a workspaceControl. A plain QWidget.show takes no kwargs,
+    # so fall back to the bare call when running outside Maya.
+    try:
+        _window.show(dockable=True)
+    except TypeError:
+        _window.show()
+    _window.raise_()
+    _window.activateWindow()
     return _window
 
 

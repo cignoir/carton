@@ -100,6 +100,54 @@ Carton は **Maya 向けプラグイン/ツールの配布・バージョン管�
 - `main_window.py:1466` `_filter_cards` で textChanged 時フィルタ
 - namespace 別フィルタも `_library_ns_filter` / `_mytools_ns_filter` で実装済
 
+### Q. ツール側の UI 言語を Carton 本体の言語設定と連動させるには？ なぜ launch hook 方式？
+
+ツールが「Carton 本体の言語に追従する UI」を持てるよう、二段構えで提供している:
+
+**Layer 1 — `set_language(code)` フック規約**
+
+ツール作者は package の top-level に `set_language(code: str) -> None` を実装するだけ。Carton は `entry_point` を呼ぶ直前に `mod.set_language(active_lang)` を呼ぶ (`carton/core/script_manager.py` の `_apply_tool_language`)。実装してないツールは silently スキップ — 既存ツールは何も変えなくても動く後方互換。
+
+**Layer 2 — `CARTON_LANGUAGE` 環境変数**
+
+`set_language` 実装の有無に関わらず Carton は `os.environ['CARTON_LANGUAGE']` を起動直前に書く。フックを実装してないツールでも環境変数経由で読める。サブプロセスを spawn するツールにも伝播する。
+
+**Layer 3 — `carton.tool_i18n` ヘルパー (任意)**
+
+```python
+# my_tool/__init__.py
+from carton.tool_i18n import for_caller, set_language  # set_language を再 export
+_tr = for_caller()
+t = _tr.t
+```
+
+`my_tool/i18n/{en,ja,...}.json` を置けば `t("key")` で自動解決。`set_language` 規約も同じ import で満たせる。Carton 不在環境では try/except でフォールバック実装に切り替えるパターン (各ツール ~20 行) を用意する。
+
+**なぜこの設計か**
+
+- **C 規約 (フック関数)**: 環境変数だけだと「ツールが起動時に毎回 env を読む」コードを各ツールが書く必要がある。明示的な関数呼び出しの方が「Carton が呼んだ」が見える化される。
+- **D ヘルパー (任意)**: ガチで自前 i18n 機構を組みたい人 (例: maya-refit のように既に独自 `tr()` を持っているツール) はヘルパーを使わずに `set_language` だけ実装すればいい。helper は楽したい人向けの薄い砂糖。
+- **live 切替は意図的に非実装**: 起動時のみ。ライブ切替を入れると Carton が「起動中のツール」を覚えておく必要があり、widget の lifecycle 管理スコープが広がる。Maya 環境で言語をしょっちゅう切り替えるユースケースは現状無い。
+- **gettext を使わない理由**: `.po/.mo` のビルド工程は DCC ツールの「ファット配布」と相性が悪い。ロケール数が一桁なので JSON 1 ファイル × ロケール数で十分。
+
+詳細は `carton/tool_i18n.py` の docstring と `tests/test_tool_i18n.py` を参照。
+
+---
+
+### Q. `description` を多言語対応するときに、なぜ別ファイル (`package.nls.<locale>.json`) ではなく package.json 内のオブジェクト形式？
+
+VSCode の拡張機能のような外部 NLS ファイル方式は採らず、package.json の `description` フィールド内に `{en: "...", ja: "...", ...}` を書く inline 方式を採用している。
+
+理由:
+
+- **ロケール数が少ない** — DCC ツールは studio 単位の配布が多く、世界配信を前提とした多数言語対応は稀。`description` だけ多言語化したいケースが大半なので、ファイル分割するほどの規模にならない。
+- **package.json 1 ファイルが SoT** — 複数ファイル方式にすると "どのファイルがどのスコープを持つか" の説明が必要になり、Carton の Package-first 原則 (package.json が SoT) を曇らせる。
+- **後方互換**: スキーマは `oneOf [string, object]` なので、単一文字列の既存 package.json はそのまま動く。多言語化は opt-in。
+- **解決ロジック**: `carton.ui.i18n.resolve_localized` が「アクティブ言語 → 言語ステム (`en-US` → `en`) → `en` フォールバック → 任意の最初の文字列」の順で文字列に flatten する。Carton 本体の言語設定 (`config.language`) と連動。
+- **編集 UI**: Add / Edit ダイアログの `LocalizedDescriptionInput` は `[locale code] [text] [×]` の可変長行 + 「言語追加」ボタン構成。en/ja ハードコードは避け、スキーマが受け付ける任意の ISO-639-1 コードを編集できる。
+
+スコープが広がって `display_name` や `tags` の多言語化が必要になった場合も同じ pattern (string | {locale: string}) を流用できる。NLS ファイル分割は、ロケール数が増えて inline では辛くなったタイミングで再検討する。
+
 ---
 
 ## UI

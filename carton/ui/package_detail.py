@@ -3,7 +3,7 @@
 import os
 
 from carton.ui.compat import QtWidgets, QtCore, QtGui, Qt
-from carton.ui.i18n import t
+from carton.ui.i18n import t, resolve_localized
 from carton.ui.package_card import TypeBadge
 from carton.ui import theme
 
@@ -421,8 +421,10 @@ class PackageDetailPanel(QtWidgets.QWidget):
             subtitle_parts.append(ver_text)
         self._subtitle_label.setText("  &middot;  ".join(subtitle_parts))
 
-        # Description
-        self._desc_label.setText(registry_data.get("description", ""))
+        # Description — see resolve_localized in carton.ui.i18n.
+        self._desc_label.setText(
+            resolve_localized(registry_data.get("description", ""))
+        )
 
         # Homepage
         self._homepage = registry_data.get("homepage", "")

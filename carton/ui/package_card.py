@@ -4,7 +4,7 @@ import os
 
 from carton.ui._origin_badge import resolve_origin_verification
 from carton.ui.compat import QtWidgets, QtCore, QtGui, Qt
-from carton.ui.i18n import t
+from carton.ui.i18n import t, resolve_localized
 from carton.ui import theme
 from carton.ui.utils import resolve_icon
 
@@ -271,8 +271,9 @@ class PackageCard(QtWidgets.QFrame):
 
         info_layout.addLayout(title_layout)
 
-        # Description
-        desc = self._pkg_data.get("description", "")
+        # Description — resolves localized {en, ja, ...} dicts to the
+        # current Carton language, falls back to plain strings unchanged.
+        desc = resolve_localized(self._pkg_data.get("description", ""))
         desc_label = QtWidgets.QLabel(desc)
         desc_label.setStyleSheet(
             "font-size: 12px; color: {}; background: transparent;".format(theme.TEXT_SECONDARY)

@@ -17,6 +17,7 @@ from carton.ui.utils import list_functions
 from carton.ui._dialog_widgets import (
     make_dim_label, make_readonly_input, make_namespace_preview_label,
     update_namespace_preview, make_icon_row, browse_icon_into,
+    LocalizedDescriptionInput,
 )
 from carton.core.sidecar import read_sidecar
 from carton.core.identity import (
@@ -107,7 +108,7 @@ class AddDialog(QtWidgets.QDialog):
         icon_row, self._icon_input = make_icon_row("🔧", self._browse_icon)
         form.addRow(make_dim_label(t("label_icon")), icon_row)
 
-        self._desc_input = QtWidgets.QLineEdit()
+        self._desc_input = LocalizedDescriptionInput()
         form.addRow(make_dim_label(t("label_description")), self._desc_input)
 
         layout.addLayout(form)
@@ -208,7 +209,7 @@ class AddDialog(QtWidgets.QDialog):
             if info.get("icon"):
                 self._icon_input.setText(info["icon"])
             if info.get("description"):
-                self._desc_input.setText(info["description"])
+                self._desc_input.set_value(info["description"])
 
             if info.get("has_package_json") or info.get("is_maya_module"):
                 # package.json or Maya module: hide Run mode (auto-resolved)
@@ -237,7 +238,7 @@ class AddDialog(QtWidgets.QDialog):
                 if sidecar.get("icon"):
                     self._icon_input.setText(sidecar["icon"])
                 if sidecar.get("description"):
-                    self._desc_input.setText(sidecar["description"])
+                    self._desc_input.set_value(sidecar["description"])
             else:
                 self._name_input.setText(display)
             self._mode_exec.setChecked(True)
@@ -286,7 +287,9 @@ class AddDialog(QtWidgets.QDialog):
         is_exec_mode = self._mode_exec.isChecked()
         func = self._func_combo.currentText().strip()
         icon = self._icon_input.text().strip() or "🔧"
-        description = self._desc_input.text().strip()
+        # ``description`` is whatever shape the LocalizedDescriptionInput
+        # returns — string for single-language, dict for multi-language.
+        description = self._desc_input.get_value()
         namespace = slugify_namespace(namespace_raw)
 
         # Reject names that aren't valid Python identifiers when the
