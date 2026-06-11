@@ -53,18 +53,26 @@ class InstallManager:
             # schema_version.
             from carton.core.migrations import make_backup
             make_backup(path)
-            with open(path, "w", encoding="utf-8") as f:
+            tmp = path + ".tmp"
+            with open(tmp, "w", encoding="utf-8") as f:
                 json.dump(migrated, f, indent=2, ensure_ascii=False)
+            os.replace(tmp, path)
         return migrated
 
     def _save_installed(self, data=None):
-        """Save installed.json."""
+        """Save installed.json, atomic via temp + replace.
+
+        installed.json is the source of truth for package state — a crash
+        mid-write must not be able to truncate it.
+        """
         if data is None:
             data = self._installed
         path = self._config.installed_json_path
         os.makedirs(os.path.dirname(path), exist_ok=True)
-        with open(path, "w", encoding="utf-8") as f:
+        tmp = path + ".tmp"
+        with open(tmp, "w", encoding="utf-8") as f:
             json.dump(data, f, indent=2, ensure_ascii=False)
+        os.replace(tmp, path)
 
     def install_package(self, zip_path, meta):
         """Install a package from a zip file.
