@@ -15,6 +15,7 @@ import traceback
 from carton.core.install_state import is_my_tools
 from carton.ui.compat import QtWidgets
 from carton.ui.error_messages import show_error
+from carton.ui._icon_fetch import resolve_icon_path
 from carton.ui.i18n import t
 from carton.ui import theme
 from carton.ui.package_card import PackageCard
@@ -75,7 +76,7 @@ class InstallController:
                 "pinned": bool(pinned),
                 # Resolved absolute icon path so a relinked My Tools
                 # entry can render its custom icon without re-fetching.
-                "icon_resolved": w._resolve_icon_path(pkg_data) or "",
+                "icon_resolved": resolve_icon_path(pkg_data, w._config) or "",
             }
             w._install_manager.install_package(dest, meta)
 
