@@ -38,8 +38,20 @@
       "description": "パッケージタイプ。省略時は python_package"
     },
     "description": {
-      "type": "string",
-      "description": "ツールの説明文"
+      "description": "ツールの説明文。単一文字列で書けば全言語共通、{ja: '...', en: '...'} のオブジェクトで書けば Carton の言語設定に追従して切り替わる。表示時は要求言語 → en → 任意の文字列の順にフォールバック解決される。",
+      "oneOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "object",
+          "minProperties": 1,
+          "patternProperties": {
+            "^[a-z]{2}(-[A-Z]{2})?$": { "type": "string" }
+          },
+          "additionalProperties": false
+        }
+      ]
     },
     "author": {
       "type": "string",
