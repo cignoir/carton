@@ -96,13 +96,13 @@ Carton は **Maya 向けプラグイン/ツールの配布・バージョン管�
 
 **ある**。
 
-- `main_window.py:475` `_build_search_row` で QLineEdit を配置、placeholder 付き
-- `main_window.py:1466` `_filter_cards` で textChanged 時フィルタ
+- `main_window.py` の `_build_search_row` で QLineEdit を配置、placeholder 付き
+- 同 `_filter_cards` で textChanged 時フィルタ
 - namespace 別フィルタも `_library_ns_filter` / `_mytools_ns_filter` で実装済
 
 ### Q. ツール側の UI 言語を Carton 本体の言語設定と連動させるには？ なぜ launch hook 方式？
 
-ツールが「Carton 本体の言語に追従する UI」を持てるよう、二段構えで提供している:
+ツールが「Carton 本体の言語に追従する UI」を持てるよう、三段構えで提供している:
 
 **Layer 1 — `set_language(code)` フック規約**
 
@@ -176,7 +176,7 @@ VSCode の拡張機能のような外部 NLS ファイル方式は採らず、pa
 - **Pinned**: catalogue が事前計算した SHA256 を持つ / GitHub Release に `SHA256SUMS` asset が添付されている。配布物の改ざん検出が可能。
 - **Unpinned**: GitHub 自動生成 archive や hash 事前計算なしの URL。TOFU (trust-on-first-use) で初回取得時の hash をキャッシュ。
 
-### Q. `strict_verify` ってデフォルト ON (`config.py:130`) だけど厳しすぎない？
+### Q. `strict_verify` ってデフォルト ON (`config.py`) だけど厳しすぎない？
 
 - 改ざんリスクを考慮しデフォルト ON。共有ドライブ catalogue を誰かが書き換えるシナリオを防ぐ。
 - 信頼できる自社 catalogue だけを購読している場合は OFF にして unpinned origin を使える。
@@ -233,8 +233,8 @@ VSCode の拡張機能のような外部 NLS ファイル方式は採らず、pa
 | クラウドサービス必須化 | ✗ | Local-first を優先 |
 | 他 DCC 対応 | ✗ | スコープ肥大回避、必要なら fork |
 | MVVM 層 | ✗ | Qt signals/slots で代替、過剰設計 |
-| 検索機能 | ✓ | 実装済 (main_window.py:475) |
-| My Tools の参照登録 | ✓ | 編集即反映を優先 (script_manager.py:1) |
+| 検索機能 | ✓ | 実装済 (main_window.py `_build_search_row`) |
+| My Tools の参照登録 | ✓ | 編集即反映を優先 (script_manager.py) |
 | strict_verify デフォルト ON | ✓ | 改ざん検出優先、OFF 可 |
 
 ---

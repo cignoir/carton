@@ -24,6 +24,16 @@ uvx carton-maya package lint    # validate before committing
 If you don't have uv yet: `pip install uv` or `pipx install uv`. `uvx` is
 bundled with uv.
 
+## Iterating inside Maya
+
+Register your working copy through Carton's **My Tools → Register** —
+the entry references your files in place, nothing is copied. With the
+`dev_reload_my_tools` setting enabled (Settings → General, on by
+default), every Launch evicts the cached module and re-reads your
+source: edit, click Launch, see the change — no Maya restart.
+Catalogue-installed packages keep their cached import for speed; only
+your own registrations reload.
+
 ## Choosing a package type
 
 Carton has four package types. Pick based on **what you ship** and **whether
@@ -189,6 +199,7 @@ At launch: `source "myTool.mel"; myTool();`.
 | `plugin_file` | Plugin name without extension. Passed to `loadPlugin` |
 | `commands` | MEL commands the plugin registers (informational) |
 | `nodes` | Nodes the plugin registers (informational) |
+| `command` | Python statement run right after the plugin loads (use `ui_command` for MEL) |
 | `ui_command` | MEL function called when the user clicks Launch |
 | `auto_load` | Auto-load the plugin at install time (optional, default `false`) |
 
@@ -303,18 +314,29 @@ Scaffolds into the current directory (`npm init` style):
 ```bash
 mkdir my-tool && cd my-tool
 uvx carton-maya package init
-? What kind of package?
-  ❯ Python script (single .py)
-    Python package (folder)
-    MEL script
-    Maya plugin (.mll)
-    Maya module (.mod)
-? Namespace: mystudio
-? Name: my_tool
-? Display name: My Tool
-? Maya versions: [✓] 2024 [✓] 2025 [✓] 2026 [ ] 2027
-✓ Created package.json + folder structure
+? Package type?
+  ❯ python_package
+    mel_script
+    plugin
+    maya_module
+? Package name (snake_case)? my_tool
+? Namespace (publisher id, e.g. mystudio — required to publish, empty to skip)? mystudio
+? Display name? My Tool
+? Initial version? 0.1.0
+? One-line description? Mirrors selected controls
+? Author? you
+? Maya versions? [✓] 2024 [✓] 2025 [✓] 2026 [ ] 2027
+Scaffolded my_tool (python_package) at /path/to/my-tool
+  package.json
+  my_tool/__init__.py
 ```
+
+Every prompt has a matching flag (`--type`, `--name`, `--namespace`,
+`--display-name`, `--version`, `--description`, `--author`,
+`--maya-versions`, `--platform`); pass `--non-interactive` to skip the
+prompts entirely and fill the rest with defaults. Skipping the
+namespace omits the field from `package.json` — add it before
+publishing.
 
 #### `package lint`
 

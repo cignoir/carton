@@ -145,7 +145,7 @@ v0.5.0 は **Package-first モデル**を導入し、カタログスキーマを
 
 - **ハードカットオーバー、共存しません。** v0.4 クライアントは v0.5 カタログを読めません（ファイル名自体が `registry.json` → `catalogue.json` に変わり、内部の shape も異なります）。共有カタログを使っている全員が同時にアップグレードする必要があります。
 - **カタログ管理者は再 upload が必要。** ローカルで自動 migrate が走った後の `catalogue.json`（および変更のない `packages/` ツリー）をホスト先に push してください。購読者はそれを pull して新しい shape を受け取ります。
-- **Python API：** `RegistryClient` クラスは削除されました。外部から利用していた場合は `carton.core.catalogue_client` の `CatalogueClient` に移行してください — サーフェスは同じで、`registry_*` 系のシンボルが `catalogue_*` に rename されています。
+- **Python API：** `RegistryClient` クラスは削除されました。外部から利用していた場合は `carton.core.catalogue.client` の `CatalogueClient` に移行してください — サーフェスは同じで、`registry_*` 系のシンボルが `catalogue_*` に rename されています。
 - **フィールド名の rename** — `installed.json` と publish 済み `package.json` の両方で `registry_id` → `catalogue_id`、`home_registry` → `home_origin`（`embedded` / `github` / `url` / `local` のタグドユニオン）。v0.5.0 より前の `home_registry` だけを持つアーティファクトは re-register 時に home 情報が拾われなくなりますが、再 publish すれば `home_origin` が新たに stamp されます。
 - **CLI フラグ rename：** `python -m carton unpublish --registry ...` は `--catalogue ...` に変更。
 
@@ -201,6 +201,8 @@ Settings には **「厳密な整合性検証」** チェックボックスが�
 - ハッシュの不一致を**致命的なエラー**として扱います。
 
 公開されてからインストールされるまでの間に、誰かがバイト列を改ざんしていないことを保証したいケース、つまり共有カタログやリモートカタログを利用する場面で有効化することを推奨します。
+
+Carton 自身のセルフアップデートも同じ基準で守られます。リリース zip は GitHub リリースアセットの SHA256 digest に対してダウンロード時に検証され、次回 Maya 起動時の適用直前にも再検証されます。厳密な整合性検証が ON の場合、digest を持たないリリースへの更新は拒否されます。
 
 ## カタログの構成
 

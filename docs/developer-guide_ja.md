@@ -20,6 +20,16 @@ uvx carton-maya package lint    # コミット前に検証
 
 uv が未インストールなら `pip install uv` または `pipx install uv` で入れてください。`uvx` は uv に同梱されています。
 
+## Maya 内での反復開発
+
+作業中のコピーは Carton の **My Tools → 登録** で登録します——エントリは
+ファイルをその場所のまま参照するだけで、コピーは作られません。
+`dev_reload_my_tools` 設定（設定 → 一般、デフォルト ON）が有効なら、
+起動のたびにキャッシュ済みモジュールを破棄してソースを読み直します。
+編集 → 起動ボタン → 即反映、Maya の再起動は不要です。カタログから
+インストールしたパッケージは速度優先でキャッシュ import のまま、
+リロードされるのは自分の登録分だけです。
+
 ## パッケージタイプの選び方
 
 Carton には 4 つのパッケージタイプがあります。**「何を配布するか」「Maya 版で実装が分かれるか」** で決まります。
@@ -175,6 +185,7 @@ flowchart TB
 | `plugin_file` | 拡張子なしのプラグイン名。`loadPlugin` に渡される |
 | `commands` | 登録される MEL コマンド一覧（情報表示用） |
 | `nodes` | 登録されるノード一覧（情報表示用） |
+| `command` | ロード直後に実行する Python 文（MEL なら `ui_command` を使う） |
 | `ui_command` | 起動ボタン押下時に呼ばれる MEL 関数 |
 | `auto_load` | インストール時に自動ロード（任意、デフォルト `false`） |
 
@@ -280,18 +291,28 @@ areas:
 ```bash
 mkdir my-tool && cd my-tool
 uvx carton-maya package init
-? What kind of package?
-  ❯ Python script (single .py)
-    Python package (folder)
-    MEL script
-    Maya plugin (.mll)
-    Maya module (.mod)
-? Namespace: mystudio
-? Name: my_tool
-? Display name: My Tool
-? Maya versions: [✓] 2024 [✓] 2025 [✓] 2026 [ ] 2027
-✓ Created package.json + folder structure
+? Package type?
+  ❯ python_package
+    mel_script
+    plugin
+    maya_module
+? Package name (snake_case)? my_tool
+? Namespace (publisher id, e.g. mystudio — required to publish, empty to skip)? mystudio
+? Display name? My Tool
+? Initial version? 0.1.0
+? One-line description? 選択コントロールをミラーする
+? Author? you
+? Maya versions? [✓] 2024 [✓] 2025 [✓] 2026 [ ] 2027
+Scaffolded my_tool (python_package) at /path/to/my-tool
+  package.json
+  my_tool/__init__.py
 ```
+
+各プロンプトにはフラグが対応する（`--type` `--name` `--namespace`
+`--display-name` `--version` `--description` `--author`
+`--maya-versions` `--platform`）。`--non-interactive` で全プロンプトを
+スキップしてデフォルト埋めできる。namespace を空でスキップした場合は
+`package.json` にフィールド自体が入らないので、publish 前に追記すること。
 
 #### `package lint`
 

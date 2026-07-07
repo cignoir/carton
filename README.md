@@ -189,7 +189,7 @@ needing a `catalogue.json` wrapper.
   the new shape.
 - **Python API:** the `RegistryClient` class has been removed. External
   consumers should import `CatalogueClient` from
-  `carton.core.catalogue_client` — same surface, with `registry_*`
+  `carton.core.catalogue.client` — same surface, with `registry_*`
   symbols renamed to `catalogue_*`.
 - **Field renames** in both `installed.json` and published
   `package.json`: `registry_id` → `catalogue_id`, `home_registry` →
@@ -263,6 +263,12 @@ SHA256 and refuses any unpinned origin (GitHub auto archive, etc.); hash
 mismatches become fatal. Recommended for shared or remote catalogues where
 you want to be sure nobody has tampered with the bytes between publish and
 install.
+
+Carton's own self-update is held to the same bar: the release zip is
+verified against the GitHub release asset's SHA256 digest at download
+time and re-verified right before the staged update is applied at the
+next Maya startup. With strict verification on, a release without a
+digest is refused outright.
 
 ## Catalogue Structure
 

@@ -9,7 +9,7 @@
 > * ``README.md`` / ``README_ja.md`` — user-facing v5.0 behaviour
 > * ``CLAUDE.md`` — architecture summary and internal terminology
 > * ``schemas/catalogue.schema.json`` — v5.0 catalogue format
-> * ``carton/core/catalogue_client.py`` — current merge + projection code
+> * ``carton/core/catalogue/client.py`` — current merge + projection code
 >
 > Left in place so the design history remains browsable, and because
 > the v4→v5 migrator paths in ``carton/core/migrations/`` still speak
