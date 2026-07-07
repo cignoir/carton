@@ -261,10 +261,11 @@ def _catalogue_id(args):
         if current:
             print("Already has catalogue_id: {}".format(current))
             return
+        from carton.core.catalogue.io import write_catalogue_dict
+
         new_id = new_uuid()
         catalogue["catalogue_id"] = new_id
-        with open(path, "w", encoding="utf-8") as f:
-            json.dump(catalogue, f, indent=2, ensure_ascii=False)
+        write_catalogue_dict(path, catalogue)
         print("Stamped: {}".format(new_id))
         return
     if current:
