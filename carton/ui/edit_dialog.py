@@ -11,6 +11,12 @@ from carton.ui._dialog_widgets import (
     update_namespace_preview, make_icon_row, browse_icon_into,
     LocalizedDescriptionInput,
 )
+from carton.core.entry_point_resolver import (
+    build_exec,
+    build_mel,
+    build_plugin,
+    build_python,
+)
 from carton.core.identity import slugify_namespace
 
 
@@ -287,31 +293,23 @@ class EditDialog(QtWidgets.QDialog):
             cmd = self._plugin_cmd_input.text().strip()
             entry_point = {"command": cmd} if cmd else {}
         elif self._is_plugin:
-            entry_point = {
-                "type": "plugin",
-                "file": os.path.basename(local_path),
-            }
-            cmd = self._plugin_cmd_input.text().strip()
-            if cmd:
-                entry_point["command"] = cmd
+            entry_point = build_plugin(
+                os.path.basename(local_path),
+                command=self._plugin_cmd_input.text().strip(),
+            )
         elif self._mode_exec.isChecked():
-            entry_point = {
-                "type": "exec",
-                "file": os.path.basename(local_path),
-            }
+            entry_point = build_exec(os.path.basename(local_path))
         elif is_mel:
-            entry_point = {
-                "type": "mel",
-                "script": os.path.basename(self._pkg_data.get("local_path", "")),
-                "procedure": self._func_combo.currentText().strip() or name,
-            }
+            entry_point = build_mel(
+                os.path.basename(local_path),
+                procedure=self._func_combo.currentText().strip() or name,
+            )
         else:
             override = self._module_input.text().strip()
-            entry_point = {
-                "type": "python",
-                "module": override or name,
-                "function": self._func_combo.currentText().strip() or "show",
-            }
+            entry_point = build_python(
+                override or name,
+                function=self._func_combo.currentText().strip(),
+            )
 
         self._result = {
             "action": "save",

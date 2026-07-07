@@ -1,6 +1,18 @@
-"""Resolve the launch entry_point for an installed package.
+"""Single authority for entry_point shapes: build, normalize, resolve.
 
-Source-of-truth order for v4.0:
+The canonical tagged-union forms (mirrored by ``package.schema.json``):
+
+* ``{"type": "python", "module": ..., "function": ...}``
+* ``{"type": "mel", "script": ..., "procedure": ...}``
+* ``{"type": "exec", "file": ...}``
+* ``{"type": "plugin", "plugin_file": ..., ["command"|"ui_command"]: ...}``
+
+Every producer (AddDialog, EditDialog) must go through the ``build_*``
+constructors and every consumer (launcher, register) through
+:func:`normalize_entry_point`, so legacy dialects live only inside this
+module instead of leaking shape knowledge into each call site.
+
+Resolution source-of-truth order (:func:`resolve_entry_point`):
 
 1. If the package is registry-installed and the inner ``package.json``
    exists at ``packages/<ns>/<name>/package.json``, that is the SoT.
@@ -15,6 +27,76 @@ the bytes actually exist.
 
 import json
 import os
+
+
+class EntryPointError(ValueError):
+    """Raised when an entry_point fails validation."""
+
+
+def build_python(module, function="show"):
+    """Canonical python entry: import ``module``, call ``function()``."""
+    return {"type": "python", "module": module, "function": function or "show"}
+
+
+def build_mel(script, procedure=""):
+    """Canonical MEL entry: source ``script``, call ``procedure()``.
+
+    ``procedure`` defaults to the script's stem — Maya convention names
+    the global proc after the file.
+    """
+    proc = procedure or os.path.splitext(os.path.basename(script))[0]
+    return {"type": "mel", "script": script, "procedure": proc}
+
+
+def build_exec(file):
+    """Canonical exec entry: run ``file`` top-level (no import contract)."""
+    return {"type": "exec", "file": file}
+
+
+def build_plugin(plugin_file, command="", ui_command=""):
+    """Canonical plugin entry: load ``plugin_file``, optionally run a command.
+
+    ``plugin_file`` is stored extension-less per the schema; a basename
+    like ``"foo.mll"`` is accepted and trimmed. ``command`` is a Python
+    statement executed after load, ``ui_command`` a MEL procedure name.
+    """
+    stem = plugin_file[:-4] if plugin_file.endswith(".mll") else plugin_file
+    entry = {"type": "plugin", "plugin_file": stem}
+    if command:
+        entry["command"] = command
+    if ui_command:
+        entry["ui_command"] = ui_command
+    return entry
+
+
+def validate_entry_point(ep):
+    """Normalize ``ep`` and check it is dispatchable; return the result.
+
+    Raises :class:`EntryPointError` naming the missing piece. Only the
+    four tagged-union types are accepted — maya_module's free-form
+    ``{"command": ...}`` entries never pass through here (that type is
+    dispatched by its handler, not the generic launcher).
+    """
+    entry = normalize_entry_point(ep)
+    if not isinstance(entry, dict):
+        raise EntryPointError(
+            "entry_point must be an object, got {!r}".format(entry))
+    ep_type = entry.get("type")
+    required = {
+        "python": ("module",),
+        "mel": ("script", "procedure"),
+        "exec": ("file",),
+        "plugin": ("plugin_file",),
+    }
+    if ep_type not in required:
+        raise EntryPointError(
+            "entry_point has no usable 'type' (got {!r})".format(ep_type))
+    for key in required[ep_type]:
+        if not entry.get(key):
+            raise EntryPointError(
+                "entry_point type {!r} requires a non-empty {!r}".format(
+                    ep_type, key))
+    return entry
 
 
 def resolve_entry_point(installed_entry, package_dir=None, registry_data=None):
@@ -60,8 +142,10 @@ def normalize_entry_point(ep):
       * dict without ``type`` but with ``module`` → ``{"type":"python", ...}``
       * dict without ``type`` but with ``script`` + ``procedure`` → ``{"type":"mel", ...}``
       * dict without ``type`` but with ``file`` ending in ``.mll`` → ``{"type":"plugin", ...}``
+      * plugin dialect ``{"type":"plugin", "file": ...}`` (single-file
+        registrations pre-0.5.9) → the schema's ``plugin_file`` key
 
-    Anything already carrying a ``type`` passes through. Anything we can't
+    Anything already canonical passes through. Anything we can't
     classify is returned as-is so the launcher's own fall-through guard
     surfaces a clear error.
     """
@@ -75,7 +159,7 @@ def normalize_entry_point(ep):
     if not isinstance(ep, dict) or not ep:
         return ep
     if ep.get("type"):
-        return ep
+        return _canonicalize_plugin(ep)
     promoted = dict(ep)
     if ep.get("module"):
         promoted["type"] = "python"
@@ -87,8 +171,22 @@ def normalize_entry_point(ep):
     file_hint = ep.get("file", "")
     if file_hint.endswith(".mll"):
         promoted["type"] = "plugin"
-        return promoted
+        return _canonicalize_plugin(promoted)
     return ep
+
+
+def _canonicalize_plugin(ep):
+    """Rename a plugin entry's legacy ``file`` key to ``plugin_file``.
+
+    The value is kept verbatim (extension and all) — the launcher
+    tolerates both bare and ``.mll`` names, and rewriting values here
+    would silently change what legacy installed.json entries point at.
+    """
+    if ep.get("type") != "plugin" or "file" not in ep or ep.get("plugin_file"):
+        return ep
+    fixed = dict(ep)
+    fixed["plugin_file"] = fixed.pop("file")
+    return fixed
 
 
 def _read_inner_entry_point(package_dir):

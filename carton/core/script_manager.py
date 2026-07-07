@@ -58,6 +58,11 @@ class ScriptManager:
         # machine with the same tool layout.
         stored_path = store_local_path(file_path)
 
+        # Persist entry_point in canonical form so legacy dialects adopted
+        # from a package.json converge instead of surviving forever.
+        from carton.core.entry_point_resolver import normalize_entry_point
+        entry_point = normalize_entry_point(entry_point)
+
         # Record in installed.json
         now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
         installed_data = {
@@ -127,8 +132,15 @@ class ScriptManager:
 
     def launch(self, pkg_data):
         """Launch a local script."""
-        entry = pkg_data.get("entry_point", {}) or {}
-        ep_type = entry.get("type", "")
+        from carton.core.entry_point_resolver import normalize_entry_point
+
+        # Legacy dialects ("module:function" string, typeless dicts,
+        # plugin "file" key) are translated here so every branch below
+        # only ever sees canonical shapes.
+        entry = normalize_entry_point(pkg_data.get("entry_point", {}) or {})
+        # Unclassifiable input passes through normalize as-is (possibly a
+        # string) — leave it intact so the no-type error below can show it.
+        ep_type = entry.get("type", "") if isinstance(entry, dict) else ""
 
         # Resolve the portable stored path once, then pass the expanded
         # version into pkg_data so downstream branches (and the delegated
@@ -178,6 +190,10 @@ class ScriptManager:
                 plugin_path = local_path
             elif local_path and os.path.isdir(local_path):
                 plugin_path = os.path.join(local_path, plugin_file)
+                # Canonical plugin_file is extension-less; on-disk it isn't.
+                if not os.path.exists(plugin_path) \
+                        and os.path.exists(plugin_path + ".mll"):
+                    plugin_path += ".mll"
             else:
                 plugin_path = plugin_file
             if not maya.cmds.pluginInfo(plugin_path, q=True, loaded=True):

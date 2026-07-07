@@ -20,6 +20,14 @@ from carton.ui._dialog_widgets import (
     LocalizedDescriptionInput,
 )
 from carton.core.sidecar import read_sidecar
+from carton.core.entry_point_resolver import (
+    EntryPointError,
+    build_exec,
+    build_mel,
+    build_plugin,
+    build_python,
+    validate_entry_point,
+)
 from carton.core.identity import (
     slugify_namespace, slugify_name, is_valid_python_module_name,
 )
@@ -318,16 +326,17 @@ class AddDialog(QtWidgets.QDialog):
                 self.accept()
                 return
             # If package.json exists AND carries a dispatchable entry_point,
-            # use it directly. If entry_point is missing/malformed, fall
-            # through to auto-detection — otherwise the tool installs fine
-            # but launches silently no-op because ScriptManager.launch can't
-            # dispatch without a ``type``.
-            pkgjson_ep = info.get("entry_point") if info else None
-            ep_usable = (
-                isinstance(pkgjson_ep, dict)
-                and bool(pkgjson_ep.get("type"))
-            )
-            if info and info.get("has_package_json") and ep_usable:
+            # adopt it in normalized form. If entry_point is missing or
+            # fails validation, fall through to auto-detection — otherwise
+            # the tool installs fine but blows up at launch time, where the
+            # error is far harder to act on than here.
+            pkgjson_ep = None
+            if info and info.get("entry_point") is not None:
+                try:
+                    pkgjson_ep = validate_entry_point(info["entry_point"])
+                except EntryPointError:
+                    pkgjson_ep = None
+            if info and info.get("has_package_json") and pkgjson_ep:
                 result = {
                     "file_path": path,
                     "namespace": namespace or slugify_namespace(info.get("namespace", "")),
@@ -410,33 +419,19 @@ class AddDialog(QtWidgets.QDialog):
         is_plugin = path.endswith(".mll")
 
         if is_plugin:
-            entry_point = {
-                "type": "plugin",
-                "file": os.path.basename(path),
-            }
-            plugin_cmd = self._plugin_cmd_input.text().strip()
-            if plugin_cmd:
-                entry_point["command"] = plugin_cmd
+            entry_point = build_plugin(
+                os.path.basename(path),
+                command=self._plugin_cmd_input.text().strip(),
+            )
             pkg_type = "plugin"
         elif is_exec_mode:
-            entry_point = {
-                "type": "exec",
-                "file": os.path.basename(path),
-            }
+            entry_point = build_exec(os.path.basename(path))
             pkg_type = "mel_script" if is_mel else "python_package"
         elif is_mel:
-            entry_point = {
-                "type": "mel",
-                "script": os.path.basename(path),
-                "procedure": func or module_name,
-            }
+            entry_point = build_mel(os.path.basename(path), procedure=func)
             pkg_type = "mel_script"
         else:
-            entry_point = {
-                "type": "python",
-                "module": module_name,
-                "function": func or "show",
-            }
+            entry_point = build_python(module_name, function=func)
             pkg_type = "python_package"
 
         return {
@@ -467,17 +462,9 @@ class AddDialog(QtWidgets.QDialog):
                 if f.endswith(".mel"):
                     mel_files.append(f)
             script_file = mel_files[0] if mel_files else "{}.mel".format(module_name)
-            entry_point = {
-                "type": "mel",
-                "script": script_file,
-                "procedure": func or os.path.splitext(script_file)[0],
-            }
+            entry_point = build_mel(script_file, procedure=func)
         else:
-            entry_point = {
-                "type": "python",
-                "module": module_name,
-                "function": func or "show",
-            }
+            entry_point = build_python(module_name, function=func)
 
         return {
             "file_path": path,

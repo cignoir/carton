@@ -63,9 +63,23 @@ class TestLaunchFallThroughGuard:
         pkg_data = {
             "type": "python_package",
             "source": "local",
-            "entry_point": {"module": "foo", "function": "show"},
+            "entry_point": {"random": "junk", "another": "key"},
         }
-        with pytest.raises(RuntimeError, match="function, module"):
+        with pytest.raises(RuntimeError, match="another, random"):
+            sm.launch(pkg_data)
+
+    def test_typeless_module_dict_is_promoted_and_launches(self, sm):
+        """launch() normalizes legacy shapes itself now — a typeless
+        ``{"module": ...}`` dict no longer dead-ends at the guard, it is
+        promoted to a python entry and dispatched (import failure here
+        proves it got past the guard to importlib)."""
+        pkg_data = {
+            "type": "python_package",
+            "source": "local",
+            "entry_point": {"module": "mmc_no_such_module_xyz",
+                            "function": "show"},
+        }
+        with pytest.raises(ModuleNotFoundError):
             sm.launch(pkg_data)
 
 
