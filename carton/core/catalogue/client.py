@@ -35,6 +35,7 @@ from carton.core.origins import (
 )
 from carton.core.uuid_id import read_uuid
 from carton.core.source_cache import SourceCache
+from carton.models.version import semver_sort_key
 
 
 def _is_remote_path(path):
@@ -371,9 +372,8 @@ class CatalogueClient(object):
             versions = self._project_github_versions(origin, pkg_id, pkg_data)
             item["versions"] = versions
             if versions:
-                # Pick a stable "latest" by lexicographic order — semver
-                # ordering is the consumer's job.
-                item["latest_version"] = sorted(versions.keys())[-1]
+                item["latest_version"] = max(versions.keys(),
+                                             key=semver_sort_key)
         elif isinstance(origin, (UrlOrigin, LocalOrigin)):
             # Url and local origins both expose a single "current"
             # version (the one written in their package.json). Only the

@@ -13,6 +13,7 @@ import os
 
 from urllib.parse import urljoin
 from carton.core.origins.base import ArtifactRef, Origin, OriginError, VersionMeta
+from carton.models.version import semver_sort_key
 
 
 def _is_remote_base(base):
@@ -77,11 +78,9 @@ class EmbeddedOrigin(Origin):
     def latest_version(self):
         if self._latest and self._latest in self._versions:
             return self._latest
-        # Fall back to lexicographic max — callers that care about
-        # semver ordering should sort themselves.
         if not self._versions:
             return ""
-        return sorted(self._versions.keys())[-1]
+        return max(self._versions.keys(), key=semver_sort_key)
 
     def get_artifact(self, version):
         info = self._versions.get(version)

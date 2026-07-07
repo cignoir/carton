@@ -1,7 +1,7 @@
 """Tests for the Version model."""
 
 import pytest
-from carton.models.version import Version
+from carton.models.version import Version, semver_sort_key
 
 
 class TestVersionParse:
@@ -55,3 +55,25 @@ class TestVersionStr:
 
     def test_repr(self):
         assert repr(Version.parse("1.2.3")) == "Version(1.2.3)"
+
+
+class TestSemverSortKey:
+    def test_two_digit_components_sort_numerically(self):
+        # Lexicographic order would put "0.9.0" last — the original bug
+        # in the github-origin latest_version projection.
+        versions = ["0.9.0", "0.10.0", "0.2.1"]
+        assert max(versions, key=semver_sort_key) == "0.10.0"
+
+    def test_full_ordering(self):
+        versions = ["1.0.0", "0.10.0", "0.9.0", "10.0.0", "2.0.10", "2.0.9"]
+        assert sorted(versions, key=semver_sort_key) == [
+            "0.9.0", "0.10.0", "1.0.0", "2.0.9", "2.0.10", "10.0.0",
+        ]
+
+    def test_unparseable_never_beats_valid_semver(self):
+        versions = ["zzz-tag", "0.1.0"]
+        assert max(versions, key=semver_sort_key) == "0.1.0"
+
+    def test_only_unparseable_falls_back_to_string_order(self):
+        versions = ["beta", "alpha"]
+        assert max(versions, key=semver_sort_key) == "beta"

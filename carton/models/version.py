@@ -50,3 +50,18 @@ class Version:
 
     def __str__(self):
         return "{}.{}.{}".format(self.major, self.minor, self.patch)
+
+
+def semver_sort_key(version_str):
+    """Sort key ordering version strings numerically (0.10.0 > 0.9.0).
+
+    Lexicographic ordering breaks as soon as any component hits two
+    digits. Unparseable strings rank below every valid semver and fall
+    back to string order among themselves, so a stray tag never beats a
+    real release.
+    """
+    try:
+        v = Version.parse(version_str)
+        return (1, v.major, v.minor, v.patch, version_str)
+    except ValueError:
+        return (0, 0, 0, 0, version_str)
