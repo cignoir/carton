@@ -212,7 +212,9 @@ class ScriptManager:
                     exec(compile(f.read(), local_path, "exec"), __main__.__dict__)
         elif ep_type == "mel":
             import maya.mel
-            script = entry.get("script", "")
+            # MEL string literals treat backslashes as escapes, so an
+            # absolute Windows path would be mangled ("C:\tools" -> tab).
+            script = entry.get("script", "").replace("\\", "/")
             procedure = entry.get("procedure", "")
             maya.mel.eval('source "{}"; {}();'.format(script, procedure))
         elif ep_type == "python":
