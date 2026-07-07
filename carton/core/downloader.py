@@ -161,13 +161,13 @@ class Downloader:
         for attempt in range(1, _MAX_RETRIES + 1):
             tmp_path = dest_path + ".tmp"
             try:
-                resp = urlopen(url, timeout=60)
-                with open(tmp_path, "wb") as f:
-                    while True:
-                        chunk = resp.read(8192)
-                        if not chunk:
-                            break
-                        f.write(chunk)
+                with urlopen(url, timeout=60) as resp:
+                    with open(tmp_path, "wb") as f:
+                        while True:
+                            chunk = resp.read(8192)
+                            if not chunk:
+                                break
+                            f.write(chunk)
 
                 if expected_sha256:
                     if not verify_sha256(tmp_path, expected_sha256):
