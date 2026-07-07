@@ -70,6 +70,7 @@
       "oneOf": [
         { "$ref": "#/$defs/entry_point_python" },
         { "$ref": "#/$defs/entry_point_mel" },
+        { "$ref": "#/$defs/entry_point_exec" },
         { "$ref": "#/$defs/entry_point_plugin" },
         {
           "type": "string",
@@ -225,6 +226,18 @@
       },
       "additionalProperties": false
     },
+    "entry_point_exec": {
+      "type": "object",
+      "required": ["type", "file"],
+      "properties": {
+        "type": { "const": "exec" },
+        "file": {
+          "type": "string",
+          "description": "トップレベル実行するスクリプトファイル名（.py / .mel）。import 契約なしのスクリプト向け"
+        }
+      },
+      "additionalProperties": false
+    },
     "entry_point_plugin": {
       "type": "object",
       "required": ["type", "plugin_file"],
@@ -233,6 +246,10 @@
         "plugin_file": {
           "type": "string",
           "description": "プラグインファイル名（拡張子なし）"
+        },
+        "command": {
+          "type": "string",
+          "description": "ロード後に実行する Python 文（単一ファイル登録由来。MEL なら ui_command を使う）"
         },
         "commands": {
           "type": "array",

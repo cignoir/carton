@@ -136,6 +136,44 @@ def test_lint_plugin_with_platform_passes(tmp_path):
     assert "plugin_platform_required" not in rules
 
 
+def test_lint_exec_entry_point_passes_schema(tmp_path):
+    """exec is a first-class launch type — the schema must accept it.
+
+    Regression guard: GUI single-file registrations emit
+    ``{"type": "exec", "file": ...}`` and publish injects it verbatim
+    into the canonical package.json, but the schema's oneOf historically
+    lacked an exec variant, so lint flagged Carton's own output.
+    """
+    _write_pkg_json(
+        str(tmp_path),
+        entry_point={"type": "exec", "file": "create_sphere.py"},
+    )
+    _write(str(tmp_path / "create_sphere.py"), "print('hi')\n")
+    result = lint_package(str(tmp_path))
+    assert not result.has_errors(), [
+        (i.rule, i.message) for i in result.errors
+    ]
+
+
+def test_lint_plugin_command_passes_schema(tmp_path):
+    """Optional post-load ``command`` (single-file dialect) is schema-legal."""
+    _write_pkg_json(
+        str(tmp_path),
+        type="plugin",
+        platform=["win64"],
+        entry_point={
+            "type": "plugin",
+            "plugin_file": "myPlugin",
+            "command": "import my_tool; my_tool.show()",
+        },
+    )
+    _write(str(tmp_path / "plug-ins" / "myPlugin.mll"), "")
+    result = lint_package(str(tmp_path))
+    assert not result.has_errors(), [
+        (i.rule, i.message) for i in result.errors
+    ]
+
+
 def test_lint_plugin_missing_mll_file_errors(tmp_path):
     _write_pkg_json(
         str(tmp_path),
