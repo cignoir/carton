@@ -49,8 +49,7 @@ class _StubDownloader:
 
 
 class _StubInstallManager:
-    def __init__(self, staging_dir):
-        self._config = types.SimpleNamespace(staging_dir=staging_dir)
+    def __init__(self):
         self.installed = []
 
     def install_package(self, zip_path, meta):
@@ -60,12 +59,15 @@ class _StubInstallManager:
 class _StubWindow:
     def __init__(self, staging_dir, packages):
         self._downloader = _StubDownloader()
-        self._install_manager = _StubInstallManager(staging_dir)
+        self._install_manager = _StubInstallManager()
         self._catalogue_client = types.SimpleNamespace(
             get_packages=lambda: packages,
         )
+        # The controller reads every path off the window's config — the
+        # same Config instance the services were built from.
         self._config = types.SimpleNamespace(
             strict_verify=False, icon_cache_dir="",
+            staging_dir=staging_dir,
         )
         self._card_layout = QtWidgets.QVBoxLayout()
         self.sidebar_rebuilds = 0

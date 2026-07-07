@@ -67,7 +67,7 @@ class InstallController:
             safe_name = validate_name(pkg_name)
             Version.parse(target_version)
             dest = os.path.join(
-                w._install_manager._config.staging_dir,
+                w._config.staging_dir,
                 "{}-{}.zip".format(safe_name, target_version),
             )
             w._downloader.download(
@@ -158,7 +158,7 @@ class InstallController:
         rel = pkg_data.get("path", "")
         if rel and w._install_manager:
             package_dir = os.path.join(
-                w._install_manager._config.install_dir, rel,
+                w._config.install_dir, rel,
             )
         catalogue_packages = (
             w._catalogue_client.get_packages() if w._catalogue_client else {}
@@ -195,12 +195,12 @@ class InstallController:
                     exec_file = entry_point.get("file", "")
                     if rel:
                         exec_data["local_path"] = os.path.join(
-                            w._install_manager._config.install_dir,
+                            w._config.install_dir,
                             rel, exec_file,
                         )
                     else:
                         exec_data["local_path"] = os.path.join(
-                            w._install_manager._config.packages_dir,
+                            w._config.packages_dir,
                             pkg_data.get("name", ""), exec_file,
                         )
                 w._script_manager.launch(exec_data)
