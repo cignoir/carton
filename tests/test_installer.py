@@ -33,6 +33,27 @@ def _make_test_zip(tmpdir, pkg_name="test_pkg"):
     return zip_path
 
 
+def _make_zip(tmpdir, files, version="1.0.0"):
+    """Create a zip carrying an explicit {arcname: content} file map."""
+    zip_path = os.path.join(tmpdir, "test_pkg-{}.zip".format(version))
+    with zipfile.ZipFile(zip_path, "w") as zf:
+        for arcname, content in files.items():
+            zf.writestr(arcname, content)
+    return zip_path
+
+
+def _meta(version="1.0.0"):
+    return {
+        "id": _PKG_ID,
+        "namespace": "mystudio",
+        "name": "test_pkg",
+        "version": version,
+        "type": "python_package",
+        "entry_point": {"type": "python", "module": "test_pkg",
+                        "function": "show"},
+    }
+
+
 class TestInstallManager:
     def test_install_and_list(self):
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -77,6 +98,113 @@ class TestInstallManager:
             mgr.uninstall_package(_PKG_ID)
 
             assert not mgr.is_installed(_PKG_ID)
+
+    def test_reinstall_preserves_runtime_generated_files(self):
+        """Files a tool wrote into its package dir survive an update."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            config = Config(install_dir=tmpdir)
+            mgr = InstallManager(config, MayaEnvManager())
+            pkg_dir = os.path.join(tmpdir, "packages", "mystudio", "test_pkg")
+
+            v1 = _make_zip(tmpdir, {
+                "test_pkg/__init__.py": "def show(): pass\n",
+                "data/shipped.txt": "v1",
+            })
+            mgr.install_package(v1, _meta("1.0.0"))
+
+            # Tool writes settings at runtime — nested and top-level.
+            with open(os.path.join(pkg_dir, "user_prefs.json"), "w") as f:
+                f.write('{"theme": "dark"}')
+            os.makedirs(os.path.join(pkg_dir, "cache"))
+            with open(os.path.join(pkg_dir, "cache", "state.bin"), "w") as f:
+                f.write("blob")
+
+            v2 = _make_zip(tmpdir, {
+                "test_pkg/__init__.py": "def show(): pass  # v2\n",
+                "data/shipped.txt": "v2",
+            }, version="2.0.0")
+            mgr.install_package(v2, _meta("2.0.0"))
+
+            with open(os.path.join(pkg_dir, "user_prefs.json")) as f:
+                assert f.read() == '{"theme": "dark"}'
+            assert os.path.exists(os.path.join(pkg_dir, "cache", "state.bin"))
+            # Author-shipped files come from the new zip, not the backup.
+            with open(os.path.join(pkg_dir, "data", "shipped.txt")) as f:
+                assert f.read() == "v2"
+
+    def test_reinstall_does_not_resurrect_author_removed_files(self):
+        """A file the author shipped in v1 and dropped in v2 stays gone."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            config = Config(install_dir=tmpdir)
+            mgr = InstallManager(config, MayaEnvManager())
+            pkg_dir = os.path.join(tmpdir, "packages", "mystudio", "test_pkg")
+
+            v1 = _make_zip(tmpdir, {
+                "test_pkg/__init__.py": "def show(): pass\n",
+                "obsolete.txt": "delete me in v2",
+            })
+            mgr.install_package(v1, _meta("1.0.0"))
+
+            v2 = _make_zip(tmpdir, {
+                "test_pkg/__init__.py": "def show(): pass\n",
+            }, version="2.0.0")
+            mgr.install_package(v2, _meta("2.0.0"))
+
+            assert not os.path.exists(os.path.join(pkg_dir, "obsolete.txt"))
+
+    def test_new_zip_wins_over_runtime_file_at_same_path(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            config = Config(install_dir=tmpdir)
+            mgr = InstallManager(config, MayaEnvManager())
+            pkg_dir = os.path.join(tmpdir, "packages", "mystudio", "test_pkg")
+
+            v1 = _make_zip(tmpdir, {"test_pkg/__init__.py": "x = 1\n"})
+            mgr.install_package(v1, _meta("1.0.0"))
+            with open(os.path.join(pkg_dir, "notes.txt"), "w") as f:
+                f.write("runtime")
+
+            v2 = _make_zip(tmpdir, {
+                "test_pkg/__init__.py": "x = 2\n",
+                "notes.txt": "shipped-by-author",
+            }, version="2.0.0")
+            mgr.install_package(v2, _meta("2.0.0"))
+
+            with open(os.path.join(pkg_dir, "notes.txt")) as f:
+                assert f.read() == "shipped-by-author"
+
+    def test_legacy_entry_without_manifest_preserves_nothing(self):
+        """Pre-manifest installs can't tell runtime files from removed
+        author files — preserving nothing is the safe behaviour."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            config = Config(install_dir=tmpdir)
+            mgr = InstallManager(config, MayaEnvManager())
+            pkg_dir = os.path.join(tmpdir, "packages", "mystudio", "test_pkg")
+
+            v1 = _make_zip(tmpdir, {"test_pkg/__init__.py": "x = 1\n"})
+            mgr.install_package(v1, _meta("1.0.0"))
+            # Simulate an entry written before the manifest existed.
+            del mgr._installed["packages"][_PKG_ID]["files"]
+            with open(os.path.join(pkg_dir, "user_prefs.json"), "w") as f:
+                f.write("{}")
+
+            v2 = _make_zip(tmpdir, {"test_pkg/__init__.py": "x = 2\n"},
+                           version="2.0.0")
+            mgr.install_package(v2, _meta("2.0.0"))
+
+            assert not os.path.exists(
+                os.path.join(pkg_dir, "user_prefs.json"))
+
+    def test_manifest_recorded_in_installed_entry(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            config = Config(install_dir=tmpdir)
+            mgr = InstallManager(config, MayaEnvManager())
+            v1 = _make_zip(tmpdir, {
+                "test_pkg/__init__.py": "x\n",
+                "data/a.txt": "a",
+            })
+            mgr.install_package(v1, _meta("1.0.0"))
+            entry = mgr.get_installed_packages()[_PKG_ID]
+            assert entry["files"] == ["data/a.txt", "test_pkg/__init__.py"]
 
     @pytest.mark.parametrize("namespace,name", [
         ("..", "evil"),

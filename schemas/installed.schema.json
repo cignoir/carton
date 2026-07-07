@@ -59,6 +59,11 @@
           "type": "boolean",
           "description": "My Tools (source=local) の場合、参照先がフォルダかファイルかの区別"
         },
+        "files": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "install 時の zip 同梱ファイル一覧（package_dir 相対、/ 区切り）。再 install 時にこの一覧に無いファイル＝ランタイム生成物として保全するための manifest"
+        },
         "origin": {
           "type": "object",
           "description": "v5.0 inbound origin snapshot. このパッケージをどこから install したかの identity を記録する (catalogue の versions/latest_version は stale になるので含めない、再解決時は origin 経由で最新を取る)",

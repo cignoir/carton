@@ -110,6 +110,8 @@ class InstallManager:
         try:
             os.makedirs(package_dir, exist_ok=True)
             self._extract_zip(zip_path, package_dir)
+            shipped_files = self._zip_file_list(zip_path)
+            self._preserve_runtime_files(backup_dir, package_dir, prev_entry)
             inner = self._read_inner_package_json(package_dir)
 
             # entry_point is no longer persisted in installed.json — it's
@@ -141,6 +143,7 @@ class InstallManager:
                 meta, pkg_type, rel_path,
                 activated_paths, relink_local_path,
                 inner_is_folder, inner_home_origin,
+                shipped_files=shipped_files,
             )
             self._persist_install_entry(pkg_id, entry_dict, prev_entry)
 
@@ -222,6 +225,56 @@ class InstallManager:
             raise InstallError("Failed to extract package: {}".format(e),
                                code="extract_failed")
 
+    @staticmethod
+    def _zip_file_list(zip_path):
+        """Relative file paths shipped in the zip (forward slashes, no dirs).
+
+        Recorded in installed.json as the ``files`` manifest so the next
+        install can tell author-shipped files from runtime-generated ones.
+        """
+        with zipfile.ZipFile(zip_path, "r") as zf:
+            return sorted(
+                info.filename.replace("\\", "/")
+                for info in zf.infolist() if not info.is_dir()
+            )
+
+    def _preserve_runtime_files(self, backup_dir, package_dir, prev_entry):
+        """Carry runtime-generated files from the previous install forward.
+
+        Tools may write settings or caches into their own package dir at
+        runtime; the transactional swap would silently drop them on every
+        update. A file in the backup that is absent from the previous
+        install's recorded zip manifest was runtime-generated — copy it
+        into the new tree, unless the new zip ships a file at the same
+        path (the author's file wins).
+
+        Entries installed before the manifest existed have no ``files``
+        key and preserve nothing: without the manifest we cannot tell a
+        runtime file from one the author shipped then deleted, and
+        resurrecting deleted files would be worse.
+        """
+        if not backup_dir or not os.path.isdir(backup_dir) or prev_entry is None:
+            return
+        manifest = prev_entry.get("files")
+        if not manifest:
+            return
+        shipped = set(manifest)
+        for root, _dirs, files in os.walk(backup_dir):
+            for fname in files:
+                src = os.path.join(root, fname)
+                rel = os.path.relpath(src, backup_dir).replace("\\", "/")
+                if rel in shipped:
+                    continue
+                dst = os.path.join(package_dir, *rel.split("/"))
+                if os.path.exists(dst):
+                    continue
+                try:
+                    os.makedirs(os.path.dirname(dst), exist_ok=True)
+                    shutil.copy2(src, dst)
+                except OSError as e:
+                    get_logger().warning(
+                        "could not preserve runtime file %s: %s", rel, e)
+
     def _read_inner_package_json(self, package_dir):
         """Return the inner ``package.json`` as a dict, or ``{}`` if missing.
 
@@ -259,7 +312,8 @@ class InstallManager:
 
     def _build_install_entry(self, meta, pkg_type, rel_path,
                               activated_paths, relink_local_path,
-                              inner_is_folder, inner_home_origin):
+                              inner_is_folder, inner_home_origin,
+                              shipped_files=None):
         """Construct the installed.json entry dict for a successful install."""
         info = PackageInfo(
             pkg_id=meta["id"],
@@ -276,6 +330,10 @@ class InstallManager:
             home_origin=inner_home_origin or {},
         )
         entry_dict = info.to_installed_dict()
+        if shipped_files is not None:
+            # Manifest of author-shipped files; lets the next install
+            # preserve runtime-generated files (see _preserve_runtime_files).
+            entry_dict["files"] = shipped_files
         if relink_local_path:
             if inner_is_folder is not None:
                 entry_dict["is_folder"] = inner_is_folder
