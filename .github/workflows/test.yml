@@ -15,13 +15,25 @@ jobs:
         python-version: ["3.10", "3.11", "3.12"]
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: ${{ matrix.python-version }}
           cache: pip
+
+      - name: Install Qt system libraries
+        # PySide6 ships its own Qt, but libQt6Gui hard-links these system
+        # libraries (even under QT_QPA_PLATFORM=offscreen). The runner
+        # image doesn't carry them, so without this step importing
+        # PySide6 dies with "libEGL.so.1: cannot open shared object file"
+        # inside the pytest-qt plugin load — surfacing as a bare
+        # INTERNALERROR / exit code 3.
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            libegl1 libgl1 libopengl0 libxkbcommon0 libdbus-1-3 libfontconfig1
 
       - name: Install carton-maya + dev deps
         run: |
@@ -30,9 +42,16 @@ jobs:
 
       - name: Install Qt platform plugin (offscreen)
         run: |
-          # PySide6 ships its own Qt; QT_QPA_PLATFORM=offscreen is set
-          # by tests/conftest.py.
+          # QT_QPA_PLATFORM=offscreen is set by tests/conftest.py.
           python -m pip install PySide6
+
+      - name: Sanity-check Qt loads headless
+        # Fails with the real ImportError when a system lib is missing,
+        # instead of letting pytest choke on it as an internal error.
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: |
+          python -c "from PySide6 import QtWidgets; QtWidgets.QApplication([]); print('qt ok')"
 
       - name: Run pytest
         env:
