@@ -26,7 +26,18 @@ _MAX_RETRIES = 3
 
 
 class DownloadError(Exception):
-    pass
+    """Download / verification failure.
+
+    ``code`` is a stable machine-readable category the UI dispatches on
+    (``strict_policy`` / ``integrity`` / ``disk_space`` / ``url_missing``
+    / ``network``) so user-facing classification never depends on the
+    English message text. An empty code means "unclassified" — the UI
+    falls back to legacy message matching.
+    """
+
+    def __init__(self, message, code=""):
+        super().__init__(message)
+        self.code = code
 
 
 def _is_local_path(path):
@@ -66,7 +77,7 @@ class Downloader:
         """
         url = artifact_ref.url
         if not url:
-            raise DownloadError("artifact has no URL")
+            raise DownloadError("artifact has no URL", code="url_missing")
 
         # Policy gate first — fail fast before touching the network.
         strict = bool(getattr(self._config, "strict_verify", False))
@@ -74,7 +85,8 @@ class Downloader:
             raise DownloadError(
                 "unpinned source rejected (strict_verify is on): {}".format(
                     artifact_ref.source_label or url
-                )
+                ),
+                code="strict_policy",
             )
 
         # Decide the expected sha256 for this download.
@@ -106,7 +118,10 @@ class Downloader:
             try:
                 digest = compute_sha256(dest_path)
             except OSError as e:
-                raise DownloadError("TOFU sha256 compute failed: {}".format(e))
+                raise DownloadError(
+                    "TOFU sha256 compute failed: {}".format(e),
+                    code="integrity",
+                )
             cache.write_pinned_sha256(url, digest)
 
         return dest_path
@@ -132,7 +147,8 @@ class Downloader:
                     "Insufficient disk space: need {}MB, have {}MB".format(
                         expected_size * 2 // (1024 * 1024),
                         free // (1024 * 1024),
-                    )
+                    ),
+                    code="disk_space",
                 )
 
         if _is_local_path(url):
@@ -144,14 +160,15 @@ class Downloader:
         """Copy a local file."""
         resolved = os.path.normpath(src_path)
         if not os.path.exists(resolved):
-            raise DownloadError("File not found: {}".format(resolved))
+            raise DownloadError("File not found: {}".format(resolved),
+                                code="url_missing")
 
         shutil.copy2(resolved, dest_path)
 
         if expected_sha256:
             if not verify_sha256(dest_path, expected_sha256):
                 os.remove(dest_path)
-                raise DownloadError("SHA256 mismatch")
+                raise DownloadError("SHA256 mismatch", code="integrity")
 
         return dest_path
 
@@ -172,7 +189,8 @@ class Downloader:
                 if expected_sha256:
                     if not verify_sha256(tmp_path, expected_sha256):
                         os.remove(tmp_path)
-                        raise DownloadError("SHA256 mismatch")
+                        raise DownloadError("SHA256 mismatch",
+                                            code="integrity")
 
                 os.replace(tmp_path, dest_path)
                 return dest_path
@@ -188,5 +206,6 @@ class Downloader:
                     time.sleep(2 ** attempt)
 
         raise DownloadError(
-            "Download failed after {} retries: {}".format(_MAX_RETRIES, last_error)
+            "Download failed after {} retries: {}".format(_MAX_RETRIES, last_error),
+            code="network",
         )

@@ -113,42 +113,77 @@ def _title_for(operation):
     return t("err_title_generic")
 
 
+# code → (body_key, hint_key) tables. Codes are set at the raise sites
+# in core (DownloadError/InstallError/GhCliError take a ``code`` kwarg),
+# so classification is stable even when the message wording changes or
+# gets localized. The substring fallbacks below each table only serve
+# exceptions raised without a code (third-party re-raises, old pickles).
+_DOWNLOAD_CODE_KEYS = {
+    "strict_policy": ("err_download_strict_policy",
+                      "err_download_strict_policy_hint"),
+    "integrity": ("err_download_integrity", "err_download_integrity_hint"),
+    "disk_space": ("err_download_disk", "err_download_disk_hint"),
+    "url_missing": ("err_download_url_missing",
+                    "err_download_url_missing_hint"),
+    "network": ("err_download_network", "err_download_network_hint"),
+}
+
+_INSTALL_CODE_KEYS = {
+    "zip_corrupt": ("err_install_zip_corrupt", "err_install_zip_corrupt_hint"),
+    "extract_failed": ("err_install_extract_failed",
+                       "err_install_extract_failed_hint"),
+    "handler_failed": ("err_install_handler_failed",
+                       "err_install_handler_failed_hint"),
+    "persist_failed": ("err_install_persist_failed",
+                       "err_install_persist_failed_hint"),
+    "generic": ("err_install_generic", "err_install_generic_hint"),
+}
+
+_GH_CODE_KEYS = {
+    "cli_missing": ("err_gh_cli_missing", "err_gh_cli_missing_hint"),
+    "asset_missing": ("err_gh_asset_missing", "err_gh_asset_missing_hint"),
+    "generic": ("err_gh_generic", "err_gh_generic_hint"),
+}
+
+
 def _classify(exc):
     """Return ``(body_key, hint_key)`` i18n keys for an exception.
 
     Order matters: more specific subclasses must be checked before their
     parents. ``hint_key`` may be ``""`` to indicate no hint.
     """
-    # --- Download errors: subcategorize by message substring.
-    # DownloadError only carries a message string; we don't want to
-    # redesign core to add error codes just for UI display, so we do a
-    # narrow substring match here. The substrings are anchored to the
-    # literal strings raised in downloader.py.
+    code = getattr(exc, "code", "")
+
     if isinstance(exc, DownloadError):
+        keys = _DOWNLOAD_CODE_KEYS.get(code)
+        if keys:
+            return keys
+        # Legacy fallback: classify code-less instances by message.
         s = str(exc)
         if "unpinned source rejected" in s:
-            return "err_download_strict_policy", "err_download_strict_policy_hint"
+            return _DOWNLOAD_CODE_KEYS["strict_policy"]
         if "SHA256 mismatch" in s or "TOFU sha256" in s:
-            return "err_download_integrity", "err_download_integrity_hint"
+            return _DOWNLOAD_CODE_KEYS["integrity"]
         if "Insufficient disk space" in s:
-            return "err_download_disk", "err_download_disk_hint"
+            return _DOWNLOAD_CODE_KEYS["disk_space"]
         if s.startswith("File not found") or "no URL" in s:
-            return "err_download_url_missing", "err_download_url_missing_hint"
-        # Generic fallback (network errors, unexpected transport failures).
-        return "err_download_network", "err_download_network_hint"
+            return _DOWNLOAD_CODE_KEYS["url_missing"]
+        return _DOWNLOAD_CODE_KEYS["network"]
 
-    # --- Install errors.
     if isinstance(exc, InstallError):
+        keys = _INSTALL_CODE_KEYS.get(code)
+        if keys:
+            return keys
         s = str(exc)
         if "Corrupt zip" in s or "Invalid or corrupt package zip" in s:
-            return "err_install_zip_corrupt", "err_install_zip_corrupt_hint"
+            return _INSTALL_CODE_KEYS["zip_corrupt"]
         if "Failed to extract" in s:
-            return "err_install_extract_failed", "err_install_extract_failed_hint"
+            return _INSTALL_CODE_KEYS["extract_failed"]
         if "Handler install failed" in s:
-            return "err_install_handler_failed", "err_install_handler_failed_hint"
+            return _INSTALL_CODE_KEYS["handler_failed"]
         if "Failed to persist" in s:
-            return "err_install_persist_failed", "err_install_persist_failed_hint"
-        return "err_install_generic", "err_install_generic_hint"
+            return _INSTALL_CODE_KEYS["persist_failed"]
+        return _INSTALL_CODE_KEYS["generic"]
 
     # --- Publish-related.
     # VersionConflictError needs the version number formatted in, so it
@@ -163,12 +198,15 @@ def _classify(exc):
 
     # --- GitHub CLI and API.
     if isinstance(exc, GhCliError):
+        keys = _GH_CODE_KEYS.get(code)
+        if keys:
+            return keys
         s = str(exc)
         if "not found on PATH" in s:
-            return "err_gh_cli_missing", "err_gh_cli_missing_hint"
+            return _GH_CODE_KEYS["cli_missing"]
         if "asset not found" in s:
-            return "err_gh_asset_missing", "err_gh_asset_missing_hint"
-        return "err_gh_generic", "err_gh_generic_hint"
+            return _GH_CODE_KEYS["asset_missing"]
+        return _GH_CODE_KEYS["generic"]
     if isinstance(exc, GithubApiError):
         return "err_github_api_generic", "err_github_api_generic_hint"
 

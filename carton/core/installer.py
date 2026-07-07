@@ -28,7 +28,17 @@ class InstallError(RuntimeError):
     On failure, InstallManager.install_package restores the previous version
     if there was one, so catching this exception means the on-disk state is
     back to what it was before the install attempt.
+
+    ``code`` is a stable machine-readable category the UI dispatches on
+    (``zip_corrupt`` / ``extract_failed`` / ``handler_failed`` /
+    ``persist_failed`` / ``generic``) so user-facing classification never
+    depends on the English message text. An empty code means
+    "unclassified" — the UI falls back to legacy message matching.
     """
+
+    def __init__(self, message, code=""):
+        super().__init__(message)
+        self.code = code
 
 
 class InstallManager:
@@ -200,14 +210,17 @@ class InstallManager:
             with zipfile.ZipFile(zip_path, "r") as zf:
                 bad = zf.testzip()
                 if bad is not None:
-                    raise InstallError("Corrupt zip — bad entry: {}".format(bad))
+                    raise InstallError("Corrupt zip — bad entry: {}".format(bad),
+                                       code="zip_corrupt")
                 zf.extractall(package_dir)
         except zipfile.BadZipFile as e:
-            raise InstallError("Invalid or corrupt package zip: {}".format(e))
+            raise InstallError("Invalid or corrupt package zip: {}".format(e),
+                               code="zip_corrupt")
         except InstallError:
             raise
         except OSError as e:
-            raise InstallError("Failed to extract package: {}".format(e))
+            raise InstallError("Failed to extract package: {}".format(e),
+                               code="extract_failed")
 
     def _read_inner_package_json(self, package_dir):
         """Return the inner ``package.json`` as a dict, or ``{}`` if missing.
@@ -240,7 +253,8 @@ class InstallManager:
         try:
             handler.install(package_dir, meta, self._env_manager)
         except Exception as e:
-            raise InstallError("Handler install failed: {}".format(e))
+            raise InstallError("Handler install failed: {}".format(e),
+                               code="handler_failed")
         return self._env_manager.diff_since(env_before)
 
     def _build_install_entry(self, meta, pkg_type, rel_path,
@@ -284,7 +298,8 @@ class InstallManager:
                 self._installed["packages"][pkg_id] = prev_entry
             else:
                 self._installed["packages"].pop(pkg_id, None)
-            raise InstallError("Failed to persist installed.json: {}".format(e))
+            raise InstallError("Failed to persist installed.json: {}".format(e),
+                               code="persist_failed")
 
     def _rollback_filesystem(self, package_dir, backup_dir):
         """Restore the previous version (or clean up) after an install failure.

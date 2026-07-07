@@ -60,6 +60,42 @@ def test_download_error_subcategorization(message, expected_body):
     assert body_key == expected_body
 
 
+# --- Structured codes trump message text -------------------------------------
+# The raise sites stamp a machine-readable ``code``; classification must
+# survive arbitrary (reworded, localized) messages.
+
+@pytest.mark.parametrize("exc,expected_body", [
+    (DownloadError("完全に別の文言", code="integrity"),
+     "err_download_integrity"),
+    (DownloadError("reworded", code="strict_policy"),
+     "err_download_strict_policy"),
+    (DownloadError("reworded", code="disk_space"), "err_download_disk"),
+    (DownloadError("reworded", code="url_missing"),
+     "err_download_url_missing"),
+    (DownloadError("reworded", code="network"), "err_download_network"),
+    (InstallError("reworded", code="zip_corrupt"), "err_install_zip_corrupt"),
+    (InstallError("reworded", code="extract_failed"),
+     "err_install_extract_failed"),
+    (InstallError("reworded", code="handler_failed"),
+     "err_install_handler_failed"),
+    (InstallError("reworded", code="persist_failed"),
+     "err_install_persist_failed"),
+    (GhCliError("reworded", code="cli_missing"), "err_gh_cli_missing"),
+    (GhCliError("reworded", code="asset_missing"), "err_gh_asset_missing"),
+])
+def test_code_dispatch_is_message_independent(exc, expected_body):
+    body_key, _ = _classify(exc)
+    assert body_key == expected_body
+
+
+def test_unknown_code_falls_back_to_message_matching():
+    # A code this classifier doesn't know (newer core, older UI) must not
+    # crash — it degrades to the legacy substring path.
+    exc = DownloadError("SHA256 mismatch", code="from_the_future")
+    body_key, _ = _classify(exc)
+    assert body_key == "err_download_integrity"
+
+
 # --- Install subcategorization ----------------------------------------------
 
 @pytest.mark.parametrize("message,expected_body", [

@@ -102,7 +102,8 @@ class SelfUpdater:
             # anything it cannot verify — including Carton itself.
             raise DownloadError(
                 "unpinned source rejected (strict_verify is on): "
-                "carton self-update"
+                "carton self-update",
+                code="strict_policy",
             )
 
         # Stage next to the carton/ Python package — NOT under install_dir.

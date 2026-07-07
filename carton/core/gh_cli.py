@@ -21,12 +21,15 @@ class GhCliError(RuntimeError):
 
     ``stderr`` carries gh's own error message when available so callers
     can surface something actionable ("not logged in", "repo not found",
-    etc.) instead of a generic failure.
+    etc.) instead of a generic failure. ``code`` is a stable category the
+    UI dispatches on (``cli_missing`` / ``asset_missing`` / ``generic``)
+    so classification never depends on the English message text.
     """
 
-    def __init__(self, message, stderr=""):
+    def __init__(self, message, stderr="", code=""):
         super().__init__(message)
         self.stderr = stderr
+        self.code = code
 
 
 def is_available():
@@ -76,7 +79,7 @@ def create_release(repo, tag, title="", notes="", assets=None,
         GhCliError: When ``gh`` is unavailable or returns non-zero.
     """
     if shutil.which("gh") is None:
-        raise GhCliError("gh CLI not found on PATH")
+        raise GhCliError("gh CLI not found on PATH", code="cli_missing")
 
     cmd = ["gh", "release", "create", tag, "--repo", repo]
     if title:
@@ -92,7 +95,8 @@ def create_release(repo, tag, title="", notes="", assets=None,
 
     for asset in assets or []:
         if not os.path.exists(asset):
-            raise GhCliError("asset not found: {}".format(asset))
+            raise GhCliError("asset not found: {}".format(asset),
+                             code="asset_missing")
         cmd.append(asset)
 
     try:
