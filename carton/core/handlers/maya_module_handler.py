@@ -193,8 +193,9 @@ def _exec_user_setup(user_setup_path):
             exec(code, namespace)
         except Exception:
             import traceback
-            print("[Carton] userSetup.py failed: {}".format(user_setup_path))
-            traceback.print_exc()
+            from carton.core.log import get_logger
+            get_logger().warning("userSetup.py failed: %s\n%s",
+                                 user_setup_path, traceback.format_exc())
 
     _mu.executeDeferred(_run)
 

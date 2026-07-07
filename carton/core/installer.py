@@ -14,6 +14,7 @@ from carton.core.identity import (
     validate_namespace,
 )
 from carton.core.install_state import is_my_tools
+from carton.core.log import get_logger
 from carton.core.migrations import (
     INSTALLED_SCHEMA_VERSION,
     migrate_installed_data,
@@ -295,12 +296,14 @@ class InstallManager:
             if os.path.isdir(package_dir):
                 shutil.rmtree(package_dir, ignore_errors=True)
         except Exception as ce:
-            print("[Carton] rollback cleanup failed: {}".format(ce))
+            get_logger().warning("rollback cleanup failed: %s", ce)
         if backup_dir and os.path.isdir(backup_dir):
             try:
                 os.rename(backup_dir, package_dir)
             except OSError as ce:
-                print("[Carton] rollback restore failed: {}".format(ce))
+                get_logger().warning(
+                    "rollback restore failed — previous version left at "
+                    "the .carton-bak backup: %s", ce)
 
     def uninstall_package(self, pkg_id):
         """Uninstall a package.
@@ -365,7 +368,7 @@ class InstallManager:
             )
             if not os.path.exists(package_dir):
                 name = pkg_data.get("name", pkg_id)
-                print("[Carton] Package dir not found, skipping: {}".format(name))
+                get_logger().warning("package dir not found, skipping: %s", name)
                 continue
             handler = get_handler(pkg_type)
             handler.activate(package_dir, pkg_data, self._env_manager)

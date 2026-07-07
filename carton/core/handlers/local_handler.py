@@ -53,7 +53,9 @@ class LocalHandler(PackageHandler):
         if not local_path:
             return
         if not os.path.exists(local_path):
-            print("[Carton] Local path not found, skipping: {}".format(local_path))
+            from carton.core.log import get_logger
+            get_logger().warning("local path not found, skipping: %s",
+                                 local_path)
             return
         self._activate_by_type(local_path, meta, env_manager)
 

@@ -123,7 +123,8 @@ class ScriptManager:
 
         local_path = resolve_local_path(pkg_data.get("local_path", ""))
         if not local_path or not os.path.exists(local_path):
-            print("[Carton] Local path not found: {}".format(local_path))
+            from carton.core.log import get_logger
+            get_logger().warning("local path not found: %s", local_path)
             return
 
         is_folder = pkg_data.get("is_folder", False)

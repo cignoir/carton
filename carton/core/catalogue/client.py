@@ -33,6 +33,7 @@ from carton.core.origins import (
     UrlOrigin,
     origin_from_dict,
 )
+from carton.core.log import get_logger
 from carton.core.uuid_id import read_uuid
 from carton.core.source_cache import SourceCache
 from carton.models.version import semver_sort_key
@@ -103,15 +104,15 @@ class CatalogueClient(object):
                 # Catalogue-level failures (network, parse) should never
                 # bring down the whole client — log and move on so the
                 # other catalogues still resolve.
-                print("[Carton.catalogue] Failed to load {!r}: {}".format(
-                    getattr(entry, "name", "<unknown>"), e))
+                get_logger().warning("catalogue %r failed to load: %s",
+                                     getattr(entry, "name", "<unknown>"), e)
         # Personal catalogue is merged LAST so subscribed catalogues win
         # on pkg_id collision — an official source should always trump a
         # user's ad-hoc URL-direct add.
         try:
             self._load_personal_catalogue()
         except Exception as e:
-            print("[Carton.catalogue] Personal catalogue load failed: {}".format(e))
+            get_logger().warning("personal catalogue load failed: %s", e)
 
     def get_packages(self):
         """Return merged ``{pkg_id: pkg_data}``. Loads on first call."""
@@ -167,8 +168,8 @@ class CatalogueClient(object):
     def _load_local(self, entry):
         path = self._resolve_local_catalogue_path(entry.path)
         if not path or not os.path.exists(path):
-            print("[Carton.catalogue] Not found: {} ({})".format(
-                _entry_label(entry), entry.path))
+            get_logger().warning("catalogue not found: %s (%s)",
+                                 _entry_label(entry), entry.path)
             return
 
         # Auto-migrate legacy registry.json to catalogue.json on disk.
@@ -181,8 +182,8 @@ class CatalogueClient(object):
             with open(path, "r", encoding="utf-8") as f:
                 data = json.load(f)
         except (OSError, ValueError) as e:
-            print("[Carton.catalogue] Read failed: {} ({})".format(
-                _entry_label(entry), e))
+            get_logger().warning("catalogue read failed: %s (%s)",
+                                 _entry_label(entry), e)
             return
 
         # If this catalogue still parses as a v4.0 registry, migrate
@@ -199,8 +200,8 @@ class CatalogueClient(object):
             req = Request(url)
             req.add_header("Accept", "application/json")
             req.add_header("User-Agent", "Carton/0.5")
-            resp = urlopen(req, timeout=15)
-            data = json.loads(resp.read().decode("utf-8"))
+            with urlopen(req, timeout=15) as resp:
+                data = json.loads(resp.read().decode("utf-8"))
         except (URLError, OSError, ValueError) as e:
             # Try the legacy registry.json URL as a fallback so that a
             # repo that has only been migrated on the producer side keeps
@@ -210,26 +211,25 @@ class CatalogueClient(object):
                     req = Request(entry.path)
                     req.add_header("Accept", "application/json")
                     req.add_header("User-Agent", "Carton/0.5")
-                    resp = urlopen(req, timeout=15)
-                    data = json.loads(resp.read().decode("utf-8"))
+                    with urlopen(req, timeout=15) as resp:
+                        data = json.loads(resp.read().decode("utf-8"))
                 except (URLError, OSError, ValueError) as e2:
-                    print("[Carton.catalogue] Remote failed: {} ({})".format(
-                        _entry_label(entry), e2))
+                    get_logger().warning("remote catalogue failed: %s (%s)",
+                                         _entry_label(entry), e2)
                     return
             else:
-                print("[Carton.catalogue] Remote failed: {} ({})".format(
-                    _entry_label(entry), e))
+                get_logger().warning("remote catalogue failed: %s (%s)",
+                                     _entry_label(entry), e)
                 return
 
         # Migrate in memory only (no write-back to remote). stamp_id=False
         # so a missing UUID stays missing rather than rotating each fetch.
         data, _ = migrate_registry_to_catalogue(data, stamp_id=False)
         if not data.get("catalogue_id"):
-            print(
-                "[Carton.catalogue] Remote {!r} has no catalogue_id — "
-                "ask the maintainer to stamp it so mirror matching can "
-                "work.".format(_entry_label(entry))
-            )
+            get_logger().warning(
+                "remote %r has no catalogue_id — ask the maintainer to "
+                "stamp it so mirror matching can work.",
+                _entry_label(entry))
         self._cache_catalogue_id(entry, data)
         self._cache_display_name(entry, data)
         base_dir = url.rsplit("/", 1)[0] + "/"
@@ -336,8 +336,8 @@ class CatalogueClient(object):
                 if isinstance(origin, GithubOrigin):
                     origin.attach_cache(self._cache)
             except OriginError as e:
-                print("[Carton.catalogue] Skipping {!r} from {!r}: {}".format(
-                    pkg_id, catalogue_name, e))
+                get_logger().warning("skipping %r from %r: %s",
+                                     pkg_id, catalogue_name, e)
                 continue
 
             self._origins[pkg_id] = origin

@@ -49,7 +49,8 @@ class SelfUpdater:
             resp = urlopen(req, timeout=10)
             data = json.loads(resp.read().decode("utf-8"))
         except (URLError, OSError, ValueError) as e:
-            print("[Carton] GitHub update check failed: {}".format(e))
+            from carton.core.log import get_logger
+            get_logger().warning("GitHub update check failed: %s", e)
             return None
 
         tag = data.get("tag_name", "")

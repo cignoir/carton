@@ -294,10 +294,14 @@ class Config:
         seed it from the current snapshot so the user's existing
         catalogues become the default profile's contents.
         """
+        from carton.core.log import get_logger
+        log = get_logger()
         try:
             from carton.core import profile_store
             from carton.core.profile import InstallerProfile
-        except Exception:
+        except Exception as e:
+            log.warning("profile subsystem unavailable, running on "
+                        "config.json only: %s", e)
             return
         if not self.active_profile:
             self.active_profile = profile_store.DEFAULT_PROFILE_NAME
@@ -311,8 +315,8 @@ class Config:
                 profile_store.save_profile(
                     profile_store.DEFAULT_PROFILE_NAME, InstallerProfile.blank(),
                 )
-            except Exception:
-                pass
+            except Exception as e:
+                log.warning("could not create the 'default' profile: %s", e)
         if not profile_store.profile_exists(self.active_profile):
             # Only seed the active profile from a non-empty Config. If
             # the snapshot is empty avoid creating a permanent empty
@@ -322,15 +326,22 @@ class Config:
                     profile_store.save_profile(
                         self.active_profile, InstallerProfile.from_config(self),
                     )
-                except Exception:
+                except Exception as e:
+                    log.warning(
+                        "could not seed profile %r from config.json — "
+                        "profile switching won't see these catalogues: %s",
+                        self.active_profile, e)
                     return
             else:
                 return
         try:
             profile = profile_store.load_profile(self.active_profile)
             self.apply_profile(profile)
-        except Exception:
-            pass
+        except Exception as e:
+            log.warning(
+                "active profile %r could not be loaded (%s) — continuing "
+                "with the values snapshotted in config.json",
+                self.active_profile, e)
 
     def save(self, path=None):
         """Write to config.json.
@@ -349,6 +360,8 @@ class Config:
         # next launch (or another machine pointed at the same profile dir)
         # picks up the changes. config.json's copy is just a snapshot.
         if is_canonical and self.active_profile:
+            from carton.core.log import get_logger
+            log = get_logger()
             try:
                 from carton.core import profile_store
                 from carton.core.profile import InstallerProfile
@@ -362,13 +375,21 @@ class Config:
                         existing = profile_store.load_profile(self.active_profile)
                         if existing.catalogues:
                             return
-                    except Exception:
-                        pass
+                    except Exception as e:
+                        log.warning("clobber-guard could not read profile "
+                                    "%r, mirroring anyway: %s",
+                                    self.active_profile, e)
                 profile_store.save_profile(
                     self.active_profile, InstallerProfile.from_config(self),
                 )
-            except Exception:
-                pass
+            except Exception as e:
+                # config.json was written but the profile mirror wasn't —
+                # the stale profile overlay will revert this save on next
+                # launch, so the user must at least be able to see why.
+                log.warning(
+                    "config.json saved but mirroring to profile %r failed "
+                    "(%s) — this change may be reverted by the profile "
+                    "overlay on next launch", self.active_profile, e)
 
     def change_install_dir(self, new_dir):
         """Move Carton's install directory to ``new_dir`` and persist the change.
@@ -428,11 +449,14 @@ class Config:
                 shutil.move(src, dst)
                 moved.append((src, dst))
         except (OSError, shutil.Error) as e:
+            from carton.core.log import get_logger
             for src, dst in moved:
                 try:
                     shutil.move(dst, src)
-                except Exception:
-                    pass
+                except Exception as rollback_err:
+                    get_logger().warning(
+                        "install-dir rollback could not restore %s: %s",
+                        dst, rollback_err)
             raise InstallDirChangeError("Failed to move files: {}".format(e))
 
         self.install_dir = new_dir
