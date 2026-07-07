@@ -50,6 +50,11 @@ def register_package_subparser(sub):
         help="Package type (skip the prompt)",
     )
     init_p.add_argument("--name", help="Package name (snake_case)")
+    init_p.add_argument(
+        "--namespace", default=None,
+        help="Publisher namespace (e.g. mystudio). Required to publish; "
+             "omit to scaffold without one",
+    )
     init_p.add_argument("--display-name", dest="display_name")
     init_p.add_argument("--version", default=None, help="Initial version (default: 0.1.0)")
     init_p.add_argument("--description", default=None)
@@ -167,6 +172,7 @@ def _package_init(args):
         author=answers["author"],
         maya_versions=answers["maya_versions"] or list(DEFAULT_MAYA_VERSIONS),
         platform=answers.get("platform"),
+        namespace=answers.get("namespace", ""),
     )
 
     try:
@@ -191,6 +197,7 @@ def _init_defaults_only(args, default_name):
     return {
         "pkg_type": args.pkg_type or "python_package",
         "name": name,
+        "namespace": _clean_namespace(args.namespace or ""),
         "display_name": args.display_name or _to_display_name(name),
         "version": args.version or "0.1.0",
         "description": args.description or "",
@@ -198,6 +205,27 @@ def _init_defaults_only(args, default_name):
         "maya_versions": _parse_csv(args.maya_versions),
         "platform": _parse_csv(args.platform),
     }
+
+
+def _clean_namespace(raw):
+    """Slugify + validate a namespace; exit with an error if unusable.
+
+    Empty input is fine (the field is omitted from package.json and the
+    author adds it later / via the GUI), but a namespace that survives
+    neither slugify nor validation would scaffold an unpublishable
+    package — fail loudly instead.
+    """
+    from carton.core.identity import (
+        InvalidIdentityError, slugify_namespace, validate_namespace,
+    )
+    raw = (raw or "").strip()
+    if not raw:
+        return ""
+    try:
+        return validate_namespace(slugify_namespace(raw))
+    except InvalidIdentityError as exc:
+        print("ERROR: {}".format(exc), file=sys.stderr)
+        sys.exit(1)
 
 
 def _init_prompt(args, default_name):
@@ -225,6 +253,17 @@ def _init_prompt(args, default_name):
     ).ask()
     if not name:
         sys.exit(130)
+
+    namespace = args.namespace
+    if namespace is None:
+        namespace = questionary.text(
+            "Namespace (publisher id, e.g. mystudio — required to publish, "
+            "empty to skip)?",
+            default="",
+        ).ask()
+        if namespace is None:
+            sys.exit(130)
+    namespace = _clean_namespace(namespace)
 
     display_name = args.display_name or questionary.text(
         "Display name?", default=_to_display_name(name),
@@ -267,6 +306,7 @@ def _init_prompt(args, default_name):
     return {
         "pkg_type": pkg_type,
         "name": name,
+        "namespace": namespace,
         "display_name": display_name,
         "version": version,
         "description": description,

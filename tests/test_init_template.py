@@ -94,6 +94,51 @@ def test_render_maya_module(tmp_path):
     assert "0.1.0" in mod_text
 
 
+def test_render_with_namespace_includes_field(tmp_path):
+    target = tmp_path / "ns_tool"
+    ctx = build_context(
+        name="ns_tool", display_name="NS Tool", version="0.1.0",
+        description="d", author="a", maya_versions=["2025"],
+        namespace="mystudio",
+    )
+    render_template("python_package", str(target), ctx)
+
+    pkg = json.loads((target / "package.json").read_text(encoding="utf-8"))
+    assert pkg["namespace"] == "mystudio"
+    assert pkg["name"] == "ns_tool"
+
+
+def test_render_without_namespace_omits_field(tmp_path):
+    """An empty namespace must be OMITTED, not written as "" — the schema
+    pattern forbids an empty string and lint would flag the scaffold."""
+    target = tmp_path / "bare_tool"
+    ctx = build_context(
+        name="bare_tool", display_name="Bare", version="0.1.0",
+        description="d", author="a", maya_versions=["2025"],
+    )
+    render_template("python_package", str(target), ctx)
+
+    pkg = json.loads((target / "package.json").read_text(encoding="utf-8"))
+    assert "namespace" not in pkg
+
+
+def test_render_with_namespace_passes_lint(tmp_path):
+    from carton.core.lint import lint_package
+
+    target = tmp_path / "ns_lint"
+    ctx = build_context(
+        name="ns_lint", display_name="NS", version="0.1.0",
+        description="d", author="a", maya_versions=["2025"],
+        namespace="mystudio",
+    )
+    render_template("python_package", str(target), ctx)
+
+    result = lint_package(str(target))
+    assert not result.has_errors(), [
+        (i.rule, i.message) for i in result.errors
+    ]
+
+
 def test_render_refuses_nonempty_target(tmp_path):
     target = tmp_path / "occupied"
     target.mkdir()

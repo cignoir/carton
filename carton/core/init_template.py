@@ -51,8 +51,14 @@ def template_root(pkg_type):
 
 
 def build_context(name, display_name, version, description, author,
-                  maya_versions, platform=None):
-    """Assemble the substitution dict expected by templates."""
+                  maya_versions, platform=None, namespace=""):
+    """Assemble the substitution dict expected by templates.
+
+    ``namespace`` is optional: the schema forbids an empty namespace
+    field (2-32 char pattern), so the templates embed a whole
+    ``{{namespace_line}}`` — a complete ``"namespace": "...",`` line
+    when given, nothing at all when skipped.
+    """
     ctx = {
         "name": name,
         "display_name": display_name,
@@ -61,6 +67,9 @@ def build_context(name, display_name, version, description, author,
         "author": author,
         "maya_versions_json": json.dumps(list(maya_versions)),
         "platform_json": json.dumps(list(platform or DEFAULT_PLATFORM)),
+        "namespace_line": (
+            '"namespace": "{}",\n  '.format(namespace) if namespace else ""
+        ),
     }
     return ctx
 
