@@ -11,7 +11,9 @@ from carton.core.display_name_resolver import resolve_display_name
 from carton.core.install_state import is_my_tools, is_pure_local
 from carton.ui._catalogue_crud import add_existing_catalogue, create_new_catalogue
 from carton.ui._icon_fetch import IconFetcher, resolve_icon_path
+from carton.ui._edit_controller import EditController
 from carton.ui._install_controller import InstallController
+from carton.ui._profile_controller import ProfileController
 from carton.ui._publish_controller import PublishController
 from carton.ui._self_update_controller import SelfUpdateController
 from carton.ui._namespace_grouping import (
@@ -27,7 +29,6 @@ from carton.ui.package_card import PackageCard
 from carton.ui.package_detail import PackageDetailPanel
 from carton.ui.settings_dialog import SettingsDialog
 from carton.ui.add_dialog import AddDialog
-from carton.ui.edit_dialog import EditDialog
 
 _WINDOW_TITLE = "Carton"
 _WINDOW_WIDTH = 780
@@ -109,6 +110,8 @@ class CartonWindow(_CartonWindowBase):
         self._install_ctl = InstallController(self)
         self._publish_ctl = PublishController(self)
         self._self_update_ctl = SelfUpdateController(self)
+        self._edit_ctl = EditController(self)
+        self._profile_ctl = ProfileController(self)
 
         self._setup_ui()
 
@@ -445,76 +448,13 @@ class CartonWindow(_CartonWindowBase):
         self._rebuild_profile_combo()
 
     def _rebuild_profile_combo(self):
-        if not self._config:
-            return
-        from carton.core import profile_store
-        from carton.core.profile import InstallerProfile
-        self._profile_combo.blockSignals(True)
-        self._profile_combo.clear()
-        names = profile_store.ordered_profiles(self._config.profile_order)
-        # Recovery: if nothing is on disk (fresh install or accidental
-        # state loss), materialise the default profile from the current
-        # Config snapshot so the user always has at least one entry.
-        if not names:
-            try:
-                profile_store.save_profile(
-                    profile_store.DEFAULT_PROFILE_NAME,
-                    InstallerProfile.from_config(self._config),
-                )
-                self._config.active_profile = profile_store.DEFAULT_PROFILE_NAME
-                self._config.save()
-                names = profile_store.ordered_profiles(self._config.profile_order)
-            except Exception:
-                pass
-        for name in names:
-            self._profile_combo.addItem(name, name)
-        active = self._config.active_profile or profile_store.DEFAULT_PROFILE_NAME
-        idx = self._profile_combo.findData(active)
-        if idx < 0:
-            idx = 0
-        self._profile_combo.setCurrentIndex(idx)
-        self._profile_combo.blockSignals(False)
+        self._profile_ctl.rebuild_combo()
 
     def _on_profile_combo_changed(self, index):
-        if not self._config or index < 0:
-            return
-        new_name = self._profile_combo.itemData(index) or ""
-        if new_name == self._config.active_profile:
-            return
-        self._switch_profile(new_name)
-
-    def _switch_profile(self, name):
-        from carton.core import profile_store
-        from carton.core.profile import InvalidProfileError
-        if not name:
-            name = profile_store.DEFAULT_PROFILE_NAME
-        try:
-            profile = profile_store.load_profile(name)
-        except InvalidProfileError as e:
-            show_error(self, e)
-            self._rebuild_profile_combo()
-            return
-        self._config.apply_profile(profile)
-        self._config.active_profile = name
-        self._config.save()
-        self._config.apply_proxy_to_env()
-        self.refresh()
+        self._profile_ctl.on_combo_changed(index)
 
     def _open_profile_manager(self):
-        from carton.ui.profile_manager_dialog import ProfileManagerDialog
-        dlg = ProfileManagerDialog(self._config, parent=self)
-        dlg.exec_()
-        self._rebuild_profile_combo()
-        # The user may have edited the active profile — reapply just in case.
-        if self._config.active_profile:
-            try:
-                from carton.core import profile_store
-                profile = profile_store.load_profile(self._config.active_profile)
-                self._config.apply_profile(profile)
-                self._config.save()
-                self.refresh()
-            except Exception:
-                pass
+        self._profile_ctl.open_manager()
 
     def refresh(self):
         if not self._catalogue_client:
@@ -1049,95 +989,7 @@ class CartonWindow(_CartonWindowBase):
         self._stack.setCurrentIndex(1)
 
     def _show_edit(self, pkg_id):
-        pkg_data = self._install_manager.get_installed_packages().get(pkg_id, {})
-        if not pkg_data:
-            return
-
-        # Check which catalogues have this package published
-        published_regs = []
-        if self._publisher:
-            published_regs = self._publisher.find_published_catalogues(pkg_id)
-
-        result = EditDialog.prompt(
-            pkg_id, pkg_data,
-            published_catalogues=published_regs, parent=self,
-        )
-        if not result:
-            return
-
-        action = result["action"]
-        if action == "history":
-            self._show_history_for(pkg_id)
-        elif action == "unpublish":
-            self._on_unpublish(pkg_id, result["catalogue"])
-        elif action == "remove":
-            if self._script_manager:
-                self._script_manager.unregister(pkg_id)
-            self._rebuild_sidebar()
-            self._rebuild_cards()
-        elif action == "save":
-            self._apply_edit_save(pkg_id, pkg_data, result, published_regs)
-
-    def _apply_edit_save(self, pkg_id, pkg_data, result, published_regs):
-        """Persist an EditDialog "save" result and refresh the views."""
-        fields = {
-            "display_name": result["display_name"],
-            "version": result["version"],
-            "author": result["author"],
-            "icon": result["icon"],
-            "homepage": result["homepage"],
-            "description": result["description"],
-            "entry_point": result["entry_point"],
-            "include_compiled": result.get("include_compiled", False),
-        }
-
-        new_pkg_id = self._resolve_edit_namespace_change(
-            pkg_id, pkg_data, result, published_regs, fields,
-        )
-        if new_pkg_id is None:
-            return  # Validation failed; user already saw an error dialog
-
-        if new_pkg_id != pkg_id:
-            self._install_manager.rekey_package(pkg_id, new_pkg_id, fields)
-        else:
-            self._install_manager.update_package_fields(pkg_id, fields)
-        # Sidebar counts and namespace children depend on the current
-        # installed.json snapshot — refresh both views so renames /
-        # namespace changes show up immediately.
-        self._rebuild_sidebar()
-        self._rebuild_cards()
-
-    def _resolve_edit_namespace_change(self, pkg_id, pkg_data, result,
-                                        published_regs, fields):
-        """Validate a namespace change from the edit dialog.
-
-        Mutates ``fields`` in place to add ``namespace`` when the change is
-        accepted. Returns the (possibly new) pkg_id, or None if validation
-        failed (in which case an error dialog has already been shown).
-        Namespace changes are ignored when the package is already published
-        somewhere — the on-disk identity is locked.
-        """
-        new_ns = result.get("namespace", "")
-        old_ns = pkg_data.get("namespace", "")
-        if new_ns == old_ns or published_regs:
-            return pkg_id
-
-        # Slugify + validate; the dialog should already have shown a
-        # preview but be defensive in case it didn't.
-        if new_ns:
-            from carton.core.identity import (
-                slugify_namespace, validate_namespace, InvalidIdentityError,
-            )
-            new_ns = slugify_namespace(new_ns)
-            try:
-                new_ns = validate_namespace(new_ns)
-            except InvalidIdentityError as e:
-                show_error(self, e, operation="register")
-                return None
-
-        fields["namespace"] = new_ns
-        name = pkg_data.get("name", "")
-        return "{}/{}".format(new_ns, name) if new_ns else name
+        self._edit_ctl.show_edit(pkg_id)
 
     def _filter_cards(self, text):
         text = text.lower()
