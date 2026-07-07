@@ -41,11 +41,18 @@ def _pkg_data(with_sha=True):
 class _StubDownloader:
     def __init__(self):
         self.calls = []
+        self.artifact_calls = []
 
     def download(self, url, dest, expected_sha256=None, expected_size=None):
         self.calls.append((url, dest, expected_sha256, expected_size))
         with open(dest, "wb") as f:
             f.write(b"fake-zip-bytes")
+
+    def download_artifact(self, artifact_ref, dest, cache=None):
+        self.artifact_calls.append((artifact_ref, dest, cache))
+        with open(dest, "wb") as f:
+            f.write(b"fake-zip-bytes")
+        return dest
 
 
 class _StubInstallManager:
@@ -57,11 +64,13 @@ class _StubInstallManager:
 
 
 class _StubWindow:
-    def __init__(self, staging_dir, packages):
+    def __init__(self, staging_dir, packages, origin=None):
         self._downloader = _StubDownloader()
         self._install_manager = _StubInstallManager()
         self._catalogue_client = types.SimpleNamespace(
             get_packages=lambda: packages,
+            get_origin=lambda pkg_id: origin,
+            source_cache="stub-cache",
         )
         # The controller reads every path off the window's config — the
         # same Config instance the services were built from.
@@ -144,6 +153,30 @@ def test_install_strict_verify_rejects_missing_sha256(qtbot, tmp_path, errors):
     assert w._install_manager.installed == []
     # Nothing should have been downloaded before the strict check.
     assert w._downloader.calls == []
+
+
+def test_install_uses_origin_artifact_path_with_cache(qtbot, tmp_path, errors):
+    """Packages backed by an Origin download via download_artifact so the
+    shared SourceCache applies TOFU pinning — the legacy download() path
+    is only for origin-less projections."""
+    staging = tmp_path / "staging"
+    staging.mkdir()
+    ref = types.SimpleNamespace(url="https://example.invalid/z.zip",
+                                sha256="0" * 64, size_bytes=None,
+                                is_pinned=True, source_label="stub")
+    origin = types.SimpleNamespace(get_artifact=lambda version: ref)
+    w = _StubWindow(str(staging), {PKG_ID: _pkg_data()}, origin=origin)
+
+    InstallController(w).install(PKG_ID)
+
+    assert errors == []
+    assert len(w._downloader.artifact_calls) == 1
+    got_ref, _dest, cache = w._downloader.artifact_calls[0]
+    assert got_ref is ref
+    assert cache == "stub-cache"
+    # Legacy download() must not have run.
+    assert w._downloader.calls == []
+    assert len(w._install_manager.installed) == 1
 
 
 def test_install_unknown_package_is_a_noop(qtbot, tmp_path, errors):

@@ -124,6 +124,17 @@ class CatalogueClient(object):
         """Return the :class:`Origin` instance backing ``pkg_id``, or None."""
         return self._origins.get(pkg_id)
 
+    @property
+    def source_cache(self):
+        """Shared :class:`SourceCache` (ETag + TOFU sha256 pins).
+
+        Exposed so install flows can hand it to
+        :meth:`Downloader.download_artifact` — without the cache,
+        unpinned origins download unverified every time instead of being
+        pinned on first use.
+        """
+        return self._cache
+
     # ---- entry loading -------------------------------------------------
 
     def _load_personal_catalogue(self):

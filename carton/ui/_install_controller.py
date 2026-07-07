@@ -49,12 +49,11 @@ class InstallController:
         version_info = pkg_data.get("versions", {}).get(target_version, {})
 
         try:
-            url = version_info.get("download_url")
-            if not url:
-                raise RuntimeError(t("no_download_url"))
-
             # Strict verify: refuse to install anything from a catalogue
-            # entry that doesn't carry a sha256.
+            # entry that doesn't carry a sha256. Checked here (not only
+            # inside download_artifact) because embedded origins count as
+            # "pinned" even with an empty hash — the downloader's policy
+            # gate alone would let those through unverified.
             if w._config and w._config.strict_verify:
                 if not version_info.get("sha256"):
                     raise RuntimeError(t("install_strict_no_sha256"))
@@ -70,11 +69,28 @@ class InstallController:
                 w._config.staging_dir,
                 "{}-{}.zip".format(safe_name, target_version),
             )
-            w._downloader.download(
-                url, dest,
-                expected_sha256=version_info.get("sha256"),
-                expected_size=version_info.get("size_bytes"),
-            )
+
+            origin = (w._catalogue_client.get_origin(pkg_id)
+                      if w._catalogue_client else None)
+            if origin is not None:
+                # v5.0 path: the origin resolves the artifact and the
+                # shared SourceCache applies pinned/unpinned semantics —
+                # unpinned github origins get TOFU-pinned on first fetch
+                # instead of downloading unverified every install.
+                ref = origin.get_artifact(target_version)
+                w._downloader.download_artifact(
+                    ref, dest, cache=w._catalogue_client.source_cache,
+                )
+            else:
+                # Origin-less entries (stale projections) — legacy path.
+                url = version_info.get("download_url")
+                if not url:
+                    raise RuntimeError(t("no_download_url"))
+                w._downloader.download(
+                    url, dest,
+                    expected_sha256=version_info.get("sha256"),
+                    expected_size=version_info.get("size_bytes"),
+                )
 
             meta = {
                 "id": pkg_id,
