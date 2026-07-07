@@ -14,10 +14,8 @@ hit disk immediately; the Profile Builder passes a no-op so the
 in-memory profile is mutated freely until the user clicks Save.
 """
 
-import json
 import os
 
-from urllib.request import Request, urlopen
 from urllib.parse import urlparse
 from carton.ui.compat import QtWidgets, Qt
 from carton.ui import theme
@@ -596,13 +594,6 @@ class RegistriesSection(QtWidgets.QWidget):
 
         layout.addLayout(btn_row)
 
-    # ---- public ----------------------------------------------------------
-
-    def reload_target(self, target):
-        """Swap the underlying target and refresh the list view."""
-        self._target = target
-        self._refresh()
-
     # ---- private ---------------------------------------------------------
 
     def _refresh(self):
@@ -632,55 +623,20 @@ class RegistriesSection(QtWidgets.QWidget):
             handler()
 
     def _create_new_local(self):
-        """Scaffold a fresh v5.0 catalogue in an empty folder.
-
-        Pre-existing ``catalogue.json`` / ``registry.json`` in the picked
-        folder are left alone — we just register the path and let
-        :class:`CatalogueClient` read / auto-migrate them on first fetch.
-        Only the "folder is empty" case creates a new file, and it's
-        always v5.0 (no more v3.1 legacy scaffolds that would just get
-        migrated on the next launch).
-        """
-        from carton.core.migrations import (
-            CATALOGUE_FILENAME,
-            CATALOGUE_SCHEMA_VERSION,
-            LEGACY_REGISTRY_FILENAME,
-        )
-        from carton.core.uuid_id import new_uuid
+        """Scaffold (or adopt) a catalogue in the picked folder and register it."""
+        from carton.core.catalogue.sources import scaffold_local_catalogue
 
         folder = QtWidgets.QFileDialog.getExistingDirectory(
             self, t("setup_select_folder"),
         )
         if not folder:
             return
-        cat_path = os.path.join(folder, CATALOGUE_FILENAME)
-        legacy_path = os.path.join(folder, LEGACY_REGISTRY_FILENAME)
-
-        default_name = os.path.basename(os.path.normpath(folder))
-        if os.path.exists(cat_path):
-            # Existing catalogue already owns its name; just register.
-            self._finish_add(cat_path, display_name=default_name, catalogue_id="")
-            return
-        if os.path.exists(legacy_path):
-            # CatalogueClient auto-migrates on first read; just register.
-            self._finish_add(legacy_path, display_name=default_name, catalogue_id="")
-            return
-
         try:
-            rid = new_uuid()
-            os.makedirs(folder, exist_ok=True)
-            with open(cat_path, "w", encoding="utf-8") as f:
-                json.dump({
-                    "schema_version": CATALOGUE_SCHEMA_VERSION,
-                    "catalogue_id": rid,
-                    "display_name": default_name,
-                    "packages": {},
-                }, f, indent=2, ensure_ascii=False)
-            os.makedirs(os.path.join(folder, "packages"), exist_ok=True)
+            path, name, rid = scaffold_local_catalogue(folder)
         except Exception as e:
             show_error(self, e)
             return
-        self._finish_add(cat_path, display_name=default_name, catalogue_id=rid)
+        self._finish_add(path, display_name=name, catalogue_id=rid)
 
     def _add_local(self):
         from carton.ui._catalogue_pairing import (
@@ -705,6 +661,8 @@ class RegistriesSection(QtWidgets.QWidget):
         self._finish_add(path, display_name=name, catalogue_id=rid)
 
     def _add_github(self):
+        from carton.core.catalogue import sources
+
         repo, ok = wide_input(self, "GitHub", t("settings_github_placeholder"))
         if not ok or not repo.strip():
             return
@@ -713,122 +671,55 @@ class RegistriesSection(QtWidgets.QWidget):
             QtWidgets.QMessageBox.warning(self, "Carton", t("settings_github_invalid"))
             return
         try:
-            api_url = "https://api.github.com/repos/{}".format(repo)
-            req = Request(api_url)
-            req.add_header("Accept", "application/vnd.github.v3+json")
-            resp = urlopen(req, timeout=10)
-            data = json.loads(resp.read().decode("utf-8"))
-            branch = data.get("default_branch", "main")
-        except Exception as e:
+            base = sources.resolve_github_base(repo)
+            # v5.0 single-package probe runs first: if the repo root
+            # carries a ``package.json`` with a valid ``namespace/name``,
+            # register it into the personal catalogue — "paste owner/repo
+            # of your one tool" just works without hand-authoring a
+            # catalogue.json. Personal entries never touch
+            # ``_target.catalogues``, so the list widget stays as-is.
+            result, pkg_id = sources.register_github_single_package(base, repo)
+        except sources.CatalogueSourceError as e:
             QtWidgets.QMessageBox.warning(
                 self, "Carton", t("settings_github_error", str(e)),
             )
             return
-        base = "https://raw.githubusercontent.com/{}/{}".format(repo, branch)
-        # v5.0 single-package probe runs first: if the repo root carries a
-        # ``package.json`` with a valid ``namespace/name``, treat it as a
-        # single-package repo and register into the local personal
-        # catalogue instead of walking the multi-package probe path. This
-        # lets "paste owner/repo of your one tool" just work without the
-        # user having to hand-author a catalogue.json.
-        if self._try_register_single_package(base, repo):
+        if self._show_single_package_result(result, pkg_id):
             return
-        # Probe order: v5.0 catalogue before v4.0 registry, nested
-        # layout before root (preserves the existing habit of the
-        # sample repos — the official template publishes under
-        # ``registry/registry.json`` → now ``registry/catalogue.json``).
-        candidates = [
-            base + "/registry/catalogue.json",
-            base + "/catalogue.json",
-            base + "/registry/registry.json",
-            base + "/registry.json",
-        ]
-        resolved = None
-        for url in candidates:
-            try:
-                req = Request(url)
-                resp = urlopen(req, timeout=10)
-                if resp.getcode() == 200:
-                    resolved = url
-                    break
-            except Exception:
-                continue
+        # Not a single-package repo → walk the multi-package probe.
+        resolved = sources.probe_github_catalogue_url(base)
         if not resolved:
             QtWidgets.QMessageBox.warning(
                 self, "Carton", t("settings_github_no_catalogue", repo),
             )
             return
-        from carton.ui._catalogue_pairing import probe_remote_catalogue_meta
-        meta = probe_remote_catalogue_meta(resolved)
+        meta = sources.probe_remote_catalogue_meta(resolved)
         # Author-owned display_name wins; fall back to the GitHub repo
         # name so the entry still renders with a meaningful label.
         name = meta["display_name"] or repo.split("/")[1]
         self._finish_add(resolved, display_name=name, catalogue_id=meta["catalogue_id"])
 
-    def _try_register_single_package(self, base, repo):
-        """Probe ``{base}/package.json`` and register into personal catalogue.
+    def _show_single_package_result(self, result, pkg_id):
+        """Surface a single-package registration outcome; True if handled."""
+        from carton.core.catalogue import sources
 
-        Returns True when the single-package path was taken (caller stops
-        and skips the catalogue.json probe). False means either no
-        ``package.json`` or the probed file lacked a usable
-        ``namespace/name``; the caller continues to the catalogue probe.
-
-        On a successful hit we mutate ``~/.carton/personal_catalogue.json``
-        and surface a message box — we intentionally do NOT touch
-        ``_target.catalogues`` because plan v5.0 keeps personal-catalogue
-        entries separate from subscribed catalogues. The live UI list
-        (``self._list``) only reflects subscribed catalogues, so nothing
-        needs to change there.
-        """
-        from carton.core.catalogue.personal import PersonalCatalogue, derive_pkg_id
-        from carton.ui._catalogue_pairing import probe_github_package_json
-
-        pkg_data = probe_github_package_json(base)
-        if pkg_data is None:
-            return False
-        pkg_id = derive_pkg_id(pkg_data)
-        if not pkg_id:
-            # package.json exists but lacks namespace/name — fall through
-            # so the user still has a chance to hit a sibling
-            # catalogue.json if the repo has both.
-            return False
-
-        catalogue = PersonalCatalogue.load()
-        if catalogue.contains(pkg_id):
+        if result == sources.RESULT_ALREADY_ADDED:
             QtWidgets.QMessageBox.information(
                 self, "Carton",
                 t("settings_github_pkg_already_added", pkg_id),
             )
             return True
-        catalogue.add_github_package(pkg_id, repo)
-        try:
-            catalogue.save()
-        except OSError as e:
-            QtWidgets.QMessageBox.warning(
-                self, "Carton", t("settings_github_error", str(e)),
+        if result == sources.RESULT_REGISTERED:
+            QtWidgets.QMessageBox.information(
+                self, "Carton",
+                t("settings_github_pkg_registered", pkg_id),
             )
             return True
-        QtWidgets.QMessageBox.information(
-            self, "Carton",
-            t("settings_github_pkg_registered", pkg_id),
-        )
-        return True
+        return False
 
     def _add_package_url(self):
-        """Register a single package by direct ``package.json`` URL.
-
-        Counterpart to ``_add_github`` for repos that aren't on GitHub
-        (or host their ``package.json`` at a non-standard path). Hits
-        the URL, reads ``namespace``/``name`` from the returned JSON,
-        and stores a ``url`` origin in the personal catalogue so the
-        Library view can merge it in alongside subscribed catalogues.
-
-        No ``_target.catalogues`` mutation — personal catalogue lives
-        under ``~/.carton/`` and is machine-local (plan v5.0 spec).
-        """
-        from carton.core.catalogue.personal import (
-            PersonalCatalogue, derive_pkg_id,
-        )
+        """Register a single package by direct ``package.json`` URL."""
+        from carton.core.catalogue import sources
 
         url, ok = wide_input(
             self, t("settings_add_package_url"),
@@ -840,46 +731,19 @@ class RegistriesSection(QtWidgets.QWidget):
         if not url.startswith(("http://", "https://")):
             QtWidgets.QMessageBox.warning(self, "Carton", t("settings_invalid_url"))
             return
-
         try:
-            req = Request(url)
-            req.add_header("Accept", "application/json")
-            resp = urlopen(req, timeout=10)
-            pkg_data = json.loads(resp.read().decode("utf-8"))
-        except Exception as e:
+            result, pkg_id = sources.register_url_single_package(url)
+        except sources.CatalogueSourceError as e:
             QtWidgets.QMessageBox.warning(
                 self, "Carton",
                 t("settings_package_url_error", str(e)),
             )
             return
-
-        pkg_id = derive_pkg_id(pkg_data)
-        if not pkg_id:
+        if not self._show_single_package_result(result, pkg_id):
             QtWidgets.QMessageBox.warning(
                 self, "Carton",
                 t("settings_package_url_invalid_pkg"),
             )
-            return
-
-        catalogue = PersonalCatalogue.load()
-        if catalogue.contains(pkg_id):
-            QtWidgets.QMessageBox.information(
-                self, "Carton",
-                t("settings_github_pkg_already_added", pkg_id),
-            )
-            return
-        catalogue.add_url_package(pkg_id, url)
-        try:
-            catalogue.save()
-        except OSError as e:
-            QtWidgets.QMessageBox.warning(
-                self, "Carton", t("settings_github_error", str(e)),
-            )
-            return
-        QtWidgets.QMessageBox.information(
-            self, "Carton",
-            t("settings_github_pkg_registered", pkg_id),
-        )
 
     def _add_remote(self):
         from carton.ui._catalogue_pairing import probe_remote_catalogue_meta

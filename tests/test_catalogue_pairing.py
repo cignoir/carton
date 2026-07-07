@@ -1,10 +1,10 @@
-"""Unit tests for the registry pairing helper's pure logic.
+﻿"""Unit tests for the registry pairing helper's pure logic.
 
 The Qt-dependent bits (stamp_local_registry_with_prompt,
 resolve_duplicate_registry) can't be exercised headlessly here, but the
 duplicate-entry resolver is framework-free and carries the logic that
 decides whether a pairing flow should surface the "already registered"
-dialog — which is where the most user-facing bug lives.
+dialog 窶・which is where the most user-facing bug lives.
 """
 
 import json
@@ -51,7 +51,7 @@ class TestFindDuplicateEntry:
         """The paired remote is expected to share the UUID with its mirror.
 
         This is the exact bug the user hit: picking a local mirror during
-        a remote→mirror pairing flow tripped the duplicate dialog because
+        a remote竊知irror pairing flow tripped the duplicate dialog because
         ``find_catalogue_by_id`` returned the remote that triggered the
         pairing in the first place. ``ignore`` lets the caller pass the
         paired remote so we can skip it.
@@ -87,7 +87,7 @@ class TestFindDuplicateEntry:
 
 
 class _FakeResponse(object):
-    """Minimal urlopen-response stand-in."""
+    """Minimal urlopen-response stand-in (context-manager capable)."""
 
     def __init__(self, payload, code=200):
         self._payload = payload
@@ -98,6 +98,12 @@ class _FakeResponse(object):
 
     def getcode(self):
         return self._code
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc):
+        return False
 
 
 class TestProbeGithubPackageJson:
@@ -111,7 +117,7 @@ class TestProbeGithubPackageJson:
         def _fake_urlopen(req, timeout=None):
             return _FakeResponse(payload)
         monkeypatch.setattr(
-            "carton.ui._catalogue_pairing.urlopen", _fake_urlopen,
+            "carton.core.catalogue.sources.urlopen", _fake_urlopen,
         )
 
         data = probe_github_package_json(
@@ -125,7 +131,7 @@ class TestProbeGithubPackageJson:
         def _raise(*args, **kwargs):
             raise URLError("offline")
         monkeypatch.setattr(
-            "carton.ui._catalogue_pairing.urlopen", _raise,
+            "carton.core.catalogue.sources.urlopen", _raise,
         )
         assert probe_github_package_json(
             "https://raw.githubusercontent.com/ghost/tool/main",
@@ -135,7 +141,7 @@ class TestProbeGithubPackageJson:
         def _fake_urlopen(req, timeout=None):
             return _FakeResponse(b"not-json-at-all")
         monkeypatch.setattr(
-            "carton.ui._catalogue_pairing.urlopen", _fake_urlopen,
+            "carton.core.catalogue.sources.urlopen", _fake_urlopen,
         )
         assert probe_github_package_json(
             "https://raw.githubusercontent.com/alice/tool/main",
@@ -146,18 +152,18 @@ class TestProbeGithubPackageJson:
         def _fake_urlopen(req, timeout=None):
             return _FakeResponse(b"{}", code=404)
         monkeypatch.setattr(
-            "carton.ui._catalogue_pairing.urlopen", _fake_urlopen,
+            "carton.core.catalogue.sources.urlopen", _fake_urlopen,
         )
         assert probe_github_package_json(
             "https://raw.githubusercontent.com/alice/tool/main",
         ) is None
 
     def test_returns_none_when_payload_is_list(self, monkeypatch):
-        """A valid JSON array isn't a package.json — treat as absent."""
+        """A valid JSON array isn't a package.json 窶・treat as absent."""
         def _fake_urlopen(req, timeout=None):
             return _FakeResponse(b"[1, 2, 3]")
         monkeypatch.setattr(
-            "carton.ui._catalogue_pairing.urlopen", _fake_urlopen,
+            "carton.core.catalogue.sources.urlopen", _fake_urlopen,
         )
         assert probe_github_package_json(
             "https://raw.githubusercontent.com/alice/tool/main",
@@ -172,7 +178,7 @@ class TestProbeGithubPackageJson:
             seen["url"] = req.get_full_url() if hasattr(req, "get_full_url") else str(req)
             return _FakeResponse(b'{"namespace": "a", "name": "b"}')
         monkeypatch.setattr(
-            "carton.ui._catalogue_pairing.urlopen", _fake_urlopen,
+            "carton.core.catalogue.sources.urlopen", _fake_urlopen,
         )
 
         probe_github_package_json(

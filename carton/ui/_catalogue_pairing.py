@@ -1,100 +1,30 @@
-"""Shared helpers for adding catalogues with UUID awareness.
+"""Qt-side helpers for adding catalogues with UUID awareness.
 
 Both the main window's "Publish → Add existing" flow and the Settings
 Catalogues tab need the same logic: peek at the catalogue.json, offer
 to stamp a missing ``catalogue_id``, and guard against duplicates
-already known to the Config. This module centralises that so the two
-UI paths can't drift apart.
+already known to the Config. The pure probe / comparison functions
+live in :mod:`carton.core.catalogue.sources` (re-exported here so
+existing call sites keep importing from one place); this module owns
+only the pieces that put dialogs on screen.
 """
 
 import json
-import os
 
-from urllib.request import Request, urlopen
-from urllib.error import URLError
-from carton.core.uuid_id import (
-    read_uuid,
-    stamp_uuid,
+# Re-exported for existing call sites — the implementations are Qt-free
+# and live in core so the CLI / tests can use them too.
+from carton.core.catalogue.sources import (  # noqa: F401
+    find_duplicate_entry,
+    normalize_catalogue_path,
+    probe_github_package_json,
+    probe_remote_catalogue_id,
+    probe_remote_catalogue_meta,
+    read_local_catalogue_id,
 )
+from carton.core.uuid_id import stamp_uuid
 
 from carton.ui.compat import QtWidgets
 from carton.ui.i18n import t
-
-
-def read_local_catalogue_id(path):
-    """Peek at a local catalogue.json and return its (id, data) tuple.
-
-    Returns ``(id, data_dict)`` where ``id`` may be empty. Returns
-    ``("", None)`` on read / parse failure — callers should surface the
-    error to the user in their own context. Accepts the legacy v4.0
-    ``registry_id`` key as a fallback so stamping still works on an
-    un-migrated file.
-    """
-    try:
-        with open(path, "r", encoding="utf-8") as f:
-            data = json.load(f)
-    except (OSError, json.JSONDecodeError):
-        return "", None
-    cid = read_uuid(data, "catalogue_id") or read_uuid(data, "registry_id")
-    return cid, data
-
-
-def probe_remote_catalogue_meta(url, timeout=15):
-    """One-off HTTP GET to a URL; return ``{catalogue_id, display_name}``.
-
-    Any network / parse error yields an all-empty dict. Callers pick the
-    field they need and ignore the rest. Centralised so a single round
-    trip populates both the UUID cache and the display_name cache on
-    first registration — we want subscribers to adopt the author's
-    intended name immediately rather than prompting for an alias.
-    """
-    result = {"catalogue_id": "", "display_name": ""}
-    try:
-        req = Request(url)
-        req.add_header("Accept", "application/json")
-        resp = urlopen(req, timeout=timeout)
-        data = json.loads(resp.read().decode("utf-8"))
-    except (URLError, OSError, ValueError):
-        return result
-    cid = read_uuid(data, "catalogue_id") or read_uuid(data, "registry_id")
-    if cid:
-        result["catalogue_id"] = cid
-    name = (data.get("display_name") or "").strip()
-    if name:
-        result["display_name"] = name
-    return result
-
-
-def probe_remote_catalogue_id(url, timeout=15):
-    """Return just the ``catalogue_id`` from the remote catalogue.
-
-    Thin wrapper around :func:`probe_remote_catalogue_meta` — kept as a
-    named alias so older call sites that only care about the UUID read
-    cleanly. New code that also wants the display_name should call
-    ``probe_remote_catalogue_meta`` directly to avoid a second round trip.
-    """
-    return probe_remote_catalogue_meta(url, timeout=timeout)["catalogue_id"]
-
-
-def probe_github_package_json(base_url, timeout=10):
-    """One-off HTTP GET to ``{base_url}/package.json``; return the parsed dict.
-
-    Used by the Settings > Add GitHub flow to decide whether the target
-    repo is a v5.0 single-package repo before falling back to the multi-
-    package ``catalogue.json`` probe. Any network / parse failure yields
-    ``None`` — the caller interprets that as "no package.json here".
-    """
-    url = base_url.rstrip("/") + "/package.json"
-    try:
-        req = Request(url)
-        req.add_header("Accept", "application/json")
-        resp = urlopen(req, timeout=timeout)
-        if getattr(resp, "getcode", lambda: 200)() != 200:
-            return None
-        data = json.loads(resp.read().decode("utf-8"))
-    except (URLError, OSError, ValueError):
-        return None
-    return data if isinstance(data, dict) else None
 
 
 def stamp_local_catalogue_with_prompt(parent, path, data):
@@ -138,32 +68,6 @@ class DuplicateCatalogueChoice:
     ADD_ALIAS = "add_alias"
 
 
-def find_duplicate_entry(catalogues, cid, new_path, ignore=None):
-    """Return the first catalogue that collides with ``(cid, new_path)``, or None.
-
-    * Entries with a different ``catalogue_id`` (or none) never collide.
-    * The entry located at the same normalised path as ``new_path`` is not a
-      collision — it's the user re-selecting a catalogue that's already in
-      the list verbatim.
-    * Any entry in ``ignore`` is skipped. Used by the pairing flow to pass
-      the remote that *should* share the UUID with the new local mirror —
-      that's the whole point of pairing, so flagging it would be wrong.
-    """
-    if not cid:
-        return None
-    ignore_set = set(id(e) for e in (ignore or []) if e is not None)
-    normalized = normalize_catalogue_path(new_path) if new_path else ""
-    for entry in catalogues:
-        if id(entry) in ignore_set:
-            continue
-        if normalized and entry.path == normalized:
-            continue
-        entry_cid = getattr(entry, "catalogue_id", "")
-        if entry_cid and entry_cid == cid:
-            return entry
-    return None
-
-
 def resolve_duplicate_catalogue(parent, existing_entry):
     """Ask the user what to do when a catalogue is already known.
 
@@ -188,10 +92,3 @@ def resolve_duplicate_catalogue(parent, existing_entry):
     if clicked is alias_btn:
         return DuplicateCatalogueChoice.ADD_ALIAS
     return DuplicateCatalogueChoice.CANCEL
-
-
-def normalize_catalogue_path(path):
-    """Mirror ``CatalogueEntry``'s path normalisation for comparisons."""
-    if path.startswith(("http://", "https://")):
-        return path
-    return os.path.normpath(path)
