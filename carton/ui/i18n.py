@@ -95,6 +95,8 @@ _STRINGS = {
         "unpublish_success": "{} has been unpublished from '{}'.",
         "unpublish_select_catalogue": "Unpublish from which catalogue?",
         "unpublish_error": "Unpublish Error",
+        "unpublish_registry_not_found": "Registry '{}' not found.",
+        "publish_warnings_heading": "Warnings:",
         "published_to_badge": "Published: {}  \u25be",
         "published_to_badge_multi": "Published ({})  \u25be",
         "unpublish_from": "Unpublish \u2014 {}",
@@ -143,6 +145,8 @@ _STRINGS = {
         # Edit dialog
         "edit_title": "Carton — Edit",
         "edit_confirm_remove": "Remove {} from Carton?\nThe original file will not be deleted.",
+        "edit_remove_title": "Remove",
+        "edit_namespace_locked_tooltip": "Locked: this package is already published. Unpublish first to change the namespace.",
         "edit_refresh_btn": "⟳ Refresh from package.json",
         "edit_refresh_tooltip": "Re-read metadata from the source folder's package.json (or sidecar) and repopulate the form. Click Save to persist the changes.",
         "edit_refresh_no_manifest": "No package.json or sidecar found at the registered local path. Nothing to refresh from.",
@@ -247,6 +251,7 @@ _STRINGS = {
         "catalogue_use_existing": "Use existing",
         "catalogue_add_alias": "Add as separate alias",
         "settings_confirm_remove": "Remove '{}'?\nThe catalogue contents will not be deleted.",
+        "settings_remove_registry_title": "Remove Registry",
         "settings_uninstall": "Uninstall Carton",
         "settings_confirm_uninstall": (
             "This will delete Carton and all installed packages.\n"
@@ -414,6 +419,8 @@ _STRINGS = {
         "unpublish_from": "公開取消 \u2014 {}",
         "register_error": "登録エラー",
         "update_error": "更新エラー",
+        "unpublish_registry_not_found": "レジストリ '{}' が見つかりません。",
+        "publish_warnings_heading": "警告:",
 
         # Catalogue creation
         "setup_select_folder": "カタログを作成するフォルダを選択",
@@ -457,6 +464,8 @@ _STRINGS = {
         # Edit dialog
         "edit_title": "Carton — 編集",
         "edit_confirm_remove": "{} の登録を解除しますか？\n元ファイルは削除されません。",
+        "edit_remove_title": "登録解除",
+        "edit_namespace_locked_tooltip": "ロック中: このパッケージは公開済みです。ネームスペースを変更するには先に公開を取り消してください。",
         "edit_refresh_btn": "⟳ package.json から再読込",
         "edit_refresh_tooltip": "登録元フォルダの package.json (または sidecar) を読み直し、フォーム内容を最新に置き換えます。実際に保存するには Save を押してください。",
         "edit_refresh_no_manifest": "登録パスに package.json も sidecar も見つかりませんでした。再読込元がありません。",
@@ -561,6 +570,7 @@ _STRINGS = {
         "catalogue_use_existing": "既存を使う",
         "catalogue_add_alias": "別名として追加",
         "settings_confirm_remove": "'{}' を削除しますか？\nカタログの中身は削除されません。",
+        "settings_remove_registry_title": "レジストリを削除",
         "settings_uninstall": "Carton をアンインストール",
         "settings_confirm_uninstall": (
             "Carton とインストール済みの全パッケージを削除します。\n"

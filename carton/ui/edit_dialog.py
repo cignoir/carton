@@ -91,8 +91,7 @@ class EditDialog(QtWidgets.QDialog):
         if is_published:
             self._namespace_input.setReadOnly(True)
             self._namespace_input.setToolTip(
-                "Locked: this package is already published. "
-                "Unpublish first to change the namespace."
+                t("edit_namespace_locked_tooltip")
             )
             self._namespace_input.setStyleSheet(
                 self._namespace_input.styleSheet() + " color: {};".format(theme.TEXT_DIM)
@@ -401,7 +400,7 @@ class EditDialog(QtWidgets.QDialog):
     def _on_remove(self):
         display = self._pkg_data.get("display_name", self._pkg_id)
         reply = QtWidgets.QMessageBox.question(
-            self, "Remove",
+            self, t("edit_remove_title"),
             t("edit_confirm_remove", display),
             QtWidgets.QMessageBox.Yes | QtWidgets.QMessageBox.No,
         )

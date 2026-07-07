@@ -22,6 +22,11 @@ from carton.ui import theme
 from carton.ui.package_card import PackageCard
 
 
+def _format_warnings(warnings):
+    """Render publish warnings as a localized bulleted block."""
+    return t("publish_warnings_heading") + "\n  - " + "\n  - ".join(warnings)
+
+
 class _PublishTargetDialog(QtWidgets.QDialog):
     """Dialog to choose a publish target catalogue.
 
@@ -186,7 +191,7 @@ class PublishController:
         if target is None:
             QtWidgets.QMessageBox.warning(
                 w, t("unpublish_error"),
-                "Registry '{}' not found.".format(catalogue_name),
+                t("unpublish_registry_not_found", catalogue_name),
             )
             return
 
@@ -469,7 +474,7 @@ class PublishController:
         if via:
             msg += "\n\n" + t("publish_remote_sync_reminder", via)
         if warnings:
-            msg += "\n\nWarnings:\n  - " + "\n  - ".join(warnings)
+            msg += "\n\n" + _format_warnings(warnings)
         QtWidgets.QMessageBox.information(w, t("publish"), msg)
         w.refresh()
 
@@ -522,7 +527,7 @@ class PublishController:
         if release_url and not manual_steps:
             msg = t("publish_github_success_url", display, release_url)
             if warnings:
-                msg += "\n\nWarnings:\n  - " + "\n  - ".join(warnings)
+                msg += "\n\n" + _format_warnings(warnings)
             QtWidgets.QMessageBox.information(w, t("publish"), msg)
             return
 
@@ -540,9 +545,7 @@ class PublishController:
         intro.setWordWrap(True)
         layout.addWidget(intro)
         if warnings:
-            warn_lbl = QtWidgets.QLabel(
-                "Warnings:\n  - " + "\n  - ".join(warnings)
-            )
+            warn_lbl = QtWidgets.QLabel(_format_warnings(warnings))
             warn_lbl.setStyleSheet("color: {};".format(theme.ACCENT_ORANGE))
             warn_lbl.setWordWrap(True)
             layout.addWidget(warn_lbl)
