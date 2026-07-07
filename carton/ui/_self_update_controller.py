@@ -91,7 +91,7 @@ class SelfUpdateController:
             # can still click "Check for updates now" in Settings to get
             # an explicit error message.
             return
-        w._pending_self_update = result  # (version, download_url)
+        w._pending_self_update = result  # (version, download_url, sha256)
         w._update_banner_label.setText(t("update_available", result[0]))
         w._update_banner_btn.setVisible(True)
         w._update_banner.setVisible(True)
@@ -100,12 +100,12 @@ class SelfUpdateController:
         w = self._w
         if not getattr(w, "_pending_self_update", None):
             return
-        version, download_url = w._pending_self_update
+        version, download_url, sha256 = w._pending_self_update
         w._update_banner_btn.setText(t("updating"))
         w._update_banner_btn.setEnabled(False)
         QtWidgets.QApplication.processEvents()
         try:
-            w._self_updater.stage_update(version, download_url)
+            w._self_updater.stage_update(version, download_url, sha256)
             w._update_banner_label.setText(
                 t("update_pending", version)
             )

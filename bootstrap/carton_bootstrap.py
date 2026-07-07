@@ -10,12 +10,21 @@ separate config value) controls only where DATA is stored (packages/,
 installed.json, caches), not where the Python package lives.
 """
 
+import hashlib
 import json
 import os
 import shutil
 import sys
 import traceback
 import zipfile
+
+
+def _sha256_of(path):
+    h = hashlib.sha256()
+    with open(path, "rb") as f:
+        for chunk in iter(lambda: f.read(65536), b""):
+            h.update(chunk)
+    return h.hexdigest()
 
 def _find_bootstrap_dir():
     """Location of the carton/ Python package. Never moves."""
@@ -47,6 +56,23 @@ def _apply_pending_update(bootstrap_dir):
         print("[Carton] Staged zip not found: {}".format(staged_zip))
         os.remove(pending_file)
         return
+
+    # Re-verify right before extracting: the zip may have sat on disk for
+    # days since SelfUpdater staged (and hash-checked) it. A mismatch means
+    # corruption or tampering — discard the update and keep the current
+    # version rather than extracting unknown bytes over carton/.
+    expected_sha256 = (pending.get("sha256") or "").lower()
+    if expected_sha256:
+        try:
+            actual = _sha256_of(staged_zip)
+        except OSError:
+            actual = ""
+        if actual != expected_sha256:
+            print("[Carton] Staged update sha256 mismatch — discarding "
+                  "(expected {}, got {})".format(expected_sha256, actual))
+            os.remove(pending_file)
+            os.remove(staged_zip)
+            return
 
     try:
         # Backup
