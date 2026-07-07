@@ -128,6 +128,11 @@ class IconFetcher(QtCore.QThread):
         cache_dir = self._config.icon_cache_dir
         os.makedirs(cache_dir, exist_ok=True)
         for pkg_id, base_url, icon_filename in self._tasks:
+            # The window interrupts us on close/rebuild — bail between
+            # downloads so wait() returns promptly instead of after the
+            # whole task list.
+            if self.isInterruptionRequested():
+                return
             cached = os.path.join(cache_dir, icon_filename)
             if os.path.exists(cached):
                 # Touch atime so the LRU eviction sees this file as "used".
@@ -140,8 +145,8 @@ class IconFetcher(QtCore.QThread):
             icon_url = urljoin(base_url, "icons/{}".format(icon_filename))
             try:
                 req = Request(icon_url)
-                resp = urlopen(req, timeout=5)
-                data = resp.read()
+                with urlopen(req, timeout=5) as resp:
+                    data = resp.read()
                 with open(cached, "wb") as f:
                     f.write(data)
                 self.icon_ready.emit(pkg_id, cached)

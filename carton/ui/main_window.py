@@ -776,9 +776,38 @@ class CartonWindow(_CartonWindowBase):
     def _stop_icon_fetcher(self):
         """Stop any in-flight icon fetcher from a previous rebuild."""
         if self._icon_fetcher and self._icon_fetcher.isRunning():
-            self._icon_fetcher.quit()
+            self._icon_fetcher.requestInterruption()
             self._icon_fetcher.wait()
             self._icon_fetcher = None
+
+    def _shutdown_workers(self):
+        """Stop background QThreads before the window goes away.
+
+        Qt aborts the whole process ("QThread: Destroyed while thread is
+        still running") if a running thread's C++ object is deleted, and
+        both workers are parented to this window — so this must run on
+        every teardown path (close button, workspaceControl close,
+        dev-reload) before the widget is destroyed.
+        """
+        self._stop_icon_fetcher()
+        worker = self._update_check_worker
+        if worker is not None and worker.isRunning():
+            # No interruption hook: the probe is a single urlopen with a
+            # 10s timeout, so bound the wait rather than hanging Maya.
+            worker.wait(15000)
+        self._update_check_worker = None
+
+    def closeEvent(self, event):
+        self._shutdown_workers()
+        super().closeEvent(event)
+
+    def dockCloseEventTriggered(self):
+        # MayaQWidgetDockableMixin calls this when the hosting
+        # workspaceControl is closed — closeEvent alone doesn't fire then.
+        self._shutdown_workers()
+        parent_hook = getattr(super(), "dockCloseEventTriggered", None)
+        if parent_hook is not None:
+            parent_hook()
 
     def _clear_card_layout(self):
         """Remove all cards from the layout, leaving the trailing stretch."""
