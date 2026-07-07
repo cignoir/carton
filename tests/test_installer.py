@@ -78,6 +78,41 @@ class TestInstallManager:
 
             assert not mgr.is_installed(_PKG_ID)
 
+    @pytest.mark.parametrize("namespace,name", [
+        ("..", "evil"),
+        ("mystudio", ".."),
+        ("mystudio", "..\\..\\evil"),
+        ("../../outside", "pkg"),
+        ("mystudio", "sub/dir"),
+        ("C:\\absolute", "pkg"),
+        ("mystudio", ""),
+    ])
+    def test_hostile_identity_is_refused(self, namespace, name):
+        """Remote-catalogue identity strings must never shape paths.
+
+        A subscribed catalogue controls namespace/name verbatim, so
+        anything outside the canonical slug alphabet is refused before
+        any filesystem work happens.
+        """
+        with tempfile.TemporaryDirectory() as tmpdir:
+            config = Config(install_dir=tmpdir)
+            mgr = InstallManager(config, MayaEnvManager())
+            zip_path = _make_test_zip(tmpdir)
+            meta = {
+                "id": "{}/{}".format(namespace, name),
+                "namespace": namespace,
+                "name": name,
+                "version": "1.0.0",
+                "type": "python_package",
+            }
+
+            with pytest.raises(InstallError):
+                mgr.install_package(zip_path, meta)
+
+            # Nothing may exist outside packages/, and packages/ itself
+            # must not have been created for a refused identity.
+            assert not os.path.isdir(os.path.join(tmpdir, "packages"))
+
     def test_rollback_on_corrupt_zip_fresh_install(self):
         """A bad zip on a fresh install must raise and leave nothing behind."""
         with tempfile.TemporaryDirectory() as tmpdir:

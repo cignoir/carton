@@ -8,6 +8,11 @@ import zipfile
 from datetime import datetime, timezone
 
 from carton.core.handlers import get_handler
+from carton.core.identity import (
+    InvalidIdentityError,
+    validate_name,
+    validate_namespace,
+)
 from carton.core.install_state import is_my_tools
 from carton.core.migrations import (
     INSTALLED_SCHEMA_VERSION,
@@ -143,9 +148,23 @@ class InstallManager:
 
         Layout: ``packages/<namespace>/<name>`` (or just ``packages/<name>``
         for namespace-less packages).
+
+        Both components are validated against the canonical identifier
+        alphabet before touching the filesystem: ``meta`` may come from a
+        remote catalogue the user merely subscribed to, and its strings
+        must never be able to steer the install path outside
+        ``install_dir`` (``..``, separators, absolute paths). The schema
+        enforces the same pattern, but only lint applies the schema — this
+        is the runtime gate.
         """
         namespace = meta.get("namespace", "")
         name = meta["name"]
+        try:
+            name = validate_name(name)
+            if namespace:
+                namespace = validate_namespace(namespace)
+        except InvalidIdentityError as e:
+            raise InstallError("Refusing install: {}".format(e))
         if namespace:
             rel_path = "packages/{}/{}".format(namespace, name)
         else:

@@ -12,7 +12,9 @@ install button updates need to address.
 import os
 import traceback
 
+from carton.core.identity import validate_name
 from carton.core.install_state import is_my_tools
+from carton.models.version import Version
 from carton.ui.compat import QtWidgets
 from carton.ui.error_messages import show_error
 from carton.ui._icon_fetch import resolve_icon_path
@@ -57,9 +59,16 @@ class InstallController:
                 if not version_info.get("sha256"):
                     raise RuntimeError(t("install_strict_no_sha256"))
 
+            # The staging filename is built from catalogue-controlled
+            # strings — validate both parts before the download writes
+            # anything, so a hostile entry can't steer the file outside
+            # staging_dir (the identity alphabet has no separators/"..",
+            # and versions must be plain semver).
+            safe_name = validate_name(pkg_name)
+            Version.parse(target_version)
             dest = os.path.join(
                 w._install_manager._config.staging_dir,
-                "{}-{}.zip".format(pkg_name, target_version),
+                "{}-{}.zip".format(safe_name, target_version),
             )
             w._downloader.download(
                 url, dest,
