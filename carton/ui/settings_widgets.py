@@ -662,6 +662,7 @@ class RegistriesSection(QtWidgets.QWidget):
 
     def _add_github(self):
         from carton.core.catalogue import sources
+        from carton.ui._busy import run_with_busy
 
         repo, ok = wide_input(self, "GitHub", t("settings_github_placeholder"))
         if not ok or not repo.strip():
@@ -670,7 +671,8 @@ class RegistriesSection(QtWidgets.QWidget):
         if "/" not in repo or repo.count("/") != 1:
             QtWidgets.QMessageBox.warning(self, "Carton", t("settings_github_invalid"))
             return
-        try:
+
+        def _resolve():
             base = sources.resolve_github_base(repo)
             # v5.0 single-package probe runs first: if the repo root
             # carries a ``package.json`` with a valid ``namespace/name``,
@@ -679,6 +681,16 @@ class RegistriesSection(QtWidgets.QWidget):
             # catalogue.json. Personal entries never touch
             # ``_target.catalogues``, so the list widget stays as-is.
             result, pkg_id = sources.register_github_single_package(base, repo)
+            if result != sources.RESULT_NOT_A_PACKAGE:
+                return result, pkg_id, None, None
+            # Not a single-package repo → walk the multi-package probe.
+            resolved = sources.probe_github_catalogue_url(base)
+            meta = (sources.probe_remote_catalogue_meta(resolved)
+                    if resolved else None)
+            return result, "", resolved, meta
+
+        try:
+            result, pkg_id, resolved, meta = run_with_busy(self, _resolve)
         except sources.CatalogueSourceError as e:
             QtWidgets.QMessageBox.warning(
                 self, "Carton", t("settings_github_error", str(e)),
@@ -686,14 +698,11 @@ class RegistriesSection(QtWidgets.QWidget):
             return
         if self._show_single_package_result(result, pkg_id):
             return
-        # Not a single-package repo → walk the multi-package probe.
-        resolved = sources.probe_github_catalogue_url(base)
         if not resolved:
             QtWidgets.QMessageBox.warning(
                 self, "Carton", t("settings_github_no_catalogue", repo),
             )
             return
-        meta = sources.probe_remote_catalogue_meta(resolved)
         # Author-owned display_name wins; fall back to the GitHub repo
         # name so the entry still renders with a meaningful label.
         name = meta["display_name"] or repo.split("/")[1]
@@ -720,6 +729,7 @@ class RegistriesSection(QtWidgets.QWidget):
     def _add_package_url(self):
         """Register a single package by direct ``package.json`` URL."""
         from carton.core.catalogue import sources
+        from carton.ui._busy import run_with_busy
 
         url, ok = wide_input(
             self, t("settings_add_package_url"),
@@ -732,7 +742,8 @@ class RegistriesSection(QtWidgets.QWidget):
             QtWidgets.QMessageBox.warning(self, "Carton", t("settings_invalid_url"))
             return
         try:
-            result, pkg_id = sources.register_url_single_package(url)
+            result, pkg_id = run_with_busy(
+                self, lambda: sources.register_url_single_package(url))
         except sources.CatalogueSourceError as e:
             QtWidgets.QMessageBox.warning(
                 self, "Carton",
@@ -746,7 +757,8 @@ class RegistriesSection(QtWidgets.QWidget):
             )
 
     def _add_remote(self):
-        from carton.ui._catalogue_pairing import probe_remote_catalogue_meta
+        from carton.core.catalogue.sources import probe_remote_catalogue_meta
+        from carton.ui._busy import run_with_busy
 
         url, ok = wide_input(
             self, t("settings_add_url"), t("settings_url_placeholder"), width=560,
@@ -757,7 +769,7 @@ class RegistriesSection(QtWidgets.QWidget):
         if not url.startswith(("http://", "https://")):
             QtWidgets.QMessageBox.warning(self, "Carton", t("settings_invalid_url"))
             return
-        meta = probe_remote_catalogue_meta(url)
+        meta = run_with_busy(self, lambda: probe_remote_catalogue_meta(url))
         # Prefer author-owned display_name over any URL-derived label.
         name = meta["display_name"] or _default_name_from_url(url)
         self._finish_add(url, display_name=name, catalogue_id=meta["catalogue_id"])

@@ -252,6 +252,7 @@ _STRINGS = {
         "catalogue_add_alias": "Add as separate alias",
         "settings_confirm_remove": "Remove '{}'?\nThe catalogue contents will not be deleted.",
         "settings_remove_registry_title": "Remove Registry",
+        "busy_network": "Contacting server…",
         "settings_uninstall": "Uninstall Carton",
         "settings_confirm_uninstall": (
             "This will delete Carton and all installed packages.\n"
@@ -571,6 +572,7 @@ _STRINGS = {
         "catalogue_add_alias": "別名として追加",
         "settings_confirm_remove": "'{}' を削除しますか？\nカタログの中身は削除されません。",
         "settings_remove_registry_title": "レジストリを削除",
+        "busy_network": "サーバーに接続中…",
         "settings_uninstall": "Carton をアンインストール",
         "settings_confirm_uninstall": (
             "Carton とインストール済みの全パッケージを削除します。\n"
