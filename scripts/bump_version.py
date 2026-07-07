@@ -1,4 +1,7 @@
-"""Bump the version in package.json and carton/__init__.py.
+"""Bump the version in package.json, carton/__init__.py and pyproject.toml.
+
+All three files must agree — tests/test_version_sync.py fails CI on any
+partial bump, and the release workflow stamps the same trio from the tag.
 
 Usage:
     python scripts/bump_version.py patch              # 0.1.8 -> 0.1.9
@@ -21,6 +24,7 @@ import sys
 _ROOT = os.path.dirname(os.path.dirname(__file__))
 _PKG_PATH = os.path.join(_ROOT, "package.json")
 _INIT_PATH = os.path.join(_ROOT, "carton", "__init__.py")
+_PYPROJECT_PATH = os.path.join(_ROOT, "pyproject.toml")
 
 
 def _read():
@@ -48,6 +52,20 @@ def _update_init(new_ver):
         f.write(content)
 
 
+def _update_pyproject(new_ver):
+    with open(_PYPROJECT_PATH, "r", encoding="utf-8") as f:
+        content = f.read()
+    content = re.sub(
+        r'^version = "[^"]*"',
+        'version = "{}"'.format(new_ver),
+        content,
+        count=1,
+        flags=re.MULTILINE,
+    )
+    with open(_PYPROJECT_PATH, "w", encoding="utf-8") as f:
+        f.write(content)
+
+
 def bump(kind):
     data = _read()
     old = data["version"]
@@ -70,6 +88,7 @@ def bump(kind):
     data["version"] = new_ver
     _write(data)
     _update_init(new_ver)
+    _update_pyproject(new_ver)
     print("{} -> {}".format(old, new_ver))
     return new_ver
 
@@ -80,7 +99,7 @@ def _git(*args):
 
 def commit_bump(new_ver, tag=False):
     """Stage the bumped files and create a Conventional Commits release commit."""
-    _git("add", _PKG_PATH, _INIT_PATH)
+    _git("add", _PKG_PATH, _INIT_PATH, _PYPROJECT_PATH)
     msg = "chore(release): bump version to {}".format(new_ver)
     _git("commit", "-m", msg)
     if tag:
