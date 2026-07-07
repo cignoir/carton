@@ -72,6 +72,14 @@ class SettingsDialog(QtWidgets.QDialog):
     def _on_nav_changed(self, row):
         self._pages.setCurrentIndex(row)
 
+    def done(self, result):
+        # The dialog may be garbage-collected right after exec_() returns,
+        # taking its child widgets (and their QThreads) with it — make sure
+        # an in-flight "check for updates now" worker has finished first.
+        for section in self.findChildren(AutoUpdateSection):
+            section.shutdown_worker()
+        super().done(result)
+
     # ---- General page ----
 
     def _build_general_page(self):

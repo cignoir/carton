@@ -238,6 +238,18 @@ class AutoUpdateSection(QtWidgets.QWidget):
         self._target.auto_check_updates = bool(checked)
         self._persist()
 
+    def shutdown_worker(self):
+        """Block until an in-flight update check finishes.
+
+        Called by the owning dialog before it is destroyed; a running
+        QThread whose C++ object gets deleted aborts the whole process.
+        The probe is a single urlopen with a 10s timeout, so bound the
+        wait rather than hanging Maya indefinitely.
+        """
+        if self._update_worker is not None and self._update_worker.isRunning():
+            self._update_worker.wait(15000)
+        self._update_worker = None
+
     def _on_check_now(self):
         if not self._self_updater:
             return
@@ -247,8 +259,8 @@ class AutoUpdateSection(QtWidgets.QWidget):
         self._original_check_label = self._check_btn.text()
         self._check_btn.setText(t("checking"))
 
-        from carton.ui.main_window import _SelfUpdateCheckWorker
-        self._update_worker = _SelfUpdateCheckWorker(self._self_updater, parent=self)
+        from carton.ui._self_update_controller import SelfUpdateCheckWorker
+        self._update_worker = SelfUpdateCheckWorker(self._self_updater, parent=self)
         self._update_worker.finished_signal.connect(self._on_check_done)
         self._update_worker.start()
 
@@ -976,7 +988,7 @@ class RegistriesSection(QtWidgets.QWidget):
             return
         entry = self._target.catalogues[row]
         reply = QtWidgets.QMessageBox.question(
-            self, "Remove Registry",
+            self, t("settings_remove_registry_title"),
             t("settings_confirm_remove", entry.label),
             QtWidgets.QMessageBox.Yes | QtWidgets.QMessageBox.No,
         )
