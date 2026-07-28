@@ -253,6 +253,9 @@ _STRINGS = {
         "settings_confirm_remove": "Remove '{}'?\nThe catalogue contents will not be deleted.",
         "settings_remove_registry_title": "Remove Registry",
         "busy_network": "Contacting server…",
+        "busy_refreshing": "Refreshing catalogues…",
+        "refresh_error": "Refresh Error",
+        "busy_downloading": "Downloading {}…",
         "settings_uninstall": "Uninstall Carton",
         "settings_confirm_uninstall": (
             "This will delete Carton and all installed packages.\n"
@@ -573,6 +576,9 @@ _STRINGS = {
         "settings_confirm_remove": "'{}' を削除しますか？\nカタログの中身は削除されません。",
         "settings_remove_registry_title": "レジストリを削除",
         "busy_network": "サーバーに接続中…",
+        "busy_refreshing": "カタログを更新中…",
+        "refresh_error": "更新エラー",
+        "busy_downloading": "{} をダウンロード中…",
         "settings_uninstall": "Carton をアンインストール",
         "settings_confirm_uninstall": (
             "Carton とインストール済みの全パッケージを削除します。\n"

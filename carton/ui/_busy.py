@@ -41,6 +41,12 @@ def run_with_busy(parent, fn, label="", show_after_ms=300):
     appears when the call takes longer than ``show_after_ms`` — fast
     calls finish without a flash of UI.
     """
+    if QtWidgets.QApplication.instance() is None:
+        # No event loop to keep alive, so there is nothing to offload to
+        # and a QThread would have nowhere to deliver its signal. Run
+        # inline and keep the same call signature for headless callers.
+        return fn()
+
     dialog = QtWidgets.QProgressDialog(
         label or t("busy_network"), "", 0, 0, parent,
     )

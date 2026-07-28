@@ -15,6 +15,7 @@ import traceback
 from carton.core.identity import validate_name
 from carton.core.install_state import is_my_tools
 from carton.models.version import Version
+from carton.ui._busy import run_with_busy
 from carton.ui.compat import QtWidgets
 from carton.ui.error_messages import show_error
 from carton.ui._icon_fetch import resolve_icon_path
@@ -47,6 +48,9 @@ class InstallController:
         pkg_name = pkg_data.get("name", "")
         target_version = version or pkg_data.get("latest_version", "")
         version_info = pkg_data.get("versions", {}).get(target_version, {})
+        # Bound before the try so the cleanup handler can reference it
+        # even when we fail before a staging path is chosen.
+        dest = ""
 
         try:
             # Strict verify: refuse to install anything from a catalogue
@@ -72,16 +76,18 @@ class InstallController:
 
             origin = (w._catalogue_client.get_origin(pkg_id)
                       if w._catalogue_client else None)
-            if origin is not None:
-                # v5.0 path: the origin resolves the artifact and the
-                # shared SourceCache applies pinned/unpinned semantics —
-                # unpinned github origins get TOFU-pinned on first fetch
-                # instead of downloading unverified every install.
-                ref = origin.get_artifact(target_version)
-                w._downloader.download_artifact(
-                    ref, dest, cache=w._catalogue_client.source_cache,
-                )
-            else:
+
+            def _fetch_artifact():
+                if origin is not None:
+                    # v5.0 path: the origin resolves the artifact and the
+                    # shared SourceCache applies pinned/unpinned semantics —
+                    # unpinned github origins get TOFU-pinned on first fetch
+                    # instead of downloading unverified every install.
+                    ref = origin.get_artifact(target_version)
+                    w._downloader.download_artifact(
+                        ref, dest, cache=w._catalogue_client.source_cache,
+                    )
+                    return
                 # Origin-less entries (stale projections) — legacy path.
                 url = version_info.get("download_url")
                 if not url:
@@ -91,6 +97,19 @@ class InstallController:
                     expected_sha256=version_info.get("sha256"),
                     expected_size=version_info.get("size_bytes"),
                 )
+
+            # Resolve + download on a worker. Between the origin lookup
+            # and the downloader's own retry loop this is minutes of
+            # blocking I/O against a host that may be unreachable, and
+            # on the UI thread every second of it freezes Maya whole.
+            #
+            # Only the fetch moves: install_package() runs handlers that
+            # call maya.cmds / maya.mel, which are main-thread only.
+            run_with_busy(
+                w, _fetch_artifact,
+                label=t("busy_downloading",
+                        pkg_data.get("display_name") or pkg_name),
+            )
 
             meta = {
                 "id": pkg_id,
@@ -115,6 +134,14 @@ class InstallController:
             w._rebuild_cards()
 
         except Exception as e:
+            # The staged zip is dead weight once the install has failed,
+            # and nothing else ever sweeps it up — leaving it behind is
+            # how .staging/ grows to gigabytes on a flaky connection.
+            if dest and os.path.exists(dest):
+                try:
+                    os.remove(dest)
+                except OSError:
+                    pass
             self.set_install_button_state(pkg_id, busy=False)
             show_error(w, e, operation="install")
 

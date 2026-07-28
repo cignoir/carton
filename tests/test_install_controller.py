@@ -10,6 +10,7 @@ breakage fails in CI instead. Regression guard for the
 """
 
 import os
+import threading
 import types
 
 import pytest
@@ -63,8 +64,17 @@ class _StubInstallManager:
         self.installed.append((zip_path, dict(meta)))
 
 
-class _StubWindow:
+class _StubWindow(QtWidgets.QWidget):
+    """Stand-in for CartonWindow.
+
+    Really is a QWidget: the controller passes the window as the parent
+    of the busy dialog that fronts the download, so a plain object would
+    only fail at click time — the exact class of breakage this module
+    exists to catch.
+    """
+
     def __init__(self, staging_dir, packages, origin=None):
+        super().__init__()
         self._downloader = _StubDownloader()
         self._install_manager = _StubInstallManager()
         self._catalogue_client = types.SimpleNamespace(
@@ -189,3 +199,75 @@ def test_install_unknown_package_is_a_noop(qtbot, tmp_path, errors):
     assert errors == []
     assert w._downloader.calls == []
     assert w._install_manager.installed == []
+
+
+def test_download_runs_off_the_ui_thread(qtbot, tmp_path, errors):
+    """The network half must not execute on the thread painting Maya.
+
+    Between the origin lookup and the downloader's retry loop this is
+    minutes of blocking I/O against a host that may be unreachable.
+    Asserting on the thread identity is the only way to keep it there —
+    a regression would be invisible until someone's VPN dropped.
+    """
+    staging = tmp_path / "staging"
+    staging.mkdir()
+    w = _StubWindow(str(staging), {PKG_ID: _pkg_data()})
+
+    seen = {}
+    real_download = w._downloader.download
+
+    def _recording_download(url, dest, expected_sha256=None, expected_size=None):
+        seen["thread"] = threading.get_ident()
+        return real_download(url, dest, expected_sha256=expected_sha256,
+                             expected_size=expected_size)
+
+    w._downloader.download = _recording_download
+
+    InstallController(w).install(PKG_ID)
+
+    assert errors == []
+    assert seen["thread"] != threading.get_ident()
+
+
+def test_install_runs_on_the_ui_thread(qtbot, tmp_path, errors):
+    """...and the install half must stay on it.
+
+    Handlers call maya.cmds / maya.mel, which are main-thread only, so
+    install_package() must never be swept into the worker along with the
+    download.
+    """
+    staging = tmp_path / "staging"
+    staging.mkdir()
+    w = _StubWindow(str(staging), {PKG_ID: _pkg_data()})
+
+    seen = {}
+    real_install = w._install_manager.install_package
+
+    def _recording_install(zip_path, meta):
+        seen["thread"] = threading.get_ident()
+        return real_install(zip_path, meta)
+
+    w._install_manager.install_package = _recording_install
+
+    InstallController(w).install(PKG_ID)
+
+    assert errors == []
+    assert seen["thread"] == threading.get_ident()
+
+
+def test_failed_install_does_not_leave_the_zip_in_staging(
+        qtbot, tmp_path, errors):
+    """A failed install used to leak its download into .staging forever."""
+    staging = tmp_path / "staging"
+    staging.mkdir()
+    w = _StubWindow(str(staging), {PKG_ID: _pkg_data()})
+
+    def _boom(zip_path, meta):
+        raise RuntimeError("handler exploded")
+
+    w._install_manager.install_package = _boom
+
+    InstallController(w).install(PKG_ID)
+
+    assert len(errors) == 1
+    assert list(staging.iterdir()) == []

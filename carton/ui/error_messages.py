@@ -39,6 +39,7 @@ _OPERATION_TITLE_KEYS = {
     "update": "update_error",
     "register": "register_error",
     "launch": "launch_error",
+    "refresh": "refresh_error",
 }
 
 

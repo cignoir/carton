@@ -21,6 +21,7 @@ from carton.ui._namespace_grouping import (
     group_by_namespace,
     toggle_collapsed,
 )
+from carton.ui._busy import run_with_busy
 from carton.ui.compat import QtWidgets, QtCore, Qt
 from carton.ui.error_messages import show_error
 from carton.ui.i18n import t
@@ -106,6 +107,12 @@ class CartonWindow(_CartonWindowBase):
         self._library_collapsed = set()
         self._library_groups = {}
         self._update_check_worker = None
+        self._refreshing = False
+        self._cards_rebuilt_by_sidebar = False
+        # Icon fetchers that overran their join budget, kept alive and
+        # unparented so they can finish without the window waiting on
+        # them (see _stop_icon_fetcher).
+        self._detached_fetchers = []
 
         self._install_ctl = InstallController(self)
         self._publish_ctl = PublishController(self)
@@ -457,11 +464,52 @@ class CartonWindow(_CartonWindowBase):
         self._profile_ctl.open_manager()
 
     def refresh(self):
+        """Re-read every catalogue and rebuild the views.
+
+        The fetch is the expensive half — one HTTP round trip per remote
+        catalogue, each with its own timeout, run in series. On the UI
+        thread that is a multi-minute freeze of all of Maya when a
+        subscribed host is unreachable, with nothing on screen to say
+        why. It runs on a worker instead, behind the shared busy dialog.
+
+        The call still *reads* synchronously: every caller here assumes
+        the package dict is current by the time refresh() returns, and a
+        signal-based rewrite would push that assumption into a dozen
+        call sites for no user-visible gain.
+        """
         if not self._catalogue_client:
             return
-        self._catalogue_client.fetch()
+        # refresh() is reachable from the settings dialog closing, the
+        # toolbar button, install/publish completion and deferred init.
+        # The worker runs a nested event loop, so without this guard a
+        # second refresh can start on top of one already in flight.
+        if self._refreshing:
+            return
+        self._refreshing = True
+        try:
+            run_with_busy(
+                self, self._catalogue_client.fetch, label=t("busy_refreshing"),
+            )
+        except Exception as e:
+            # CatalogueClient already absorbs per-catalogue failures, so
+            # reaching here means something broader broke. Show the cards
+            # we have rather than leaving the user on a stale view with
+            # no explanation.
+            show_error(self, e, operation="refresh")
+        finally:
+            self._refreshing = False
+        # _rebuild_sidebar re-selects a row, and when that changes the
+        # current row Qt delivers currentRowChanged -> _apply_sidebar_
+        # selection -> _rebuild_cards. When the previous selection is
+        # restored unchanged, no signal fires and nobody rebuilds. Track
+        # which happened instead of unconditionally rebuilding after:
+        # every card widget is constructed from scratch here, and the
+        # second pass also has to stop and join the icon fetcher the
+        # first one just started.
+        self._cards_rebuilt_by_sidebar = False
         self._rebuild_sidebar()
-        self._rebuild_cards()
+        if not self._cards_rebuilt_by_sidebar:
+            self._rebuild_cards()
         self._check_self_update()
 
     _MYTOOLS_KEY = "__my_tools__"
@@ -607,6 +655,9 @@ class CartonWindow(_CartonWindowBase):
     def _apply_sidebar_selection(self, key):
         """Common path for both sidebar lists."""
         self._sidebar_selection = key
+        # Tells an in-flight refresh() that the cards are already being
+        # rebuilt off the selection change, so it can skip its own pass.
+        self._cards_rebuilt_by_sidebar = True
         is_my_tools = self._is_mytools_selection(self._sidebar_selection)
         # Show tabs for registries, register button for My Tools
         self._tab_all.setVisible(not is_my_tools)
@@ -713,12 +764,44 @@ class CartonWindow(_CartonWindowBase):
 
     # ---- _rebuild_cards helpers ------------------------------------------
 
-    def _stop_icon_fetcher(self):
-        """Stop any in-flight icon fetcher from a previous rebuild."""
-        if self._icon_fetcher and self._icon_fetcher.isRunning():
-            self._icon_fetcher.requestInterruption()
-            self._icon_fetcher.wait()
-            self._icon_fetcher = None
+    # A card rebuild happens on every refresh and every sidebar click, so
+    # it must not be able to hold the UI thread for longer than a pause.
+    # Teardown gets a longer budget: there we would rather wait than
+    # leave threads behind on the way out.
+    _ICON_FETCHER_JOIN_MS = 3000
+    _ICON_FETCHER_TEARDOWN_JOIN_MS = 15000
+
+    def _stop_icon_fetcher(self, timeout_ms=None):
+        """Stop any in-flight icon fetcher from a previous rebuild.
+
+        The fetcher only checks for interruption between icons, so when
+        it is parked inside a socket read this has to wait out the
+        remainder of that request. Rather than block indefinitely, a
+        fetcher that overruns is detached from this window and left to
+        finish on its own.
+
+        Detaching matters: the fetcher is parented to the window, and Qt
+        aborts the process if a widget is destroyed while a child thread
+        is still running. Cutting the parent link (and the signal back
+        into the card map, which is about to be rebuilt) makes the
+        straggler harmless.
+        """
+        fetcher = self._icon_fetcher
+        self._icon_fetcher = None
+        if fetcher is None or not fetcher.isRunning():
+            return
+        fetcher.requestInterruption()
+        if fetcher.wait(timeout_ms or self._ICON_FETCHER_JOIN_MS):
+            return
+        try:
+            fetcher.icon_ready.disconnect()
+        except (RuntimeError, TypeError):
+            pass
+        fetcher.setParent(None)
+        self._detached_fetchers = [
+            f for f in self._detached_fetchers if f.isRunning()
+        ]
+        self._detached_fetchers.append(fetcher)
 
     def _shutdown_workers(self):
         """Stop background QThreads before the window goes away.
@@ -729,7 +812,7 @@ class CartonWindow(_CartonWindowBase):
         every teardown path (close button, workspaceControl close,
         dev-reload) before the widget is destroyed.
         """
-        self._stop_icon_fetcher()
+        self._stop_icon_fetcher(self._ICON_FETCHER_TEARDOWN_JOIN_MS)
         worker = self._update_check_worker
         if worker is not None and worker.isRunning():
             # No interruption hook: the probe is a single urlopen with a
