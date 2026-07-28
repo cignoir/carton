@@ -4,13 +4,22 @@ The Qt-dependent bits (stamp_local_registry_with_prompt,
 resolve_duplicate_registry) can't be exercised headlessly here, but the
 duplicate-entry resolver is framework-free and carries the logic that
 decides whether a pairing flow should surface the "already registered"
-dialog 窶・which is where the most user-facing bug lives.
+dialog — which is where the most user-facing bug lives.
 """
 
 import json
 import os
 
+import pytest
+
 from urllib.error import URLError
+
+# _catalogue_pairing imports Qt at module scope, so the whole module has
+# to be skipped rather than individual tests — matching every other
+# Qt-touching module in the suite, and keeping the suite collectable in
+# environments without a Qt binding.
+pytest.importorskip("pytestqt")
+
 from carton.core.config import Config, CatalogueEntry
 from carton.ui._catalogue_pairing import (
     find_duplicate_entry,
@@ -159,7 +168,7 @@ class TestProbeGithubPackageJson:
         ) is None
 
     def test_returns_none_when_payload_is_list(self, monkeypatch):
-        """A valid JSON array isn't a package.json 窶・treat as absent."""
+        """A valid JSON array isn't a package.json — treat as absent."""
         def _fake_urlopen(req, timeout=None):
             return _FakeResponse(b"[1, 2, 3]")
         monkeypatch.setattr(

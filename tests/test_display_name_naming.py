@@ -207,7 +207,13 @@ class TestDefaultNameFromUrl:
     """Regression tests for the pre-v0.5 `parts[-3]` URL-name bug."""
 
     def _fn(self):
-        # Lazy import — settings_widgets pulls Qt at module level.
+        # settings_widgets pulls Qt at module level, so this stays a
+        # lazy import — and skips rather than errors where no Qt
+        # binding is installed, keeping the rest of this module (which
+        # is pure core) runnable on its own.
+        import pytest
+
+        pytest.importorskip("pytestqt")
         from carton.ui.settings_widgets import _default_name_from_url
         return _default_name_from_url
 
