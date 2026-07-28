@@ -99,6 +99,11 @@ class CartonWindow(_CartonWindowBase):
         # My Tools (or vice versa).
         self._library_collapsed = set()
         self._library_groups = {}
+        # Groups and collapse set belonging to whichever view is
+        # currently rendered — the inputs _apply_card_visibility resolves
+        # against the search query. Empty for flat (per-namespace) views.
+        self._active_ns_groups = {}
+        self._active_collapsed = set()
         self._update_check_worker = None
         self._refreshing = False
         self._cards_rebuilt_by_sidebar = False
@@ -739,19 +744,25 @@ class CartonWindow(_CartonWindowBase):
                 )
                 self._insert_card_widget(card)
 
-        # Apply initial collapsed state for the active grouped view.
+        # Publish which groups (if any) the freshly built layout has, so
+        # _apply_card_visibility can resolve collapse state and the
+        # search query together. A flat view registers no groups.
         if is_mytools_root:
             self._mytools_groups = ns_groups
-            for ns_key, (_hdr, cards) in ns_groups.items():
-                if ns_key in self._mytools_collapsed:
-                    for c in cards:
-                        c.setVisible(False)
+            self._active_ns_groups = ns_groups
+            self._active_collapsed = self._mytools_collapsed
         elif is_library_root:
             self._library_groups = ns_groups
-            for ns_key, (_hdr, cards) in ns_groups.items():
-                if ns_key in self._library_collapsed:
-                    for c in cards:
-                        c.setVisible(False)
+            self._active_ns_groups = ns_groups
+            self._active_collapsed = self._library_collapsed
+        else:
+            self._active_ns_groups = {}
+            self._active_collapsed = set()
+
+        # Rebuilt cards start visible; this is what applies the folds and
+        # the search box's current contents to them. Without it a rebuild
+        # (install, publish, tab switch) silently discarded both.
+        self._apply_card_visibility()
 
         self._start_icon_fetcher(icon_fetch_tasks)
 
@@ -1025,25 +1036,19 @@ class CartonWindow(_CartonWindowBase):
             self._library_groups, self._library_collapsed, ns_key,
         )
 
-    @staticmethod
-    def _toggle_group(groups, collapsed_set, ns_key):
+    def _toggle_group(self, groups, collapsed_set, ns_key):
         """Flip collapse state for a grouped view's namespace header.
 
         Shared between My Tools and Library since the UI affordance is
         identical — only the backing ``groups`` / ``collapsed`` sets
-        differ. Walks cards to show/hide and rewrites the header arrow
-        in place (header text: ``"{arrow}  {label}"`` — 3-char prefix).
+        differ. Only the state is flipped here; rendering it is
+        _apply_card_visibility's job, so a fold made while a search is
+        active doesn't drag non-matching cards back onto the screen.
         """
-        group = groups.get(ns_key)
-        if not group:
+        if ns_key not in groups:
             return
-        header, cards = group
-        visible = toggle_collapsed(collapsed_set, ns_key)
-        for c in cards:
-            c.setVisible(visible)
-        text = header.text()
-        if len(text) >= 3:
-            header.setText(arrow_glyph(visible) + text[1:])
+        toggle_collapsed(collapsed_set, ns_key)
+        self._apply_card_visibility()
 
     def _on_icon_ready(self, pkg_id, icon_path):
         """Slot called from background thread when an icon is downloaded."""
@@ -1067,17 +1072,71 @@ class CartonWindow(_CartonWindowBase):
     def _show_edit(self, pkg_id):
         self._edit_ctl.show_edit(pkg_id)
 
-    def _filter_cards(self, text):
-        text = text.lower()
+    def _filter_cards(self, _text=None):
+        # The search box's textChanged passes the text; everything else
+        # calls this bare. Either way the current query is read from the
+        # widget, so there is only one place it can come from.
+        self._apply_card_visibility()
+
+    def _iter_cards(self):
         for i in range(self._card_layout.count()):
-            item = self._card_layout.itemAt(i)
-            widget = item.widget()
+            widget = self._card_layout.itemAt(i).widget()
             if isinstance(widget, PackageCard):
-                name = widget._pkg_data.get("name", "").lower()
-                display = widget._pkg_data.get("display_name", "").lower()
-                tags = " ".join(widget._pkg_data.get("tags", [])).lower()
-                visible = not text or text in name or text in display or text in tags
-                widget.setVisible(visible)
+                yield widget
+
+    def _apply_card_visibility(self):
+        """Decide what is on screen from the query and the collapse state.
+
+        Search and namespace collapsing both used to set card visibility
+        independently, and whichever ran last won: typing in the search
+        box revealed cards inside a collapsed namespace, and clearing it
+        left every namespace expanded no matter what the user had folded
+        away. Headers were never hidden either, so filtering left a run
+        of namespace titles with nothing under them.
+
+        Resolving both inputs in one pass is what keeps them consistent.
+        A search deliberately overrides collapsing — a hit the user
+        cannot see because it happens to sit in a folded namespace reads
+        as "no results" — but it does so without touching the stored
+        collapse state, so folding is restored when the box is cleared.
+        """
+        query = self._search.text() if hasattr(self, "_search") else ""
+        query = (query or "").strip()
+        groups = self._active_ns_groups
+
+        if not groups:
+            # Flat view: no headers, nothing to fold.
+            for card in self._iter_cards():
+                card.setVisible(card.matches(query))
+            return
+
+        collapsed = self._active_collapsed
+        for ns, (header, cards) in groups.items():
+            if query:
+                any_match = False
+                for card in cards:
+                    hit = card.matches(query)
+                    card.setVisible(hit)
+                    any_match = any_match or hit
+                header.setVisible(any_match)
+                self._set_header_arrow(header, expanded=True)
+            else:
+                folded = ns in collapsed
+                for card in cards:
+                    card.setVisible(not folded)
+                header.setVisible(True)
+                self._set_header_arrow(header, expanded=not folded)
+
+    @staticmethod
+    def _set_header_arrow(header, expanded):
+        """Rewrite a group header's leading chevron in place.
+
+        Header text is ``"{arrow}  {label}"``, so the glyph is the first
+        character and the label is everything from index 1 on.
+        """
+        text = header.text()
+        if len(text) >= 3:
+            header.setText(arrow_glyph(expanded) + text[1:])
 
     def _set_tab(self, tab):
         self._current_tab = tab

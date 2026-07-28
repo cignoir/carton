@@ -70,6 +70,31 @@ class PackageCard(QtWidgets.QFrame):
         self._published_catalogues = list(published_catalogues or [])
         self._setup_ui()
 
+    @property
+    def pkg_id(self):
+        return self._pkg_id
+
+    def matches(self, query):
+        """True if this card should survive the search box's ``query``.
+
+        Lives on the card because the card owns its data; callers that
+        filter a list of cards otherwise have to reach into ``_pkg_data``
+        and re-derive which fields are searchable.
+
+        An empty query matches everything. Matching is a case-insensitive
+        substring test over the internal name, the display name and the
+        tags — the three things a user would type.
+        """
+        query = (query or "").strip().lower()
+        if not query:
+            return True
+        haystack = [
+            self._pkg_data.get("name", ""),
+            self._pkg_data.get("display_name", ""),
+        ]
+        haystack.extend(self._pkg_data.get("tags", []) or [])
+        return any(query in str(part).lower() for part in haystack)
+
     def _setup_ui(self):
         self.setFrameShape(QtWidgets.QFrame.StyledPanel)
         self.setStyleSheet(
