@@ -10,7 +10,13 @@ permissions:
   contents: read
 
 jobs:
+  # PyPI releases are irreversible — a version number can never be
+  # reused — so this gate matters more here than anywhere else.
+  test:
+    uses: ./.github/workflows/test.yml
+
   publish:
+    needs: test
     name: Build and publish carton-maya
     runs-on: ubuntu-latest
 

@@ -7,7 +7,7 @@
 > / ``registry_client.py`` / schema 2.0) throughout. For the current
 > design see:
 > * ``README.md`` / ``README_ja.md`` — user-facing v5.0 behaviour
-> * ``CLAUDE.md`` — architecture summary and internal terminology
+> * ``docs/developer-guide.md`` — architecture and internal terminology
 > * ``schemas/catalogue.schema.json`` — v5.0 catalogue format
 > * ``carton/core/catalogue/client.py`` — current merge + projection code
 >

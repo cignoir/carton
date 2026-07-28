@@ -4,6 +4,11 @@ on:
     branches: [master, main]
   pull_request:
     branches: [master, main]
+  # Callable from the release workflows so a tag cannot ship without
+  # this having passed on the same commit. `needs:` only reaches across
+  # jobs within one workflow, so gating a release on Tests means Tests
+  # has to run as a job inside it.
+  workflow_call:
 
 jobs:
   pytest:
@@ -57,4 +62,4 @@ jobs:
         env:
           QT_QPA_PLATFORM: offscreen
         run: |
-          python -m pytest tests/ -v --ignore=tests/test_e2e_publish_install.py
+          python -m pytest tests/ -v

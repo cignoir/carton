@@ -8,7 +8,14 @@ permissions:
   contents: write
 
 jobs:
+  # A tag push is a separate event from the branch push that ran Tests,
+  # so without this the release cut whatever the tag pointed at —
+  # including commits whose test run was red.
+  test:
+    uses: ./.github/workflows/test.yml
+
   build:
+    needs: test
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5

@@ -1,6 +1,10 @@
 """Internationalization (i18n) for Carton UI."""
 
-_current_lang = "ja"
+# Matches detect_language()'s fallback. carton.startup() calls
+# set_language() before any UI is built, so this only governs paths that
+# render without going through startup — where "whatever the module was
+# written in" is not a defensible answer.
+_current_lang = "en"
 
 _STRINGS = {
     "en": {
