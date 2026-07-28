@@ -69,14 +69,27 @@ def startup():
             _script_mgr.activate(pid)
     _env_mgr.flush()
 
+    # Staging is a cache of zips in transit; only the success paths
+    # delete them, so failed installs and abandoned publishes pile up
+    # there forever. Sweep once per session, best-effort.
+    from carton.core.staging import sweep_all as _sweep_staging
+    from carton.core.log import get_logger
+    try:
+        _sweep_staging(_config)
+    except Exception as e:
+        get_logger().warning("staging sweep skipped: %s", e)
+
     # Register menu (deferred until Maya UI is initialized)
     try:
         from carton.ui.shelf import setup as _setup_ui
         _setup_ui()
-    except Exception:
-        pass
+    except Exception as e:
+        # Outside Maya (headless import, tests) there is no shelf to
+        # build. Inside Maya this is how the Carton menu appears, so a
+        # silent swallow here is a missing menu with no explanation.
+        get_logger().warning("could not register the Carton menu: %s", e)
 
-    print("[Carton] v{} ready".format(__version__))
+    get_logger().info("v%s ready", __version__)
 
 
 def show():

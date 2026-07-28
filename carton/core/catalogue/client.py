@@ -105,7 +105,7 @@ class CatalogueClient(object):
                 # bring down the whole client — log and move on so the
                 # other catalogues still resolve.
                 get_logger().warning("catalogue %r failed to load: %s",
-                                     getattr(entry, "name", "<unknown>"), e)
+                                     _entry_label(entry), e)
         # Personal catalogue is merged LAST so subscribed catalogues win
         # on pkg_id collision — an official source should always trump a
         # user's ad-hoc URL-direct add.

@@ -10,7 +10,7 @@ import json
 import os
 import re
 
-from carton.ui.compat import QtWidgets, QtCore, Qt
+from carton.ui.compat import QtWidgets, Qt
 from carton.ui.i18n import t
 from carton.ui import theme
 from carton.ui.utils import list_functions
@@ -32,7 +32,6 @@ from carton.core.identity import (
     slugify_namespace, slugify_name, is_valid_python_module_name,
 )
 from carton.core.detect import scan_folder as _detect_from_folder
-from carton.core.detect import _detect_function_in_file
 
 
 def _has_functions(path):

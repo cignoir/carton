@@ -33,9 +33,16 @@ def main():
         sys.stdout.reconfigure(encoding="utf-8", errors="replace")
         sys.stderr.reconfigure(encoding="utf-8", errors="replace")
 
+    import carton
+
     parser = argparse.ArgumentParser(
         prog="carton-maya",
         description="Carton - Maya package manager CLI",
+    )
+    parser.add_argument(
+        "--version", action="version",
+        version="carton-maya {}".format(carton.__version__),
+        help="Print the Carton version and exit",
     )
     sub = parser.add_subparsers(dest="command")
 

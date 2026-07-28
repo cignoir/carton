@@ -1,12 +1,5 @@
 """Carton main window."""
 
-import json
-import os
-from collections import OrderedDict
-
-from urllib.request import Request, urlopen
-from urllib.error import URLError
-from urllib.parse import urljoin
 from carton.core.display_name_resolver import resolve_display_name
 from carton.core.install_state import is_my_tools, is_pure_local
 from carton.ui._catalogue_crud import add_existing_catalogue, create_new_catalogue

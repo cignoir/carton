@@ -40,6 +40,24 @@ def test_python_m_carton_help_runs_without_maya():
     assert "carton-maya" in result.stdout
 
 
+def test_python_m_carton_version_reports_the_package_version():
+    """``--version`` is the first thing anyone runs against a CLI.
+
+    It also has to agree with the installed package, so a release that
+    stamps some version files and misses others shows up here.
+    """
+    import carton
+
+    result = subprocess.run(
+        [sys.executable, "-m", "carton", "--version"],
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+    )
+    assert result.returncode == 0, "stderr=\n" + (result.stderr or "")
+    assert carton.__version__ in (result.stdout + result.stderr)
+
+
 def test_carton_cli_help_does_not_load_maya():
     """Driving the parser past help text shouldn't pull maya.* either."""
     code = (

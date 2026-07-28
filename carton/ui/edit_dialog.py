@@ -2,7 +2,7 @@
 
 import os
 
-from carton.ui.compat import QtWidgets, QtCore, Qt
+from carton.ui.compat import QtWidgets, Qt
 from carton.ui.i18n import t
 from carton.ui import theme
 from carton.ui.utils import list_functions
