@@ -9,6 +9,7 @@ from urllib.error import URLError
 import carton
 from carton.core.config import default_bootstrap_dir
 from carton.core.downloader import DownloadError
+from carton.core.json_io import write_json_atomic
 from carton.models.version import Version
 
 
@@ -130,9 +131,11 @@ class SelfUpdater:
         }
         if expected_sha256:
             pending["sha256"] = expected_sha256.lower()
+        # Atomic: a truncated pending_update.json is read by the bootstrap
+        # before anything else at Maya startup, so a partial write here
+        # would be a startup failure rather than a lost update.
         pending_path = os.path.join(bootstrap_dir, "pending_update.json")
-        with open(pending_path, "w", encoding="utf-8") as f:
-            json.dump(pending, f, indent=2, ensure_ascii=False)
+        write_json_atomic(pending_path, pending)
 
         return True
 
@@ -141,8 +144,18 @@ class SelfUpdater:
         return os.path.exists(path)
 
     def get_pending_version(self):
+        """Version staged for the next Maya start, or None.
+
+        A damaged pending_update.json reports None rather than raising:
+        this feeds a Settings label, and the bootstrap is the component
+        that owns discarding the bad file (it runs first).
+        """
         path = os.path.join(default_bootstrap_dir(), "pending_update.json")
-        if os.path.exists(path):
+        if not os.path.exists(path):
+            return None
+        try:
             with open(path, "r", encoding="utf-8") as f:
-                return json.load(f).get("version")
-        return None
+                data = json.load(f)
+        except (OSError, ValueError):
+            return None
+        return data.get("version") if isinstance(data, dict) else None

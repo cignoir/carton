@@ -33,6 +33,43 @@ def _find_bootstrap_dir():
     return os.path.normpath(os.path.expanduser("~/maya/carton"))
 
 
+def _discard_pending(pending_file, reason):
+    """Delete a pending-update record we refuse to act on.
+
+    Removing the file is the whole point: this runs before
+    ``carton.startup()``, so anything that escapes as an exception stops
+    Carton from loading — and a record left on disk would reproduce that
+    failure at every single Maya start until the user found and deleted
+    the file by hand.
+    """
+    print("[Carton] Discarding pending update ({})".format(reason))
+    try:
+        os.remove(pending_file)
+    except OSError as e:
+        print("[Carton] Could not remove {}: {}".format(pending_file, e))
+
+
+def _read_pending(pending_file):
+    """Return the pending-update record, or None if it is unusable.
+
+    A truncated or key-missing record is discarded here rather than
+    allowed to raise. It reaches this state through an interrupted write
+    or a damaged disk, and the correct response to "I can't tell what
+    update was staged" is to forget it and boot the version already
+    installed — never to refuse to boot.
+    """
+    try:
+        with open(pending_file, "r", encoding="utf-8") as f:
+            pending = json.load(f)
+    except (OSError, ValueError) as e:
+        _discard_pending(pending_file, "unreadable: {}".format(e))
+        return None
+    if not isinstance(pending, dict) or not pending.get("staged_zip"):
+        _discard_pending(pending_file, "no staged_zip recorded")
+        return None
+    return pending
+
+
 def _apply_pending_update(bootstrap_dir):
     """Apply Carton self-update if pending_update.json exists.
 
@@ -45,8 +82,9 @@ def _apply_pending_update(bootstrap_dir):
     if not os.path.exists(pending_file):
         return
 
-    with open(pending_file, "r", encoding="utf-8") as f:
-        pending = json.load(f)
+    pending = _read_pending(pending_file)
+    if pending is None:
+        return
 
     carton_dir = os.path.join(bootstrap_dir, "carton")
     backup_dir = os.path.join(bootstrap_dir, "carton.bak")
@@ -97,7 +135,7 @@ def _apply_pending_update(bootstrap_dir):
         if os.path.isdir(staging_dir) and not os.listdir(staging_dir):
             os.rmdir(staging_dir)
 
-        print("[Carton] Updated to v{}".format(pending["version"]))
+        print("[Carton] Updated to v{}".format(pending.get("version", "?")))
 
     except Exception:
         traceback.print_exc()
@@ -115,8 +153,18 @@ def start():
     """Bootstrap Carton."""
     bootstrap_dir = _find_bootstrap_dir()
 
-    # Apply self-update (extracts carton/ into bootstrap_dir)
-    _apply_pending_update(bootstrap_dir)
+    # Apply self-update (extracts carton/ into bootstrap_dir).
+    #
+    # Never fatal: the update path touches the filesystem in ways that can
+    # fail for reasons that have nothing to do with the copy of Carton
+    # already installed (locked files, antivirus, a full disk). Launching
+    # the version on disk is always better than not launching at all, so
+    # anything unexpected here is reported and stepped over.
+    try:
+        _apply_pending_update(bootstrap_dir)
+    except Exception:
+        traceback.print_exc()
+        print("[Carton] Self-update skipped; starting the installed version")
 
     # Make the carton/ package importable
     if bootstrap_dir not in sys.path:

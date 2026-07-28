@@ -28,6 +28,14 @@ CARTON_DIR = os.path.join(ROOT_DIR, "carton")
 TEMPLATE_PATH = os.path.join(CARTON_DIR, "data", "install_carton.template.py")
 DIST_DIR = os.path.join(ROOT_DIR, "dist")
 
+# The bootstrap deployed to the user's Maya scripts directory. Inlined
+# into the generated installer at build time so the file the test suite
+# runs is byte-for-byte the file users get — see the note in
+# install_carton.template.py.
+BOOTSTRAP_DIR = os.path.join(ROOT_DIR, "bootstrap")
+BOOTSTRAP_PATH = os.path.join(BOOTSTRAP_DIR, "carton_bootstrap.py")
+USERSETUP_PATH = os.path.join(BOOTSTRAP_DIR, "userSetup.py")
+
 # Make `import carton.core.profile` work when this script is run directly
 # without an editable install of the package.
 if ROOT_DIR not in sys.path:
@@ -42,6 +50,8 @@ DEFAULT_LANGUAGES = ["auto", "ja", "en"]
 # config (or "null" when no profile is supplied).
 SEED_TOKEN = "__SEED_CONFIG_JSON__"
 PROFILE_NAME_TOKEN = "__SEED_PROFILE_NAME__"
+BOOTSTRAP_TOKEN = "__BOOTSTRAP_PY_LITERAL__"
+USERSETUP_TOKEN = "__USERSETUP_HOOK_LITERAL__"
 
 
 def _detect_version():
@@ -64,6 +74,29 @@ def _installer_filename(version, lang):
     if lang == "auto":
         return "install_carton_v{}.py".format(safe_ver)
     return "install_carton_{}_v{}.py".format(lang, safe_ver)
+
+
+def _read_text(path):
+    with open(path, "r", encoding="utf-8") as f:
+        return f.read()
+
+
+def _bootstrap_literals():
+    """Return ``(bootstrap_literal, usersetup_literal)`` for substitution.
+
+    Both are ``repr()``-encoded so the generated installer holds them as
+    plain Python string literals — the same trick used for SEED_CONFIG.
+    That keeps the substitution total: the bootstrap source can contain
+    any quoting, docstrings or backslashes without needing an escaping
+    convention agreed between two files.
+
+    The userSetup hook gets a leading newline because the installer
+    *appends* it to a userSetup.py that may already have content; without
+    the separator the hook would run onto the end of the user's last line.
+    """
+    bootstrap_src = _read_text(BOOTSTRAP_PATH)
+    usersetup_src = "\n" + _read_text(USERSETUP_PATH)
+    return repr(bootstrap_src), repr(usersetup_src)
 
 
 def _load_profile_seed(profile_path):
@@ -124,12 +157,15 @@ def build(version=None, languages=None, profile_path=None, output=None):
     # 4. Read template and substitute the static placeholders.
     with open(TEMPLATE_PATH, "r", encoding="utf-8") as f:
         template = f.read()
+    bootstrap_literal, usersetup_literal = _bootstrap_literals()
     base = (
         template
         .replace("__VERSION__", version)
         .replace("__CARTON_ZIP_B64__", b64)
         .replace(SEED_TOKEN, seed_literal)
         .replace(PROFILE_NAME_TOKEN, profile_name_literal)
+        .replace(BOOTSTRAP_TOKEN, bootstrap_literal)
+        .replace(USERSETUP_TOKEN, usersetup_literal)
     )
 
     release_kb = os.path.getsize(release_zip) / 1024
