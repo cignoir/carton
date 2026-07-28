@@ -13,7 +13,7 @@ from carton.core.identity import (
     validate_name,
     validate_namespace,
 )
-from carton.core.install_state import is_my_tools
+from carton.core.json_io import read_json_quarantining, write_json_atomic
 from carton.core.log import get_logger
 from carton.core.migrations import (
     INSTALLED_SCHEMA_VERSION,
@@ -56,12 +56,24 @@ class InstallManager:
         self._installed = self._load_installed()
 
     def _load_installed(self):
-        """Load installed.json. Auto-migrates pre-v4.0 files in place."""
+        """Load installed.json. Auto-migrates pre-v4.0 files in place.
+
+        An unreadable file is quarantined and replaced by an empty index
+        rather than raising. This runs during ``carton.startup()``, so
+        raising would keep Maya from loading Carton at all — and the
+        packages themselves are still on disk under ``packages/``, which
+        makes this recoverable (see :mod:`carton.core.refresh_from_disk`)
+        in a way that a dead startup is not.
+        """
         path = self._config.installed_json_path
+        empty = {"schema_version": INSTALLED_SCHEMA_VERSION, "packages": {}}
         if not os.path.exists(path):
-            return {"schema_version": INSTALLED_SCHEMA_VERSION, "packages": {}}
-        with open(path, "r", encoding="utf-8") as f:
-            data = json.load(f)
+            return empty
+        data, quarantined = read_json_quarantining(
+            path, None, what="installed.json",
+        )
+        if quarantined or data is None:
+            return empty
         migrated, was_migrated = migrate_installed_data(data)
         if was_migrated:
             # Persist on disk now (with backup) so subsequent reads are
@@ -69,10 +81,7 @@ class InstallManager:
             # schema_version.
             from carton.core.migrations import make_backup
             make_backup(path)
-            tmp = path + ".tmp"
-            with open(tmp, "w", encoding="utf-8") as f:
-                json.dump(migrated, f, indent=2, ensure_ascii=False)
-            os.replace(tmp, path)
+            write_json_atomic(path, migrated)
         return migrated
 
     def _save_installed(self, data=None):
@@ -83,12 +92,7 @@ class InstallManager:
         """
         if data is None:
             data = self._installed
-        path = self._config.installed_json_path
-        os.makedirs(os.path.dirname(path), exist_ok=True)
-        tmp = path + ".tmp"
-        with open(tmp, "w", encoding="utf-8") as f:
-            json.dump(data, f, indent=2, ensure_ascii=False)
-        os.replace(tmp, path)
+        write_json_atomic(self._config.installed_json_path, data)
 
     def install_package(self, zip_path, meta):
         """Install a package from a zip file.

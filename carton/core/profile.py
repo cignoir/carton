@@ -24,6 +24,7 @@ import os
 
 from carton.core.config import CatalogueEntry
 from carton.core.uuid_id import is_valid_uuid
+from carton.core.json_io import write_json_atomic
 
 
 class InvalidProfileError(ValueError):
@@ -235,11 +236,13 @@ class InstallerProfile:
         )
 
     def save(self, path):
-        """Write the profile to a JSON file with stable formatting."""
-        os.makedirs(os.path.dirname(os.path.abspath(path)) or ".", exist_ok=True)
-        with open(path, "w", encoding="utf-8") as f:
-            json.dump(self.to_dict(), f, indent=2, ensure_ascii=False)
-            f.write("\n")
+        """Write the profile to a JSON file with stable formatting.
+
+        Atomic: a profile is the recovery copy of the catalogue list, so
+        it must not be destroyable by the same crash that damages
+        config.json.
+        """
+        write_json_atomic(path, self.to_dict(), trailing_newline=True)
 
     @classmethod
     def load(cls, path):

@@ -5,7 +5,9 @@ import os
 import shutil
 import sys
 
-from urllib.parse import urlparse
+from carton.core.json_io import read_json_quarantining, write_json_atomic
+
+
 def _is_url(path):
     """Check if a path is an HTTP/HTTPS URL."""
     return path.startswith(("http://", "https://"))
@@ -47,8 +49,7 @@ def _promote_display_names_to_catalogue(catalogues):
             continue
         data["display_name"] = entry.display_name
         try:
-            with open(path, "w", encoding="utf-8") as f:
-                json.dump(data, f, indent=2, ensure_ascii=False)
+            write_json_atomic(path, data)
         except OSError:
             continue
 
@@ -210,6 +211,10 @@ class Config:
         dev_reload_my_tools=True,
     ):
         self.catalogues = catalogues or []
+        # Set by :meth:`load` to the path a damaged config.json was moved
+        # to. Empty on every normal load. Not persisted — it describes
+        # this session's recovery, not configuration.
+        self.recovered_from = ""
         self.install_dir = install_dir
         self.auto_check_updates = auto_check_updates
         self.github_repo = github_repo
@@ -246,13 +251,23 @@ class Config:
 
     @classmethod
     def load(cls, path=None):
-        """Load config.json. Return defaults if not found."""
+        """Load config.json. Return defaults if not found.
+
+        A config.json that exists but cannot be parsed is quarantined
+        rather than raised: this runs inside ``carton.startup()`` at Maya
+        launch, so an exception here costs the user the whole product,
+        not just their settings. The damaged file is kept as a
+        ``.corrupt-<ms>`` sidecar so nothing is destroyed, and the
+        profile overlay still runs — which is what usually makes the loss
+        invisible, since ``save()`` mirrors the catalogue list into the
+        active profile on every write.
+        """
         is_canonical = path is None
         if path is None:
             path = default_config_path()
-        if os.path.exists(path):
-            with open(path, "r", encoding="utf-8") as f:
-                data = json.load(f)
+        existed = os.path.exists(path)
+        data, quarantined = read_json_quarantining(path, {}, what="config.json")
+        if existed:
             entries_raw = data.get("catalogues", [])
             catalogues = [CatalogueEntry.from_dict(r) for r in entries_raw]
             # v0.5 one-shot: promote any subscriber-alias cache
@@ -273,6 +288,7 @@ class Config:
                 profile_order=data.get("profile_order", []),
                 dev_reload_my_tools=data.get("dev_reload_my_tools", True),
             )
+            cfg.recovered_from = quarantined
             # Only overlay the profile when loading from the canonical
             # location — explicit `path=` callers (tests, multi-config
             # tooling) shouldn't get pollution from the user's real
@@ -349,13 +365,17 @@ class Config:
         The config file is always written to the canonical bootstrap location
         (default: ``~/Documents/maya/carton/config.json`` on Windows) so that
         ``load()`` can find it regardless of where ``install_dir`` points.
+
+        The write is atomic. config.json holds the catalogue list, the
+        install directory and the active profile — none of it
+        reconstructible by hand — and it is read at startup, so a
+        half-written file is the difference between "Carton starts" and
+        "Carton doesn't".
         """
         is_canonical = path is None
         if path is None:
             path = default_config_path()
-        os.makedirs(os.path.dirname(path), exist_ok=True)
-        with open(path, "w", encoding="utf-8") as f:
-            json.dump(self.to_dict(), f, indent=2, ensure_ascii=False)
+        write_json_atomic(path, self.to_dict())
         # Mirror the overlay fields back into the active profile file so
         # next launch (or another machine pointed at the same profile dir)
         # picks up the changes. config.json's copy is just a snapshot.

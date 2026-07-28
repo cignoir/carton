@@ -21,6 +21,7 @@ import hashlib
 import json
 import os
 import time
+from carton.core.json_io import write_json_atomic
 
 
 _API_TTL_SECONDS = 3600  # 1 hour
@@ -42,11 +43,7 @@ def _key_to_path(cache_dir, kind, key):
 
 
 def _atomic_write_json(path, payload):
-    os.makedirs(os.path.dirname(path), exist_ok=True)
-    tmp = path + ".tmp"
-    with open(tmp, "w", encoding="utf-8") as f:
-        json.dump(payload, f, indent=2, ensure_ascii=False)
-    os.replace(tmp, path)
+    write_json_atomic(path, payload)
 
 
 class SourceCache(object):

@@ -14,6 +14,7 @@ directly — this module is for the on-disk path.
 import json
 import os
 
+from carton.core.json_io import write_json_atomic
 from carton.core.migrations import (
     CATALOGUE_FILENAME,
     LEGACY_REGISTRY_FILENAME,
@@ -57,11 +58,7 @@ def read_catalogue_dict(path, stamp_id=True, auto_migrate_file=True):
 
 def write_catalogue_dict(path, data):
     """Write ``data`` (already v5) to ``path``, atomic via temp + replace."""
-    os.makedirs(os.path.dirname(os.path.abspath(path)), exist_ok=True)
-    tmp = path + ".tmp"
-    with open(tmp, "w", encoding="utf-8") as f:
-        json.dump(data, f, indent=2, ensure_ascii=False)
-    os.replace(tmp, path)
+    write_json_atomic(path, data)
 
 
 def catalogue_filename_for(dir_path):

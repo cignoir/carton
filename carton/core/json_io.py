@@ -63,7 +63,7 @@ def quarantine_path_for(path):
     return "{}.corrupt-{}".format(path, int(time.time() * 1000))
 
 
-def read_json_quarantining(path, default, what=""):
+def read_json_quarantining(path, default, what="", require_mapping=True):
     """Read JSON from ``path``; on corruption quarantine it and use ``default``.
 
     Returns ``(data, quarantined_path)``. ``quarantined_path`` is ``""``
@@ -73,6 +73,12 @@ def read_json_quarantining(path, default, what=""):
     ``default`` is used as-is when the file is missing and as the
     fallback when it is unreadable, so callers should pass a freshly
     built object rather than a shared one.
+
+    ``require_mapping`` (on by default — every state file Carton owns is
+    a JSON object) treats a well-formed but wrong-shaped payload as
+    corruption too. Otherwise a file that somehow ended up holding
+    ``[]`` or ``null`` would sail past the parse and blow up further in
+    with an AttributeError that says nothing about the real problem.
 
     ``what`` is a short noun for the log line ("config.json", "installed
     packages"). Recovery is logged at warning level because it is a
@@ -84,7 +90,11 @@ def read_json_quarantining(path, default, what=""):
 
     try:
         with open(path, "r", encoding="utf-8") as f:
-            return json.load(f), ""
+            data = json.load(f)
+        if require_mapping and not isinstance(data, dict):
+            raise ValueError(
+                "expected a JSON object, got {}".format(type(data).__name__))
+        return data, ""
     except (OSError, ValueError) as e:
         from carton.core.log import get_logger
         log = get_logger()

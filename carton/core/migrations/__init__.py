@@ -23,6 +23,7 @@ from carton.core.migrations.installed import (
     INSTALLED_SCHEMA_VERSION,
     migrate_installed_data,
 )
+from carton.core.json_io import write_json_atomic
 from carton.core.migrations.catalogue import (
     CATALOGUE_FILENAME,
     CATALOGUE_SCHEMA_VERSION,
@@ -79,6 +80,5 @@ def migrate_installed_file(path):
     if not was_migrated:
         return False
     make_backup(path)
-    with open(path, "w", encoding="utf-8") as f:
-        json.dump(migrated, f, indent=2, ensure_ascii=False)
+    write_json_atomic(path, migrated)
     return True

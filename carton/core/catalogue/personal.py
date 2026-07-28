@@ -27,6 +27,7 @@ import json
 import os
 
 from carton.core.uuid_id import new_uuid
+from carton.core.json_io import write_json_atomic
 
 
 PERSONAL_CATALOGUE_FILENAME = "personal_catalogue.json"
@@ -176,9 +177,4 @@ class PersonalCatalogue(object):
         Creates parent directories as needed. Overwrites atomically via
         a temp file so a partial write never corrupts the existing one.
         """
-        path = path or default_path()
-        os.makedirs(os.path.dirname(path), exist_ok=True)
-        tmp = path + ".tmp"
-        with open(tmp, "w", encoding="utf-8") as f:
-            json.dump(self.to_dict(), f, indent=2, ensure_ascii=False)
-        os.replace(tmp, path)
+        write_json_atomic(path or default_path(), self.to_dict())
