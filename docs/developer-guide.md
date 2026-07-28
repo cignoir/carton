@@ -291,6 +291,7 @@ without launching Maya.
 
 ```
 uvx carton-maya <area> <command>
+uvx carton-maya --version
 
 areas:
   package      Operate on individual packages (author-facing)
@@ -409,6 +410,11 @@ Before publishing, verify each of these:
 - [ ] Icon reference paths exist
 - [ ] `home_origin` is set so accidental cross-catalogue publishes are
       caught
+
+You don't need to check the version number by hand. If it collides with
+something already in the target catalogue, Carton names the next free
+patch and offers to publish under it — walking past every version
+already out, so a second collision can't send you round again.
 
 ## Common pitfalls
 

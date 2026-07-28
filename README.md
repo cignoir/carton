@@ -270,6 +270,18 @@ time and re-verified right before the staged update is applied at the
 next Maya startup. With strict verification on, a release without a
 digest is refused outright.
 
+## Recovering from a damaged state file
+
+Every file Carton writes — `config.json`, `installed.json`, catalogues,
+profiles — is written to a temp file and swapped into place in one step,
+so an interrupted write can never leave a half-written file behind.
+
+If one turns up unreadable anyway (a failing disk, an external editor),
+Carton renames it to `<name>.corrupt-<timestamp>` and starts from
+defaults rather than refusing to launch. Nothing is deleted, and the
+catalogue list is usually restored automatically from the active
+profile, which carries its own copy.
+
 ## Catalogue Structure
 
 An **embedded** catalogue (one that hosts its own package zips) looks like:
@@ -331,6 +343,13 @@ you can also Publish a tool to a catalogue (or a GitHub repo) to share it.
 
 Carton supports several package types and auto-detects which one you're
 adding. Below is what you can register and what to expect for each.
+
+Because registration is by reference, moving or renaming the original
+files breaks the link. Carton notices: the card shows a **Source missing**
+badge and offers **Relink** in place of Launch. Relinking points the
+registration at the new location and rewires Maya's paths for the current
+session — the package keeps its identity, so anything already published
+under it is unaffected.
 
 ### 1. Single-file Python script (`.py`)
 
@@ -514,10 +533,15 @@ Every package has an **internal name** (a slug like `quick_rename` or
 from the file or folder name and is the package's stable identifier — it
 cannot be changed after registration without orphaning the catalogue entry.
 
-The **namespace** field is optional during Add (you can register tools for
-your own use without one) but **required to publish**. If you type
-`MyStudio` it gets auto-converted to `mystudio`; the canonical form is
-shown live below the input.
+The **namespace** field is **required** — a package without one can never
+be published, so Carton asks for it at registration rather than letting
+you discover the problem later. If you type `MyStudio` it gets
+auto-converted to `mystudio`; the canonical form is shown live below the
+input.
+
+Since almost everyone registers everything under the same namespace, set
+**Settings → Default namespace** once and the field arrives prefilled. A
+`package.json` or sidecar that declares its own namespace still wins.
 
 ## Developer documentation
 
