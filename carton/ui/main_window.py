@@ -1013,6 +1013,7 @@ class CartonWindow(_CartonWindowBase):
         card.publish_requested.connect(self._on_publish)
         card.update_requested.connect(self._on_update)
         card.unpublish_requested.connect(self._on_card_unpublish)
+        card.relink_requested.connect(self._on_relink)
         card.setCursor(Qt.PointingHandCursor)
         self._card_map[pkg_id] = card
 
@@ -1071,6 +1072,9 @@ class CartonWindow(_CartonWindowBase):
 
     def _show_edit(self, pkg_id):
         self._edit_ctl.show_edit(pkg_id)
+
+    def _on_relink(self, pkg_id):
+        self._edit_ctl.relink(pkg_id)
 
     def _filter_cards(self, _text=None):
         # The search box's textChanged passes the text; everything else

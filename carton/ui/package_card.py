@@ -2,6 +2,7 @@
 
 import os
 
+from carton.core.install_state import has_missing_local_path
 from carton.ui._origin_badge import resolve_origin_verification
 from carton.ui.compat import QtWidgets, QtCore, Qt
 from carton.ui.i18n import t, resolve_localized
@@ -59,6 +60,7 @@ class PackageCard(QtWidgets.QFrame):
     publish_requested = QtCore.Signal(str)
     update_requested = QtCore.Signal(str)
     unpublish_requested = QtCore.Signal(str, str)  # (pkg_id, registry_name)
+    relink_requested = QtCore.Signal(str)
 
     def __init__(self, pkg_id, pkg_data, installed_version=None, icon_path=None,
                  published_catalogues=None, parent=None):
@@ -172,6 +174,23 @@ class PackageCard(QtWidgets.QFrame):
             "font-size: 11px; color: {}; background: transparent;".format(theme.TEXT_DIM)
         )
         title_layout.addWidget(ver_label)
+
+        # Missing-source badge. Sits next to the version rather than in
+        # the description so it reads before the user clicks Launch and
+        # gets an import error that never mentions the path.
+        if has_missing_local_path(self._pkg_data):
+            missing = QtWidgets.QLabel("⚠ " + t("source_missing_badge"))
+            missing.setToolTip(
+                t("source_missing_tooltip",
+                  self._pkg_data.get("local_path", ""))
+            )
+            missing.setStyleSheet(
+                "font-size: 10px; font-weight: 600; color: {color};"
+                " background: transparent; padding: 1px 6px;"
+                " border: 1px solid {color}; border-radius: 3px;".format(
+                    color=theme.ACCENT_ORANGE)
+            )
+            title_layout.addWidget(missing)
 
         # Pinned badge — version held intentionally after a rollback.
         if self._installed_version and self._pkg_data.get("pinned"):
@@ -315,6 +334,25 @@ class PackageCard(QtWidgets.QFrame):
         is_local = self._pkg_data.get("_local_script", False)
 
         is_pinned = bool(self._pkg_data.get("pinned"))
+
+        if has_missing_local_path(self._pkg_data):
+            # The referenced source is gone, so Launch can only fail —
+            # and it would fail with an import error that never mentions
+            # the missing path. Offer the fix instead of the trap.
+            relink_btn = QtWidgets.QPushButton(t("relink"))
+            relink_btn.setFixedWidth(80)
+            relink_btn.setToolTip(t("relink_tooltip",
+                                    self._pkg_data.get("local_path", "")))
+            relink_btn.setStyleSheet(
+                theme.btn_card_action(theme.ACCENT_ORANGE,
+                                      theme.ACCENT_ORANGE_HOVER,
+                                      text_color=theme.BG_PRIMARY)
+            )
+            relink_btn.clicked.connect(
+                lambda: self.relink_requested.emit(self._pkg_id))
+            btn_layout.addWidget(relink_btn)
+            layout.addLayout(btn_layout)
+            return
 
         if self._installed_version or is_local:
             # Determine if an update is available. Pinned packages are

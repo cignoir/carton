@@ -9,13 +9,18 @@ attention. The controller keeps a reference back to the
 and view rebuilds, matching the other controllers.
 """
 
+import os
+
 from carton.core.identity import (
     InvalidIdentityError,
     slugify_namespace,
     validate_namespace,
 )
+from carton.core.path_utils import resolve_local_path, store_local_path
+from carton.ui.compat import QtWidgets
 from carton.ui.edit_dialog import EditDialog
 from carton.ui.error_messages import show_error
+from carton.ui.i18n import t
 
 
 class EditController:
@@ -54,6 +59,72 @@ class EditController:
             w._rebuild_cards()
         elif action == "save":
             self._apply_save(pkg_id, pkg_data, result, published_regs)
+
+    def relink(self, pkg_id):
+        """Point a My Tools entry at a source that moved.
+
+        Registration holds a reference to the author's files instead of
+        copying them, so moving or renaming the source leaves an entry
+        that still has a card but can only fail on Launch — with an
+        import error that never mentions the path. This is the repair:
+        pick the new location, and the registration follows it.
+
+        Only the path changes. Identity (namespace/name, and therefore
+        the installed.json key and anything already published under it)
+        is deliberately untouched — this is the same tool in a new
+        place, not a new registration.
+        """
+        w = self._w
+        pkg_data = w._install_manager.get_package(pkg_id)
+        if not pkg_data:
+            return
+
+        old_path = resolve_local_path(pkg_data.get("local_path", ""))
+        is_folder = pkg_data.get("is_folder", False)
+        start_dir = os.path.dirname(old_path) if old_path else ""
+
+        if is_folder:
+            chosen = QtWidgets.QFileDialog.getExistingDirectory(
+                w, t("relink_pick_folder"), start_dir,
+            )
+        else:
+            chosen, _filter = QtWidgets.QFileDialog.getOpenFileName(
+                w, t("relink_pick_file"), start_dir,
+            )
+        if not chosen:
+            return
+
+        chosen = os.path.normpath(chosen)
+        if os.path.isdir(chosen) != bool(is_folder):
+            # A folder package relinked to a single file (or the
+            # reverse) would wire up the wrong env paths and fail at
+            # launch in a way that looks like a different bug.
+            QtWidgets.QMessageBox.warning(
+                w, t("relink"),
+                t("relink_wrong_kind_folder" if is_folder
+                  else "relink_wrong_kind_file"),
+            )
+            return
+
+        pkg_type = pkg_data.get("type", "")
+        if w._script_manager:
+            # Drop the stale env wiring before adding the new location,
+            # so a relink doesn't leave the old path on sys.path for the
+            # rest of the session.
+            w._script_manager.rebind_local_path(
+                pkg_id, chosen, old_path=old_path,
+                pkg_type=pkg_type, is_folder=is_folder,
+            )
+        else:
+            w._install_manager.update_package_fields(
+                pkg_id, {"local_path": store_local_path(chosen)},
+            )
+
+        w._rebuild_sidebar()
+        w._rebuild_cards()
+        QtWidgets.QMessageBox.information(
+            w, t("relink"), t("relink_done", chosen),
+        )
 
     def _apply_save(self, pkg_id, pkg_data, result, published_regs):
         """Persist an EditDialog "save" result and refresh the views."""

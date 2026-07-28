@@ -103,6 +103,40 @@ class ScriptManager:
 
         self._install_mgr.remove_package_entry(pkg_id)
 
+    def rebind_local_path(self, pkg_id, new_path, old_path="",
+                          pkg_type=None, is_folder=None):
+        """Point a registration at a source that moved, rewiring the env.
+
+        Registration references the author's files in place, so moving
+        or renaming the source strands the entry. Repairing it is not
+        just a field update: the old location is already on ``sys.path``
+        / ``MAYA_SCRIPT_PATH`` for this session and has to come off, or
+        an import can still resolve against a directory the user
+        believes they have left behind.
+
+        Identity is untouched — same pkg_id, same namespace and name.
+        This is the same tool in a new place.
+        """
+        entry = self._install_mgr.get_package(pkg_id)
+        if not entry:
+            return False
+
+        if pkg_type is None:
+            pkg_type = entry.get("type", "")
+        if is_folder is None:
+            is_folder = entry.get("is_folder", False)
+        if not old_path:
+            old_path = resolve_local_path(entry.get("local_path", ""))
+
+        if old_path:
+            self._remove_from_env(old_path, pkg_type, is_folder)
+        self._add_to_env(new_path, pkg_type, is_folder)
+
+        self._install_mgr.update_package_fields(
+            pkg_id, {"local_path": store_local_path(new_path)},
+        )
+        return True
+
     def activate(self, pkg_id):
         """Activate a My Tools entry at Maya startup.
 
