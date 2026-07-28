@@ -356,6 +356,62 @@ class DevReloadSection(QtWidgets.QWidget):
         self._persist()
 
 
+# ---------- DefaultNamespaceSection ----------------------------------------
+
+
+class DefaultNamespaceSection(QtWidgets.QWidget):
+    """Line edit bound to ``target.default_namespace``.
+
+    Prefills the namespace field when registering a tool. Most people
+    publish everything they own under one namespace, so typing it per
+    package is repetition — and skipping it produces registrations that
+    cannot be published until they are edited.
+
+    Stored per machine rather than in a profile: it identifies the
+    person publishing, not the studio's catalogue set.
+    """
+
+    def __init__(self, target, persist, parent=None):
+        super().__init__(parent)
+        self._target = target
+        self._persist = persist
+
+        layout = QtWidgets.QVBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(6)
+
+        row = QtWidgets.QHBoxLayout()
+        row.setContentsMargins(0, 0, 0, 0)
+        label = QtWidgets.QLabel(t("settings_default_namespace"))
+        label.setStyleSheet("color: {};".format(theme.TEXT_PRIMARY))
+        row.addWidget(label)
+
+        self._input = QtWidgets.QLineEdit()
+        self._input.setPlaceholderText(t("settings_default_namespace_placeholder"))
+        self._input.setText(getattr(self._target, "default_namespace", "") or "")
+        self._input.editingFinished.connect(self._on_edited)
+        row.addWidget(self._input, stretch=1)
+        layout.addLayout(row)
+
+        hint = QtWidgets.QLabel(t("settings_default_namespace_hint"))
+        hint.setWordWrap(True)
+        hint.setStyleSheet("color: {}; font-size: 11px;".format(theme.TEXT_MUTED))
+        layout.addWidget(hint)
+
+    def _on_edited(self):
+        # Slugify on the way in so the stored value is already what a
+        # package id would use — the registration dialog shows the same
+        # preview, and agreeing here avoids a surprise at publish time.
+        from carton.core.identity import slugify_namespace
+
+        value = slugify_namespace(self._input.text().strip())
+        self._input.setText(value)
+        if value == (getattr(self._target, "default_namespace", "") or ""):
+            return
+        self._target.default_namespace = value
+        self._persist()
+
+
 # ---------- Add-catalogue method picker -----------------------------------
 
 

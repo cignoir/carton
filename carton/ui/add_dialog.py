@@ -49,8 +49,13 @@ def _has_functions(path):
 class AddDialog(QtWidgets.QDialog):
     """Unified dialog for locally registering files/folders."""
 
-    def __init__(self, parent=None):
+    def __init__(self, parent=None, default_namespace=""):
         super().__init__(parent)
+        # Prefilled into the namespace field. Almost everyone registers
+        # every tool they own under one namespace, so typing it out per
+        # package is pure repetition — and leaving it blank is what
+        # produces the un-publishable registrations.
+        self._default_namespace = default_namespace or ""
         self.setWindowTitle(t("add_title"))
         self.setFixedSize(440, 440)
         self.setStyleSheet(
@@ -105,6 +110,8 @@ class AddDialog(QtWidgets.QDialog):
 
         self._namespace_input = QtWidgets.QLineEdit()
         self._namespace_input.setPlaceholderText(t("namespace_placeholder"))
+        if self._default_namespace:
+            self._namespace_input.setText(self._default_namespace)
         self._namespace_input.textChanged.connect(self._update_namespace_preview)
         form.addRow(make_dim_label(t("label_namespace")), self._namespace_input)
         # Slug preview lives on its own row so the input doesn't get squished
@@ -481,8 +488,8 @@ class AddDialog(QtWidgets.QDialog):
         return self._result
 
     @classmethod
-    def prompt(cls, parent=None):
-        dialog = cls(parent)
+    def prompt(cls, parent=None, default_namespace=""):
+        dialog = cls(parent, default_namespace=default_namespace)
         if dialog.exec_() == QtWidgets.QDialog.Accepted:
             return dialog.get_result()
         return None

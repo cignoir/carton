@@ -1155,7 +1155,10 @@ class CartonWindow(_CartonWindowBase):
     def _on_add_script(self):
         if not self._script_manager:
             return
-        result = AddDialog.prompt(self)
+        result = AddDialog.prompt(
+            self,
+            default_namespace=getattr(self._config, "default_namespace", ""),
+        )
         if not result:
             return
         try:

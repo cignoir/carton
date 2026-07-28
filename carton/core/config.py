@@ -209,6 +209,7 @@ class Config:
         strict_verify=True,
         profile_order=None,
         dev_reload_my_tools=True,
+        default_namespace="",
     ):
         self.catalogues = catalogues or []
         # Set by :meth:`load` to the path a damaged config.json was moved
@@ -243,6 +244,11 @@ class Config:
         # added on disk by another machine) are appended at the end on
         # display, and persisted on the next save().
         self.profile_order = list(profile_order or [])
+        # Prefilled into the namespace field when registering a new tool.
+        # Machine-local, not part of a profile: it answers "who is this
+        # person publishing as", which doesn't travel with a studio's
+        # catalogue list.
+        self.default_namespace = default_namespace or ""
         # HTTP(S) proxy URL, e.g. ``http://proxy.studio.internal:8080`` or
         # ``http://user:pass@host:8080``. Empty string means "don't override
         # whatever urllib picks up from the environment" — so users who
@@ -287,6 +293,7 @@ class Config:
                 strict_verify=data.get("strict_verify", True),
                 profile_order=data.get("profile_order", []),
                 dev_reload_my_tools=data.get("dev_reload_my_tools", True),
+                default_namespace=data.get("default_namespace", ""),
             )
             cfg.recovered_from = quarantined
             # Only overlay the profile when loading from the canonical
@@ -499,6 +506,7 @@ class Config:
             "strict_verify": self.strict_verify,
             "profile_order": list(self.profile_order),
             "dev_reload_my_tools": self.dev_reload_my_tools,
+            "default_namespace": self.default_namespace,
         }
 
     def apply_profile(self, profile):

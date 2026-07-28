@@ -14,6 +14,7 @@ from carton.ui.i18n import t
 from carton.ui import theme
 from carton.ui.settings_widgets import (
     AutoUpdateSection,
+    DefaultNamespaceSection,
     DevReloadSection,
     StrictVerifySection,
     LanguageSection,
@@ -95,6 +96,11 @@ class SettingsDialog(QtWidgets.QDialog):
 
         # Install directory (Carton-specific, not part of a profile)
         self._build_install_dir_block(layout)
+
+        # Default namespace prefilled when registering a tool
+        layout.addWidget(DefaultNamespaceSection(
+            self._config, self._config.save,
+        ))
 
         # Auto-update + manual check (live mode: pass the self_updater)
         layout.addWidget(AutoUpdateSection(
