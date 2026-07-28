@@ -52,6 +52,31 @@ class Version:
         return "{}.{}.{}".format(self.major, self.minor, self.patch)
 
 
+def next_free_patch(version_str, taken):
+    """Return the first ``MAJOR.MINOR.PATCH`` after ``version_str`` not in ``taken``.
+
+    Used when a publish collides with a version already in the
+    catalogue: the answer the author almost always wants is "the next
+    patch", and walking past the ones already published means a
+    re-collision can't send them round the loop a second time.
+
+    ``taken`` is any container of version strings. Returns ``None`` if
+    ``version_str`` isn't parseable semver — there is no sensible
+    successor to a version we can't read, and guessing one would publish
+    under a number the author never chose.
+    """
+    try:
+        current = Version.parse(version_str)
+    except (ValueError, TypeError):
+        return None
+    taken = set(taken or ())
+    candidate = Version(current.major, current.minor, current.patch + 1)
+    while str(candidate) in taken:
+        candidate = Version(candidate.major, candidate.minor,
+                            candidate.patch + 1)
+    return str(candidate)
+
+
 def semver_sort_key(version_str):
     """Sort key ordering version strings numerically (0.10.0 > 0.9.0).
 

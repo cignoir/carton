@@ -15,6 +15,8 @@ import json
 import os
 
 from carton.core.display_name_resolver import resolve_display_name
+from carton.core.publisher import VersionConflictError
+from carton.models.version import next_free_patch
 from carton.ui.compat import QtWidgets, Qt
 from carton.ui.error_messages import show_error
 from carton.ui.i18n import t
@@ -449,6 +451,13 @@ class PublishController:
                 release_notes, embed_source_path,
             )
             return
+        except VersionConflictError as e:
+            self.set_publish_button_state(pkg_id, busy=False)
+            self._handle_version_conflict(
+                pkg_id, pkg_data, e, target_catalogue, namespace,
+                release_notes, embed_source_path,
+            )
+            return
         except Exception as e:
             self.set_publish_button_state(pkg_id, busy=False)
             self._show_publish_error(e)
@@ -613,14 +622,75 @@ class PublishController:
             release_notes, embed_source_path,
         )
 
+    def _handle_version_conflict(self, pkg_id, pkg_data, exc,
+                                 target_catalogue, namespace,
+                                 release_notes, embed_source_path):
+        """Offer to publish under the next free version instead of failing.
+
+        The old behaviour was a dead end: a warning naming the version
+        that was taken, after which the author had to close the dialog,
+        find the card, open Edit, work out a version that wasn't already
+        published, type it, save, and start the publish over. The answer
+        is nearly always "the next patch", and the catalogue knows which
+        numbers are free, so Carton can just ask.
+
+        The bump is written to installed.json — the same field, through
+        the same call, that saving the Edit dialog would have used.
+        Carton never touches the author's package.json here or anywhere
+        else; the source manifest stays the author's to edit.
+        """
+        w = self._w
+        proposed = next_free_patch(exc.version, exc.published_versions)
+        if not proposed:
+            # Non-semver version: there is no defensible "next" to offer,
+            # so report the collision and let the author name one.
+            QtWidgets.QMessageBox.warning(
+                w, t("publish_error"),
+                t("publish_already_published", exc.version),
+            )
+            return
+
+        box = QtWidgets.QMessageBox(w)
+        box.setIcon(QtWidgets.QMessageBox.Question)
+        box.setWindowTitle(t("publish_error"))
+        # Deliberately not publish_already_published: that string tells
+        # the author to go and bump the version themselves, which is
+        # exactly the round trip this dialog exists to remove.
+        box.setText(t("publish_version_taken", exc.version))
+        box.setInformativeText(t("publish_bump_prompt", proposed))
+        bump_btn = box.addButton(
+            t("publish_bump_confirm", proposed),
+            QtWidgets.QMessageBox.AcceptRole,
+        )
+        box.addButton(t("cancel"), QtWidgets.QMessageBox.RejectRole)
+        box.exec_()
+        if box.clickedButton() is not bump_btn:
+            return
+
+        if not w._install_manager.update_package_fields(
+                pkg_id, {"version": proposed}):
+            # The entry vanished between the publish attempt and the
+            # answer (another window, a dev reload). Retrying against a
+            # version we failed to record would republish the collision.
+            show_error(w, RuntimeError(t("publish_bump_failed")),
+                       operation="publish")
+            return
+
+        retry_data = dict(pkg_data)
+        retry_data["version"] = proposed
+        self._run_embedded(
+            pkg_id, retry_data, target_catalogue, namespace,
+            release_notes, embed_source_path,
+        )
+
     def _show_publish_error(self, exc):
         """Display a publish-error dialog mapped to a friendly message.
 
-        VersionConflictError needs the version number formatted into its
-        message, so it's handled inline here. Everything else flows through
-        the central :func:`show_error` translator.
+        VersionConflictError still needs the version formatted into its
+        message for callers that don't offer the bump (the GitHub
+        publish path, which has no catalogue to read free versions
+        from). Everything else flows through :func:`show_error`.
         """
-        from carton.core.publisher import VersionConflictError
         w = self._w
         if isinstance(exc, VersionConflictError):
             QtWidgets.QMessageBox.warning(

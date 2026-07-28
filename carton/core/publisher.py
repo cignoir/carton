@@ -43,10 +43,17 @@ _DEFAULT_MAYA_VERSIONS = ["2024", "2025", "2026", "2027"]
 
 
 class VersionConflictError(RuntimeError):
-    """Raised when attempting to publish a version that already exists."""
+    """Raised when attempting to publish a version that already exists.
 
-    def __init__(self, version):
+    ``published_versions`` lists every version the target catalogue
+    already holds for this package. The UI uses it to propose a free
+    version number rather than making the author go and work one out —
+    proposing "the next patch" without it can collide again.
+    """
+
+    def __init__(self, version, published_versions=()):
         self.version = version
+        self.published_versions = list(published_versions)
         super().__init__(version)
 
 
@@ -398,8 +405,9 @@ class Publisher:
         if not entry:
             return
         origin = entry.get("origin") or {}
-        if version in (origin.get("versions") or {}):
-            raise VersionConflictError(version)
+        published = origin.get("versions") or {}
+        if version in published:
+            raise VersionConflictError(version, published_versions=published)
 
     def publish_github(self, pkg_data, repo, release_notes="",
                        tag_prefix="v", namespace=None,
