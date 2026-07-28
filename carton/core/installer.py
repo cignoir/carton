@@ -454,6 +454,37 @@ class InstallManager:
         """Return the dictionary of installed packages. Keys are UUIDs."""
         return self._installed.get("packages", {})
 
+    def get_package(self, pkg_id):
+        """Return one installed entry, or None."""
+        return self._installed.get("packages", {}).get(pkg_id)
+
+    def put_package_entry(self, pkg_id, entry):
+        """Insert or replace an entry and persist installed.json.
+
+        The write path for registrations that don't come from a
+        catalogue install — :class:`~carton.core.script_manager.
+        ScriptManager` records My Tools entries through here. Exists so
+        that "who is allowed to write installed.json" has an answer
+        other than "whoever holds a reference to the manager".
+        """
+        self._installed.setdefault("packages", {})[pkg_id] = entry
+        self._save_installed()
+
+    def remove_package_entry(self, pkg_id):
+        """Drop an entry and persist. Returns it, or None if absent.
+
+        Unlike :meth:`uninstall_package` this only touches the index —
+        no handler, no env teardown, no demotion of double-bound
+        entries. Callers that manage their own env wiring (My Tools
+        registrations reference files in place) use this.
+        """
+        packages = self._installed.get("packages", {})
+        if pkg_id not in packages:
+            return None
+        entry = packages.pop(pkg_id)
+        self._save_installed()
+        return entry
+
     def update_package_fields(self, pkg_id, fields):
         """Merge ``fields`` into an installed package entry and persist.
 

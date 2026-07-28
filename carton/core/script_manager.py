@@ -85,16 +85,13 @@ class ScriptManager:
         if include_compiled:
             installed_data["include_compiled"] = True
 
-        installed = self._install_mgr._installed
-        installed["packages"][pkg_id] = installed_data
-        self._install_mgr._save_installed()
+        self._install_mgr.put_package_entry(pkg_id, installed_data)
 
         return pkg_id
 
     def unregister(self, pkg_id):
         """Unregister. Does not touch the original files."""
-        installed = self._install_mgr._installed
-        pkg_data = installed["packages"].get(pkg_id)
+        pkg_data = self._install_mgr.get_package(pkg_id)
         if not pkg_data:
             return
 
@@ -104,8 +101,7 @@ class ScriptManager:
 
         self._remove_from_env(local_path, pkg_type, is_folder)
 
-        del installed["packages"][pkg_id]
-        self._install_mgr._save_installed()
+        self._install_mgr.remove_package_entry(pkg_id)
 
     def activate(self, pkg_id):
         """Activate a My Tools entry at Maya startup.
@@ -116,8 +112,7 @@ class ScriptManager:
         """
         from carton.core.install_state import is_my_tools
 
-        installed = self._install_mgr._installed
-        pkg_data = installed["packages"].get(pkg_id)
+        pkg_data = self._install_mgr.get_package(pkg_id)
         if not pkg_data or not is_my_tools(pkg_data):
             return
 
