@@ -40,6 +40,10 @@ class PackageDetailPanel(QtWidgets.QWidget):
         super().__init__(parent)
         self._pkg_id = ""
         self._homepage = ""
+        # The panel is reused across packages; this holds the currently
+        # connected action-button slot so it can be taken off again
+        # without disconnecting blind (see show_package).
+        self._action_handler = None
         self._setup_ui()
 
     # ── Style constants (kept aligned with theme.py vocabulary) ──
@@ -452,12 +456,22 @@ class PackageDetailPanel(QtWidgets.QWidget):
         else:
             self._changelog_section.setVisible(False)
 
-        # Action button
-        # Safely reconnect action button
-        try:
-            self._action_btn.clicked.disconnect()
-        except RuntimeError:
-            pass
+        # Action button. The panel is reused across packages, so the
+        # previous package's handler has to come off before the new one
+        # goes on — otherwise one click launches whatever was shown
+        # before as well.
+        #
+        # On the very first show there is nothing connected yet, and
+        # PySide answers that with a RuntimeWarning rather than an
+        # exception. Track the connection instead of disconnecting
+        # blind: a warning printed on a path that is working correctly
+        # trains people to ignore warnings.
+        if self._action_handler is not None:
+            try:
+                self._action_btn.clicked.disconnect(self._action_handler)
+            except (RuntimeError, TypeError):
+                pass
+            self._action_handler = None
 
         if installed_version:
             self._action_btn.setText(t("launch"))
@@ -465,9 +479,9 @@ class PackageDetailPanel(QtWidgets.QWidget):
                 theme.btn_card_action(theme.ACCENT_BLUE, theme.ACCENT_BLUE_HOVER,
                                       radius=6, padding=8, font_size=13)
             )
-            self._action_btn.clicked.connect(
-                lambda: self.launch_requested.emit(self._pkg_id)
-            )
+            self._action_handler = lambda: self.launch_requested.emit(
+                self._pkg_id)
+            self._action_btn.clicked.connect(self._action_handler)
             self._uninstall_btn.setVisible(True)
         else:
             self._action_btn.setText(t("install"))
@@ -476,7 +490,7 @@ class PackageDetailPanel(QtWidgets.QWidget):
                                       text_color=theme.BG_PRIMARY,
                                       radius=6, padding=8, font_size=13)
             )
-            self._action_btn.clicked.connect(
-                lambda: self.install_requested.emit(self._pkg_id)
-            )
+            self._action_handler = lambda: self.install_requested.emit(
+                self._pkg_id)
+            self._action_btn.clicked.connect(self._action_handler)
             self._uninstall_btn.setVisible(False)

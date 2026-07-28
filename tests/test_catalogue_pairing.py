@@ -1,4 +1,4 @@
-﻿"""Unit tests for the registry pairing helper's pure logic.
+"""Unit tests for the registry pairing helper's pure logic.
 
 The Qt-dependent bits (stamp_local_registry_with_prompt,
 resolve_duplicate_registry) can't be exercised headlessly here, but the
