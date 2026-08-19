@@ -191,7 +191,12 @@ class _ModuleInfo(object):
             elif isinstance(node, ast.Import):
                 for alias in node.names:
                     head = alias.name.split(".")[0]
-                    if head == "maya":
+                    if head == "maya" and top:
+                        # Only a module-level `import maya...` has to move into
+                        # the guarded prologue, so the file still loads outside
+                        # Maya. One inside a function is usually the author
+                        # asking "am I running in Maya?" and has to keep
+                        # raising, or the answer becomes a lie.
                         self._mark(node)
                         bound = alias.asname or head
                         stmt = "import {}{}".format(

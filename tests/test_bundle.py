@@ -339,3 +339,24 @@ def test_reading_dunder_file_inside_a_function_is_allowed(tmp_path):
     ))
     ns = _run(build_source(folder))
     assert ns["here"]() is None
+
+
+def test_a_maya_import_inside_a_function_keeps_raising(tmp_path):
+    # `try: import maya.cmds` inside a function is how a tool asks whether it
+    # is running in Maya. Hoisting that into the guarded prologue would make
+    # the check answer yes forever.
+    folder = str(tmp_path / "pkg")
+    _minimal(folder)
+    _write(os.path.join(folder, "my_tool/theme.py"), (
+        "COLOR = '#123456'\n"
+        "\n"
+        "\n"
+        "def in_maya():\n"
+        "    try:\n"
+        "        import maya.cmds as cmds\n"
+        "    except ImportError:\n"
+        "        return None\n"
+        "    return cmds\n"
+    ))
+    ns = _run(build_source(folder))
+    assert ns["in_maya"]() is None
