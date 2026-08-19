@@ -76,6 +76,27 @@ def register_package_subparser(sub):
         help="Overwrite even if the target folder already has files",
     )
 
+    bundle_p = pkg_sub.add_parser(
+        "bundle",
+        help="Fold a python_package into one shareable .py file",
+    )
+    bundle_p.add_argument(
+        "path", nargs="?", default=".",
+        help="Path to package folder (default: .)",
+    )
+    bundle_p.add_argument(
+        "--out",
+        help="Output file (default: <package>_standalone.py in the folder)",
+    )
+    bundle_p.add_argument(
+        "--check", action="store_true",
+        help="Only verify the existing file is current; write nothing",
+    )
+    bundle_p.add_argument(
+        "--plan", action="store_true",
+        help="Show what would be folded, and what stops it, then stop",
+    )
+
     pack_p = pkg_sub.add_parser(
         "pack",
         help="Build a publishable <name>-<version>.zip from a package folder",
@@ -109,6 +130,8 @@ def dispatch_package(args, parser):
         _package_schema(args)
     elif cmd == "pack":
         _package_pack(args)
+    elif cmd == "bundle":
+        _package_bundle(args)
     elif cmd == "init":
         _package_init(args)
     else:
@@ -355,6 +378,32 @@ def _package_pack(args):
         print("ERROR: {}".format(exc), file=sys.stderr)
         sys.exit(1)
     print("Built {}".format(zip_path))
+
+
+def _package_bundle(args):
+    from carton.core.bundle import bundle_package, plan_bundle, BundleError
+
+    target = os.path.abspath(args.path or ".")
+    try:
+        if args.plan:
+            order, _infos, problems, _meta, pkg, function = plan_bundle(target)
+            print("{} -> single file, entry {}.{}()".format(pkg, pkg, function))
+            for mod in order:
+                print("  {}".format(mod))
+            if problems:
+                print("", file=sys.stderr)
+                print("Cannot be folded into one file:", file=sys.stderr)
+                for problem in problems:
+                    print("  {}".format(problem), file=sys.stderr)
+                sys.exit(1)
+            print("")
+            print("{} modules, nothing in the way.".format(len(order)))
+            return
+        path = bundle_package(target, out_path=args.out, check=args.check)
+    except BundleError as exc:
+        print("ERROR: {}".format(exc), file=sys.stderr)
+        sys.exit(1)
+    print("{} {}".format("Checked" if args.check else "Built", path))
 
 
 def _print_bundled_schema(filename):

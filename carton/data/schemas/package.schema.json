@@ -169,6 +169,18 @@
       "type": "array",
       "items": { "type": "string" },
       "description": "検索・分類用タグ"
+    },
+    "bundle": {
+      "type": "object",
+      "description": "carton-maya package bundle (単体ファイル化) の設定",
+      "properties": {
+        "data": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "単体ファイルに同梱する実行時データのグロブ (パッケージフォルダからの相対)。BUNDLED_DATA として埋め込まれ、パッケージとして動くときは従来どおりディスクを読む"
+        }
+      },
+      "additionalProperties": false
     }
   },
   "allOf": [

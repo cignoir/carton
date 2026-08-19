@@ -348,6 +348,42 @@ uvx carton-maya package lint
 
 Maya 外で配布用 zip をビルドします。CI で publish する直前に使う想定。
 
+#### `package bundle`
+
+`python_package` を 1 枚の `.py` に畳みます。Carton を持っていない人に
+ツールを渡すためのものです。渡された側は scripts フォルダに置いて import
+するか、ASCII だけの 2 行を貼って UTF-8 として読み込みます。ロケールが
+UTF-8 でない Windows では、非 ASCII を含むソースを丸ごと貼ると文字化けする
+ことがあるので、この 2 行が効きます。
+
+```bash
+uvx carton-maya package bundle              # <package>_standalone.py を書き出す
+uvx carton-maya package bundle --check      # コミット済みのものが最新か
+uvx carton-maya package bundle --plan       # 何が畳まれるか / 何が邪魔しているか
+```
+
+中身はパッケージのソースを依存順に並べたものなので、普通に読めますし直せます
+（ただし直すならパッケージ側を直して作り直すこと）。生成物をコミットして CI で
+`--check` を回せば、パッケージだけ直して配布物が古いまま、という事故を防げます。
+
+畳まれるのはエントリポイントから実際に到達するモジュールだけです。誰も import
+していない Maya プラグインやシェルフ用のヘルパーは、そのまま外に残ります。
+
+1 つの名前空間に畳むのは常に安全とは限らず、**間違った単体ファイルは無いより
+たちが悪い**です（名前が黙って別の定義に解決されることがある）。循環 import、
+同じトップレベル名を持つモジュールが 2 つある、import 中に `__file__` を読む、
+のいずれかがあると、推測せずに拒否します。何が邪魔しているかは `--plan` が出します。
+
+実行時に読むデータも一緒に運べます。package.json で指定します：
+
+```json
+"bundle": { "data": ["presets/*.json"] }
+```
+
+指定したファイルは ASCII エスケープした `BUNDLED_DATA` として埋め込まれます。
+パッケージ側はその名前を見に行き、無ければ従来どおりディスクを読む、と書いて
+おけば、1 つのコードで両方に対応できます。
+
 #### `package schema`
 
 `package.json` の JSON Schema を stdout に吐きます。IDE の JSON 補完設定に使えます：

@@ -373,6 +373,45 @@ only**. Designed for CI:
 
 Builds a distributable zip outside Maya. Useful in CI right before publish.
 
+#### `package bundle`
+
+Folds a `python_package` into one shareable `.py` file, for handing the tool
+to someone who does not have Carton. They drop it in their scripts folder and
+import it, or paste two ASCII lines that read it as UTF-8 — which matters on a
+Windows install whose locale is not UTF-8, where pasting a whole file of
+non-ASCII source can arrive corrupted.
+
+```bash
+uvx carton-maya package bundle              # write <package>_standalone.py
+uvx carton-maya package bundle --check      # is the committed one current?
+uvx carton-maya package bundle --plan       # what would be folded, and why not
+```
+
+The output is the package's own sources in dependency order, so it stays
+readable and editable — though edits belong in the package, with the file
+built again afterwards. Commit it and run `--check` in CI so a fix to the
+package cannot quietly ship a stale copy.
+
+Only modules the entry point actually reaches are folded, so a Maya plugin or
+a shelf helper that nothing imports stays out on its own.
+
+Folding many modules into one namespace is not always safe, and a wrong bundle
+is worse than none — it can resolve a name to the wrong definition without
+saying so. The command refuses instead of guessing when the package has
+circular imports, two modules defining the same top-level name, or a module
+that reads `__file__` while being imported. `--plan` names what is in the way.
+
+Data the tool reads at runtime can travel along, named in `package.json`:
+
+```json
+"bundle": { "data": ["presets/*.json"] }
+```
+
+Those files are embedded as `BUNDLED_DATA`, escaped to plain ASCII. The
+package looks that name up and falls back to reading disk when it is absent,
+which is what happens when it runs as a normal package — so one code path
+serves both.
+
 #### `package schema`
 
 Prints the `package.json` JSON Schema to stdout. Wire into your IDE for
