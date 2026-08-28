@@ -156,7 +156,8 @@ def test_asset_sha256_parsing():
 
 def _load_bootstrap():
     path = os.path.join(os.path.dirname(__file__), os.pardir,
-                        "bootstrap", "carton_bootstrap.py")
+                        "carton", "data", "bootstrap",
+                        "carton_bootstrap.py")
     spec = importlib.util.spec_from_file_location("carton_bootstrap_ut",
                                                   os.path.abspath(path))
     module = importlib.util.module_from_spec(spec)
@@ -361,8 +362,9 @@ class TestShippedBootstrapIsTheTestedBootstrap:
 
     These two used to be separate hand-maintained copies, and the one
     users actually ran was the copy without staged-update sha256
-    verification. Everything above this line tests ``bootstrap/`` — this
-    test is what makes those assertions mean something in production.
+    verification. Everything above this line tests
+    ``carton/data/bootstrap/`` — this test is what makes those
+    assertions mean something in production.
     """
 
     def _build_installer(self, tmp_path, monkeypatch):
@@ -385,8 +387,8 @@ class TestShippedBootstrapIsTheTestedBootstrap:
             self, tmp_path, monkeypatch):
         gen = self._build_installer(tmp_path, monkeypatch)
         repo_bootstrap = os.path.join(
-            os.path.dirname(__file__), os.pardir, "bootstrap",
-            "carton_bootstrap.py")
+            os.path.dirname(__file__), os.pardir, "carton", "data",
+            "bootstrap", "carton_bootstrap.py")
         with open(os.path.abspath(repo_bootstrap), "r", encoding="utf-8") as f:
             expected = f.read()
 
@@ -404,7 +406,8 @@ class TestShippedBootstrapIsTheTestedBootstrap:
             self, tmp_path, monkeypatch):
         gen = self._build_installer(tmp_path, monkeypatch)
         repo_hook = os.path.join(os.path.dirname(__file__), os.pardir,
-                                 "bootstrap", "userSetup.py")
+                                 "carton", "data", "bootstrap",
+                                 "userSetup.py")
         with open(os.path.abspath(repo_hook), "r", encoding="utf-8") as f:
             expected = f.read()
 

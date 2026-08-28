@@ -6,7 +6,8 @@ function only depends on:
 
   * the live ``carton`` package directory (located via
     ``os.path.dirname(carton.__file__)``)
-  * ``carton/data/install_carton.template.py`` shipped inside that
+  * ``carton/data/install_carton.template.py`` and the bootstrap
+    sources under ``carton/data/bootstrap/``, both shipped inside that
     package
   * an output path
 
@@ -25,6 +26,8 @@ import carton
 _EXCLUDE_DIRS = {"__pycache__", ".git", ".svn", ".idea", ".vscode"}
 SEED_TOKEN = "__SEED_CONFIG_JSON__"
 PROFILE_NAME_TOKEN = "__SEED_PROFILE_NAME__"
+BOOTSTRAP_TOKEN = "__BOOTSTRAP_PY_LITERAL__"
+USERSETUP_TOKEN = "__USERSETUP_HOOK_LITERAL__"
 
 
 def _carton_pkg_dir():
@@ -35,7 +38,35 @@ def _template_path():
     return os.path.join(_carton_pkg_dir(), "data", "install_carton.template.py")
 
 
-def _zip_carton_to_bytes():
+def _bootstrap_dir():
+    return os.path.join(_carton_pkg_dir(), "data", "bootstrap")
+
+
+def _read_text(path):
+    with open(path, "r", encoding="utf-8") as f:
+        return f.read()
+
+
+def _bootstrap_literals():
+    """Return ``(bootstrap_literal, usersetup_literal)`` for substitution.
+
+    Both are ``repr()``-encoded so the generated installer holds them as
+    plain Python string literals - the same trick used for SEED_CONFIG.
+    That keeps the substitution total: the bootstrap source can contain
+    any quoting, docstrings or backslashes without needing an escaping
+    convention agreed between two files.
+
+    The userSetup hook gets a leading newline because the installer
+    *appends* it to a userSetup.py that may already have content; without
+    the separator the hook would run onto the end of the user's last line.
+    """
+    bootstrap_dir = _bootstrap_dir()
+    bootstrap_src = _read_text(os.path.join(bootstrap_dir, "carton_bootstrap.py"))
+    usersetup_src = "\n" + _read_text(os.path.join(bootstrap_dir, "userSetup.py"))
+    return repr(bootstrap_src), repr(usersetup_src)
+
+
+def carton_zip_bytes():
     """Bundle the live ``carton/`` package into an in-memory zip blob.
 
     Arcnames are made relative to the *parent* of carton/ so the layout
@@ -80,7 +111,7 @@ def build_one(output_path, version=None, seed=None, language="auto",
     os.makedirs(out_dir, exist_ok=True)
 
     # 1. Zip the live carton/ package in memory
-    b64 = base64.b64encode(_zip_carton_to_bytes()).decode("ascii")
+    b64 = base64.b64encode(carton_zip_bytes()).decode("ascii")
 
     # 2. Read template + substitute placeholders
     tpl_path = _template_path()
@@ -93,12 +124,15 @@ def build_one(output_path, version=None, seed=None, language="auto",
         template = f.read()
     seed_literal = repr(seed) if seed is not None else "None"
     profile_literal = repr(profile_name) if profile_name else "None"
+    bootstrap_literal, usersetup_literal = _bootstrap_literals()
     installer = (
         template
         .replace("__VERSION__", version)
         .replace("__CARTON_ZIP_B64__", b64)
         .replace(SEED_TOKEN, seed_literal)
         .replace(PROFILE_NAME_TOKEN, profile_literal)
+        .replace(BOOTSTRAP_TOKEN, bootstrap_literal)
+        .replace(USERSETUP_TOKEN, usersetup_literal)
         .replace("__LANGUAGE__", language)
     )
 

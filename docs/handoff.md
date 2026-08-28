@@ -94,21 +94,21 @@ F:\workspace\carton\
 │   ├── models/
 │   │   ├── package_info.py      # PackageInfo model
 │   │   └── version.py           # Semantic versioning
-│   └── ui/
-│       ├── main_window.py       # Main window with registry grouping
-│       ├── package_card.py      # Package card widget
-│       ├── package_detail.py    # Package detail panel
-│       ├── add_dialog.py        # Add file/folder dialog
-│       ├── edit_dialog.py       # Edit metadata + unpublish dialog
-│       ├── settings_dialog.py   # Registry management + uninstall
-│       ├── shelf.py             # Maya menu registration
-│       ├── compat.py            # PySide2/6 compatibility
-│       └── i18n.py              # Internationalization (en/ja)
-├── bootstrap/
-│   ├── userSetup.py             # Maya scripts/ entry
-│   └── carton_bootstrap.py      # Self-update + import carton
-├── installer/
-│   └── install_carton.template.py  # D&D installer template
+│   ├── ui/
+│   │   ├── main_window.py       # Main window with registry grouping
+│   │   ├── package_card.py      # Package card widget
+│   │   ├── package_detail.py    # Package detail panel
+│   │   ├── add_dialog.py        # Add file/folder dialog
+│   │   ├── edit_dialog.py       # Edit metadata + unpublish dialog
+│   │   ├── settings_dialog.py   # Registry management + uninstall
+│   │   ├── shelf.py             # Maya menu registration
+│   │   ├── compat.py            # PySide2/6 compatibility
+│   │   └── i18n.py              # Internationalization (en/ja)
+│   └── data/
+│       ├── install_carton.template.py  # D&D installer template
+│       └── bootstrap/           # Inlined into the installer at build time
+│           ├── userSetup.py             # Maya scripts/ entry
+│           └── carton_bootstrap.py      # Self-update + import carton
 ├── .github/workflows/
 │   └── release.yml              # GitHub Release + installer generation
 ├── schemas/                     # JSON schemas

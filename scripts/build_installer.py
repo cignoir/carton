@@ -14,44 +14,34 @@ Usage:
     python scripts/build_installer.py \\
         --profile path/to/studio.json \\
         --output dist/install_carton_studio.py
+
+The template substitution itself lives in
+:mod:`carton.core.installer_artifact`, which is also what the in-Maya
+"Build Installer" button calls. This script only adds what release
+builds need on top of it: the version fan-out, the filename convention
+and the ``carton-v<ver>.zip`` the self-updater downloads. Two builders
+with their own copy of the substitution is exactly how the runtime one
+came to miss the bootstrap tokens and emit installers that died with a
+NameError on drop.
 """
 
 import argparse
-import base64
 import json
 import os
 import sys
-import zipfile
 
 ROOT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-CARTON_DIR = os.path.join(ROOT_DIR, "carton")
-TEMPLATE_PATH = os.path.join(CARTON_DIR, "data", "install_carton.template.py")
 DIST_DIR = os.path.join(ROOT_DIR, "dist")
 
-# The bootstrap deployed to the user's Maya scripts directory. Inlined
-# into the generated installer at build time so the file the test suite
-# runs is byte-for-byte the file users get — see the note in
-# install_carton.template.py.
-BOOTSTRAP_DIR = os.path.join(ROOT_DIR, "bootstrap")
-BOOTSTRAP_PATH = os.path.join(BOOTSTRAP_DIR, "carton_bootstrap.py")
-USERSETUP_PATH = os.path.join(BOOTSTRAP_DIR, "userSetup.py")
-
-# Make `import carton.core.profile` work when this script is run directly
-# without an editable install of the package.
+# Make `import carton...` resolve to this checkout rather than to any
+# pip-installed copy, so a release build ships the code being released.
 if ROOT_DIR not in sys.path:
     sys.path.insert(0, ROOT_DIR)
 
-_EXCLUDE_DIRS = {"__pycache__", ".git", ".svn", ".idea", ".vscode"}
+from carton.core import installer_artifact  # noqa: E402
 
 # Language variants to build by default
 DEFAULT_LANGUAGES = ["auto", "ja", "en"]
-
-# Token in the template that gets replaced with the JSON-encoded seed
-# config (or "null" when no profile is supplied).
-SEED_TOKEN = "__SEED_CONFIG_JSON__"
-PROFILE_NAME_TOKEN = "__SEED_PROFILE_NAME__"
-BOOTSTRAP_TOKEN = "__BOOTSTRAP_PY_LITERAL__"
-USERSETUP_TOKEN = "__USERSETUP_HOOK_LITERAL__"
 
 
 def _detect_version():
@@ -76,29 +66,6 @@ def _installer_filename(version, lang):
     return "install_carton_{}_v{}.py".format(lang, safe_ver)
 
 
-def _read_text(path):
-    with open(path, "r", encoding="utf-8") as f:
-        return f.read()
-
-
-def _bootstrap_literals():
-    """Return ``(bootstrap_literal, usersetup_literal)`` for substitution.
-
-    Both are ``repr()``-encoded so the generated installer holds them as
-    plain Python string literals — the same trick used for SEED_CONFIG.
-    That keeps the substitution total: the bootstrap source can contain
-    any quoting, docstrings or backslashes without needing an escaping
-    convention agreed between two files.
-
-    The userSetup hook gets a leading newline because the installer
-    *appends* it to a userSetup.py that may already have content; without
-    the separator the hook would run onto the end of the user's last line.
-    """
-    bootstrap_src = _read_text(BOOTSTRAP_PATH)
-    usersetup_src = "\n" + _read_text(USERSETUP_PATH)
-    return repr(bootstrap_src), repr(usersetup_src)
-
-
 def _load_profile_seed(profile_path):
     """Load and validate a profile JSON, return its dict form.
 
@@ -113,60 +80,30 @@ def _load_profile_seed(profile_path):
     return profile.to_dict()
 
 
+def _profile_name(profile_path):
+    """Derive the seeded profile's name from its filename."""
+    if not profile_path:
+        return None
+    base = os.path.basename(profile_path)
+    if base.endswith(".json"):
+        base = base[:-5]
+    return base or None
+
+
 def build(version=None, languages=None, profile_path=None, output=None):
     version = version or _detect_version()
     languages = languages or DEFAULT_LANGUAGES
 
     seed = _load_profile_seed(profile_path)
-    # The token in the template is substituted as a Python literal so the
-    # generated installer can be `import`-loaded without a runtime parse.
-    # repr() handles dict / list / str / bool / None cleanly for our
-    # field types and emits ``True`` / ``False`` / ``None`` (not the JSON
-    # ``true`` / ``false`` / ``null``).
-    seed_literal = repr(seed) if seed is not None else "None"
-    profile_name = None
-    if profile_path:
-        base = os.path.basename(profile_path)
-        if base.endswith(".json"):
-            base = base[:-5]
-        profile_name = base or None
-    profile_name_literal = repr(profile_name) if profile_name else "None"
+    profile_name = _profile_name(profile_path)
 
     os.makedirs(DIST_DIR, exist_ok=True)
-    zip_path = os.path.join(DIST_DIR, "carton.zip")
 
-    # 1. Create zip
-    with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as zf:
-        for root, dirs, files in os.walk(CARTON_DIR):
-            dirs[:] = [d for d in dirs if d not in _EXCLUDE_DIRS]
-            for f in files:
-                if f.endswith(".pyc"):
-                    continue
-                fp = os.path.join(root, f)
-                arcname = os.path.relpath(fp, ROOT_DIR)
-                zf.write(fp, arcname)
-
-    # 2. Base64 encode
-    with open(zip_path, "rb") as f:
-        b64 = base64.b64encode(f.read()).decode("ascii")
-
-    # 3. Rename zip for release (used by self-updater)
+    # The release zip the self-updater downloads. Same tree the
+    # installers carry inline, written out once as its own asset.
     release_zip = os.path.join(DIST_DIR, "carton-v{}.zip".format(version))
-    os.replace(zip_path, release_zip)
-
-    # 4. Read template and substitute the static placeholders.
-    with open(TEMPLATE_PATH, "r", encoding="utf-8") as f:
-        template = f.read()
-    bootstrap_literal, usersetup_literal = _bootstrap_literals()
-    base = (
-        template
-        .replace("__VERSION__", version)
-        .replace("__CARTON_ZIP_B64__", b64)
-        .replace(SEED_TOKEN, seed_literal)
-        .replace(PROFILE_NAME_TOKEN, profile_name_literal)
-        .replace(BOOTSTRAP_TOKEN, bootstrap_literal)
-        .replace(USERSETUP_TOKEN, usersetup_literal)
-    )
+    with open(release_zip, "wb") as f:
+        f.write(installer_artifact.carton_zip_bytes())
 
     release_kb = os.path.getsize(release_zip) / 1024
     print("Carton v{}".format(version))
@@ -176,26 +113,25 @@ def build(version=None, languages=None, profile_path=None, output=None):
             os.path.basename(profile_path), len(seed.get("catalogues", [])),
         ))
 
-    # 5. Output mode A: explicit --output → single file, language taken
+    # Output mode A: explicit --output → single file, language taken
     # from the profile if it sets one, otherwise "auto".
     if output:
         lang = (seed or {}).get("language", "auto")
-        installer = base.replace("__LANGUAGE__", lang)
-        out_path = os.path.abspath(output)
-        os.makedirs(os.path.dirname(out_path) or ".", exist_ok=True)
-        with open(out_path, "w", encoding="utf-8") as f:
-            f.write(installer)
+        out_path = installer_artifact.build_one(
+            output, version=version, seed=seed, language=lang,
+            profile_name=profile_name,
+        )
         out_kb = os.path.getsize(out_path) / 1024
         print("  {:>2}: {:.1f} KB  ({})".format(lang, out_kb, out_path))
         return
 
     # Output mode B: default fan-out, one installer per language variant.
     for lang in languages:
-        installer = base.replace("__LANGUAGE__", lang)
         out_name = _installer_filename(version, lang)
-        out_path = os.path.join(DIST_DIR, out_name)
-        with open(out_path, "w", encoding="utf-8") as f:
-            f.write(installer)
+        out_path = installer_artifact.build_one(
+            os.path.join(DIST_DIR, out_name), version=version, seed=seed,
+            language=lang, profile_name=profile_name,
+        )
         out_kb = os.path.getsize(out_path) / 1024
         print("  {:>2}: {:.1f} KB  ({})".format(lang, out_kb, out_name))
 

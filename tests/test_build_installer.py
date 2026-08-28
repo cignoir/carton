@@ -127,3 +127,64 @@ class TestTemplateSeedSemantics:
     def test_no_seed_in_default_build(self, tmp_path, monkeypatch):
         mod = self._load_generated(tmp_path, monkeypatch, seed=None)
         assert mod.SEED_CONFIG is None
+
+
+class TestRuntimeBuilderSubstitution:
+    """The in-Maya "Build Installer" path must substitute every token.
+
+    ``carton.core.installer_artifact`` is what the Profile Manager
+    button calls. It used to carry its own copy of the substitution
+    list, which silently fell behind the template when the bootstrap
+    tokens were added: the button produced installers that raised
+    ``NameError: name '__USERSETUP_HOOK_LITERAL__' is not defined`` the
+    moment they were dropped onto Maya. The scan below is deliberately
+    generic so a token added to the template in future fails here
+    rather than on a user's machine.
+    """
+
+    def _build(self, tmp_path, **kwargs):
+        from carton.core import installer_artifact
+        out_path = tmp_path / "install_runtime.py"
+        installer_artifact.build_one(str(out_path), version="9.9.9", **kwargs)
+        return out_path.read_text(encoding="utf-8")
+
+    def test_no_placeholder_survives(self, tmp_path):
+        import re
+        content = self._build(tmp_path)
+        leftovers = sorted(set(re.findall(r"__[A-Z][A-Z0-9_]*__", content)))
+        assert leftovers == [], "unsubstituted placeholders: {}".format(leftovers)
+
+    def test_generated_installer_imports(self, tmp_path):
+        content = self._build(tmp_path)
+        out_path = tmp_path / "install_runtime.py"
+        spec = importlib.util.spec_from_file_location(
+            "_gen_runtime_installer", str(out_path))
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+
+        assert mod.CARTON_VERSION == "9.9.9"
+        # The bootstrap sources are inlined verbatim, not left as tokens.
+        assert "def _apply_pending_update" in mod.BOOTSTRAP_PY
+        assert "carton_bootstrap" in mod.USERSETUP_HOOK
+        assert mod.USERSETUP_HOOK.startswith("\n")
+        assert content.count("BOOTSTRAP_PY = ") == 1
+
+    def test_both_builders_agree_on_the_bootstrap(self, tmp_path, monkeypatch):
+        """The dev script and the runtime path ship the same bootstrap."""
+        from carton.core import installer_artifact
+        builder = _load_builder()
+        monkeypatch.setattr(builder, "DIST_DIR", str(tmp_path))
+        dev_path = tmp_path / "install_dev.py"
+        builder.build(version="9.9.9", output=str(dev_path))
+
+        runtime_path = tmp_path / "install_runtime.py"
+        installer_artifact.build_one(str(runtime_path), version="9.9.9")
+
+        def _literals(path):
+            spec = importlib.util.spec_from_file_location(
+                "_gen_" + path.stem, str(path))
+            mod = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(mod)
+            return mod.BOOTSTRAP_PY, mod.USERSETUP_HOOK
+
+        assert _literals(dev_path) == _literals(runtime_path)

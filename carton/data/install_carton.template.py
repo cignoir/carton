@@ -32,9 +32,12 @@ SEED_CONFIG = __SEED_CONFIG_JSON__
 SEED_PROFILE_NAME = __SEED_PROFILE_NAME__
 
 # ---- Bootstrap ----
-# Both of these are substituted by scripts/build_installer.py with the
-# verbatim contents of ``bootstrap/userSetup.py`` and
-# ``bootstrap/carton_bootstrap.py`` (as Python string literals).
+# Both of these are substituted by carton.core.installer_artifact with
+# the verbatim contents of ``carton/data/bootstrap/userSetup.py`` and
+# ``carton/data/bootstrap/carton_bootstrap.py`` (as Python string
+# literals). They live inside the package rather than beside it so a
+# deployed Carton - which has no source tree next to it - can still
+# build an installer from the Profile Manager.
 #
 # They used to be maintained as a second, hand-written copy inline here.
 # That copy is what actually landed on user machines, so it silently
