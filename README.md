@@ -98,7 +98,14 @@ visible install refusal.
 
 ## Requirements
 
-- Maya 2024 / 2025 / 2026 / 2027
+- Maya 2022 or newer, started in Python 3 mode
+  (that is the default from Maya 2022 on)
+
+  Carton needs a Python 3 interpreter and a PySide2 / PySide6
+  binding — nothing tied to a particular Maya year, so the installer
+  checks the interpreter rather than an allowlist of versions. The
+  test suite runs on Python 3.9 (Maya 2023) upward in CI; Maya 2022's
+  Python 3.7 is supported but not exercised there.
 
 ## Quick Start
 

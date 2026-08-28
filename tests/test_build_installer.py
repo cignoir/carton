@@ -188,3 +188,46 @@ class TestRuntimeBuilderSubstitution:
             return mod.BOOTSTRAP_PY, mod.USERSETUP_HOOK
 
         assert _literals(dev_path) == _literals(runtime_path)
+
+
+class TestPythonVersionGate:
+    """The installer refuses interpreters, not Maya years.
+
+    The gate used to be an allowlist of Maya versions, which turned away
+    2022 and 2023 — both of which ship Python 3 and PySide2 and run the
+    suite fine — and would have turned away each new Maya until someone
+    edited the list. What Carton cannot run on is Python 2.
+    """
+
+    def _load(self, tmp_path):
+        from carton.core import installer_artifact
+        out_path = tmp_path / "install_gate.py"
+        installer_artifact.build_one(str(out_path), version="9.9.9")
+        spec = importlib.util.spec_from_file_location(
+            "_gen_gate_installer", str(out_path))
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+        return mod
+
+    @pytest.mark.parametrize("version_info", [
+        (3, 7, 7),      # Maya 2022
+        (3, 9, 7),      # Maya 2023
+        (3, 10, 8),     # Maya 2024
+        (3, 11, 4),     # Maya 2025 / 2026
+        (3, 14, 0),     # whatever ships next
+    ])
+    def test_python3_interpreters_are_accepted(self, tmp_path, version_info):
+        mod = self._load(tmp_path)
+        assert mod._unsupported_python_message(version_info) == ""
+
+    def test_python2_is_refused_with_a_reason(self, tmp_path):
+        mod = self._load(tmp_path)
+        message = mod._unsupported_python_message((2, 7, 18))
+        assert message
+        assert "2.7" in message
+        assert "3.7" in message
+
+    def test_no_maya_version_allowlist_remains(self, tmp_path):
+        mod = self._load(tmp_path)
+        assert not hasattr(mod, "SUPPORTED_MAYA")
+        assert mod.MIN_PYTHON == (3, 7)

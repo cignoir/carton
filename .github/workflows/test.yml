@@ -63,3 +63,34 @@ jobs:
           QT_QPA_PLATFORM: offscreen
         run: |
           python -m pytest tests/ -v
+
+  runtime-floor:
+    name: pytest (Maya's interpreter floor, Python ${{ matrix.python-version }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # Maya 2023 runs Python 3.9 and Maya 2022 runs 3.7. The installer
+        # accepts any Python 3, so the suite has to keep working below the
+        # 3.10 floor that `pyproject.toml` declares for the pip-installed
+        # CLI. Carton is not installed here on purpose - `pip install -e .`
+        # would refuse these versions, and inside Maya nothing pip-installs
+        # it either; the tests import it from the checkout, exactly as Maya
+        # imports it from the deployed directory.
+        python-version: ["3.9"]
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+
+      - name: Install test dependencies only
+        run: python -m pip install pytest jsonschema questionary
+
+      - name: Run pytest
+        # No Qt binding on this interpreter, so the widget tests skip
+        # themselves. Everything else is the code Maya 2022 / 2023 run.
+        run: python -m pytest tests/ -q

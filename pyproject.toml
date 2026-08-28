@@ -7,6 +7,10 @@ name = "carton-maya"
 version = "0.5.13"
 description = "Local-first package manager for Autodesk Maya tools"
 readme = "README.md"
+# The pip-installed `carton-maya` CLI only. Inside Maya, Carton is
+# imported from a deployed directory rather than pip-installed, and
+# runs on Maya 2022's Python 3.7 upward - see the runtime-floor job
+# in .github/workflows/test.yml.
 requires-python = ">=3.10"
 license = { text = "MIT" }
 authors = [

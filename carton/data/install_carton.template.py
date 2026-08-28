@@ -16,7 +16,15 @@ import zipfile
 # ---- Settings (auto-embedded by CI/CD) ----
 CARTON_VERSION = "__VERSION__"
 CARTON_LANGUAGE = "__LANGUAGE__"
-SUPPORTED_MAYA = ["2024", "2025", "2026", "2027"]
+
+# What Carton actually needs is a Python 3 interpreter and a PySide2 or
+# PySide6 binding — neither of which is tied to a Maya year. This used to
+# be an allowlist of years, which rejected Maya 2022 and 2023 (both ship
+# Python 3 and PySide2, and the test suite passes on their interpreters)
+# and would have rejected 2028 on the day it shipped. Checking the
+# interpreter instead refuses exactly the case that cannot work: a Maya
+# started in Python 2 mode.
+MIN_PYTHON = (3, 7)
 
 # CI/CD pipeline embeds the Base64-encoded zip here
 CARTON_ZIP_B64 = """__CARTON_ZIP_B64__"""
@@ -76,19 +84,34 @@ def _detect_install_dir():
     return os.path.normpath(os.path.expanduser("~/maya/carton"))
 
 
+def _unsupported_python_message(version_info=None):
+    """Return the refusal message, or "" when this interpreter will do.
+
+    Kept separate from the drop handler so it can be tested without a
+    running Maya. This file stays Python 2 parseable on purpose: a Maya
+    launched in Python 2 mode has to reach this check and be told why,
+    rather than dying on a SyntaxError before the dialog appears.
+    """
+    version_info = version_info or sys.version_info
+    if tuple(version_info[:2]) >= MIN_PYTHON:
+        return ""
+    return (
+        "Carton には Python {}.{} 以降で動作する Maya が必要です"
+        "（このMayaは Python {}.{} です）。\n"
+        "Maya 2022 以降、または Python 3 モードで起動した Maya を"
+        "お使いください。".format(
+            MIN_PYTHON[0], MIN_PYTHON[1], version_info[0], version_info[1],
+        )
+    )
+
+
 def onMayaDroppedPythonFile(*args, **kwargs):
     """Maya Drag & Drop entry point."""
     import maya.cmds as cmds
 
-    maya_version = cmds.about(version=True)
-
-    if maya_version not in SUPPORTED_MAYA:
-        _show_dialog(
-            "Carton",
-            "Maya {} は非対応です。\n対応バージョン: {}".format(
-                maya_version, ", ".join(SUPPORTED_MAYA)
-            ),
-        )
+    refusal = _unsupported_python_message()
+    if refusal:
+        _show_dialog("Carton", refusal)
         return
 
     # Installation destination (shared across Maya versions)
