@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "carton-maya"
-version = "0.5.12"
+version = "0.5.13"
 description = "Local-first package manager for Autodesk Maya tools"
 readme = "README.md"
 requires-python = ">=3.10"
