@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "carton-maya"
-version = "0.5.14"
+version = "0.5.15"
 description = "Local-first package manager for Autodesk Maya tools"
 readme = "README.md"
 # The pip-installed `carton-maya` CLI only. Inside Maya, Carton is
