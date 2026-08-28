@@ -299,6 +299,7 @@ class CartonWindow(_CartonWindowBase):
         layout.setSpacing(10)
 
         self._build_update_banner(layout)
+        self._build_catalogue_error_banner(layout)
         self._build_search_row(layout)
         self._build_toolbar(layout)
         self._build_card_list(layout)
@@ -332,6 +333,68 @@ class CartonWindow(_CartonWindowBase):
         self._update_banner_btn.setVisible(False)
         banner_layout.addWidget(self._update_banner_btn)
         parent_layout.addWidget(self._update_banner)
+
+    def _build_catalogue_error_banner(self, parent_layout):
+        """Banner for catalogues that failed to load on the last fetch.
+
+        A subscribed catalogue that can't be read used to vanish without
+        a word — its packages were simply absent, which reads as "Carton
+        lost my subscription" rather than "that host didn't answer". A
+        row banner rather than a dialog: this fires on every refresh, and
+        a modal on a flaky network would be unusable.
+        """
+        self._catalogue_error_banner = QtWidgets.QWidget()
+        self._catalogue_error_banner.setFixedHeight(32)
+        self._catalogue_error_banner.setStyleSheet(
+            "QWidget { background: #2d1c1c; border: 1px solid #4a2a2a;"
+            "  border-radius: 6px; }"
+        )  # Unique banner colors intentionally not in theme
+        self._catalogue_error_banner.setVisible(False)
+        banner_layout = QtWidgets.QHBoxLayout(self._catalogue_error_banner)
+        banner_layout.setContentsMargins(10, 0, 6, 0)
+        banner_layout.setSpacing(8)
+
+        self._catalogue_error_label = QtWidgets.QLabel()
+        self._catalogue_error_label.setStyleSheet(
+            "color: {}; font-size: 11px; background: transparent;".format(
+                theme.ACCENT_RED)
+        )
+        banner_layout.addWidget(self._catalogue_error_label)
+        banner_layout.addStretch()
+
+        retry_btn = QtWidgets.QPushButton(t("catalogue_error_retry"))
+        retry_btn.setFixedHeight(20)
+        retry_btn.setStyleSheet(
+            "QPushButton {{ background: transparent; color: {c};"
+            "  border: 1px solid {c}; border-radius: 3px; padding: 0 10px;"
+            "  font-size: 11px; }}"
+            "QPushButton:hover {{ background: {c}; color: white; }}".format(
+                c=theme.ACCENT_RED)
+        )
+        retry_btn.clicked.connect(self.refresh)
+        banner_layout.addWidget(retry_btn)
+        parent_layout.addWidget(self._catalogue_error_banner)
+
+    def _update_catalogue_error_banner(self):
+        """Show / hide the banner from the last fetch's failures."""
+        errors = []
+        if self._catalogue_client and hasattr(
+                self._catalogue_client, "get_fetch_errors"):
+            errors = self._catalogue_client.get_fetch_errors()
+        if not errors:
+            self._catalogue_error_banner.setVisible(False)
+            return
+        names = ", ".join(e.get("label", "") for e in errors)
+        self._catalogue_error_label.setText(
+            t("catalogue_error_banner", names)
+        )
+        # The reason is too long for the strip, but it is what makes the
+        # difference between "typo in the URL" and "the host is down".
+        self._catalogue_error_banner.setToolTip(
+            "\n".join("{}: {}".format(e.get("label", ""), e.get("reason", ""))
+                      for e in errors)
+        )
+        self._catalogue_error_banner.setVisible(True)
 
     def _build_search_row(self, parent_layout):
         row = QtWidgets.QHBoxLayout()
@@ -505,6 +568,7 @@ class CartonWindow(_CartonWindowBase):
         # second pass also has to stop and join the icon fetcher the
         # first one just started.
         self._cards_rebuilt_by_sidebar = False
+        self._update_catalogue_error_banner()
         self._rebuild_sidebar()
         if not self._cards_rebuilt_by_sidebar:
             self._rebuild_cards()

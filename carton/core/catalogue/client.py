@@ -80,6 +80,10 @@ class CatalogueClient(object):
         self._packages = {}
         self._origins = {}
         self._catalogue_meta = {}  # pkg_id -> {"name": ..., "id": ..., "remote": bool}
+        # Populated per fetch: catalogues that could not be read, so the
+        # UI can say which one failed instead of silently showing fewer
+        # packages. See :meth:`get_fetch_errors`.
+        self._fetch_errors = []
         # Personal catalogue = local receptacle for URL-direct single-package
         # adds (see :mod:`carton.core.catalogue.personal`). Injection shape:
         #   * ``personal_catalogue=<instance>`` → use it directly
@@ -97,6 +101,7 @@ class CatalogueClient(object):
         self._packages = {}
         self._origins = {}
         self._catalogue_meta = {}
+        self._fetch_errors = []
         for entry in self._config.catalogues:
             try:
                 self._load_entry(entry)
@@ -106,6 +111,7 @@ class CatalogueClient(object):
                 # other catalogues still resolve.
                 get_logger().warning("catalogue %r failed to load: %s",
                                      _entry_label(entry), e)
+                self._record_fetch_error(entry, e)
         # Personal catalogue is merged LAST so subscribed catalogues win
         # on pkg_id collision — an official source should always trump a
         # user's ad-hoc URL-direct add.
@@ -123,6 +129,25 @@ class CatalogueClient(object):
     def get_origin(self, pkg_id):
         """Return the :class:`Origin` instance backing ``pkg_id``, or None."""
         return self._origins.get(pkg_id)
+
+    def get_fetch_errors(self):
+        """Return ``[{"label", "path", "reason"}]`` for the last fetch.
+
+        A catalogue that fails to load used to leave nothing behind but a
+        log line: its packages simply weren't there, and the user was left
+        to guess whether they had mistyped the URL, whether the host was
+        down, or whether Carton had lost the subscription. The UI reads
+        this list after every fetch so a failure says so on screen.
+        """
+        return list(self._fetch_errors)
+
+    def _record_fetch_error(self, entry, exc):
+        """Remember why ``entry`` could not be loaded, for the UI to show."""
+        self._fetch_errors.append({
+            "label": _entry_label(entry),
+            "path": getattr(entry, "path", ""),
+            "reason": str(exc) or exc.__class__.__name__,
+        })
 
     @property
     def source_cache(self):
@@ -181,6 +206,9 @@ class CatalogueClient(object):
         if not path or not os.path.exists(path):
             get_logger().warning("catalogue not found: %s (%s)",
                                  _entry_label(entry), entry.path)
+            self._record_fetch_error(
+                entry, IOError("catalogue not found: {}".format(entry.path)),
+            )
             return
 
         # Auto-migrate legacy registry.json to catalogue.json on disk.
@@ -195,6 +223,7 @@ class CatalogueClient(object):
         except (OSError, ValueError) as e:
             get_logger().warning("catalogue read failed: %s (%s)",
                                  _entry_label(entry), e)
+            self._record_fetch_error(entry, e)
             return
 
         # If this catalogue still parses as a v4.0 registry, migrate
@@ -227,10 +256,12 @@ class CatalogueClient(object):
                 except (URLError, OSError, ValueError) as e2:
                     get_logger().warning("remote catalogue failed: %s (%s)",
                                          _entry_label(entry), e2)
+                    self._record_fetch_error(entry, e2)
                     return
             else:
                 get_logger().warning("remote catalogue failed: %s (%s)",
                                      _entry_label(entry), e)
+                self._record_fetch_error(entry, e)
                 return
 
         # Migrate in memory only (no write-back to remote). stamp_id=False

@@ -238,7 +238,13 @@ _STRINGS = {
         "my_tools_all": "All",
         "library_all": "All",
         "profile_label": "Profile",
-        "sidebar_library": "Catalogues",
+        # The section lists namespaces, not catalogues - it was a
+        # catalogue list until the v5.0 sidebar redesign and the label
+        # was left behind, which sent anyone who subscribed to a new
+        # catalogue looking for it here.
+        "sidebar_library": "Library",
+        "catalogue_error_banner": "Could not load: {}",
+        "catalogue_error_retry": "Retry",
         "profile_manage": "Manage profiles…",
         "profile_manager_title": "Profile Manager",
         "profile_manager_hint": "Profiles let you swap catalogues / proxy / language as a set. Installed packages are shared.",
@@ -577,7 +583,9 @@ _STRINGS = {
         "my_tools_all": "すべて",
         "library_all": "すべて",
         "profile_label": "プロファイル",
-        "sidebar_library": "カタログ",
+        "sidebar_library": "ライブラリ",
+        "catalogue_error_banner": "読み込めませんでした: {}",
+        "catalogue_error_retry": "再試行",
         "profile_manage": "プロファイルを管理…",
         "profile_manager_title": "プロファイル管理",
         "profile_manager_hint": "プロファイルでカタログ／プロキシ／言語をまとめて切替できます。インストール済みパッケージは共有されます。",
